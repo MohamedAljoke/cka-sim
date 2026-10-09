@@ -9,14 +9,18 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strings"
 
+	"github.com/MohamedAljoke/cka-sim/apps/cli/internal/cluster"
 	"github.com/MohamedAljoke/cka-sim/apps/cli/internal/doctor"
 )
 
 const usage = `cka-sim — a Kubernetes study environment on your own machine
 
   cka-sim doctor     check that this machine can run cka-sim
+  cka-sim up         create the study cluster: 1 control plane, 2 workers
+  cka-sim down       delete the study cluster
   cka-sim version    print the version
 `
 
@@ -43,7 +47,11 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 	switch command {
 	case "doctor":
-		return runDoctor(ctx, stdout)
+		return report(stdout, doctor.Run(ctx, doctor.Host()))
+	case "up":
+		return runUp(ctx, stdout)
+	case "down":
+		return runDown(stdout)
 	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "cka-sim %s %s/%s\n", buildVersion(), runtime.GOOS, runtime.GOARCH)
 		return nil
@@ -55,8 +63,7 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 }
 
-func runDoctor(ctx context.Context, stdout io.Writer) error {
-	results := doctor.Run(ctx, doctor.Host())
+func report(stdout io.Writer, results []doctor.Result) error {
 	failed := false
 	for _, r := range results {
 		line := fmt.Sprintf("%-6s %-18s %s", "["+r.Status+"]", r.Name, r.Detail)
@@ -69,6 +76,63 @@ func runDoctor(ctx context.Context, stdout io.Writer) error {
 	if failed {
 		return errors.New("fix the failed checks above before running cka-sim")
 	}
+	return nil
+}
+
+func problems(results []doctor.Result) []doctor.Result {
+	return slices.DeleteFunc(results, func(r doctor.Result) bool { return r.Status == doctor.OK })
+}
+
+func runUp(ctx context.Context, stdout io.Writer) error {
+	if err := report(stdout, problems(doctor.Run(ctx, doctor.Host()))); err != nil {
+		return err
+	}
+	c, err := cluster.New()
+	if err != nil {
+		return err
+	}
+	exists, err := c.Exists()
+	if err != nil {
+		return err
+	}
+	if exists {
+		fmt.Fprintf(stdout, "cluster %s is already up\n", cluster.Name)
+		printHowToConnect(stdout, c)
+		return nil
+	}
+
+	// kind's Create can't be cancelled, so Ctrl-C returns early and leaves the containers behind.
+	created := make(chan error, 1)
+	go func() { created <- c.Create(ctx) }()
+	select {
+	case err := <-created:
+		if err != nil {
+			return fmt.Errorf("create cluster: %w", err)
+		}
+	case <-ctx.Done():
+		return errors.New("interrupted; run cka-sim down to remove the half-created cluster")
+	}
+	fmt.Fprintf(stdout, "\ncluster %s is up\n", cluster.Name)
+	printHowToConnect(stdout, c)
+	return nil
+}
+
+func printHowToConnect(stdout io.Writer, c *cluster.Cluster) {
+	fmt.Fprintf(stdout, `
+  with kubectl on this machine:  kubectl --kubeconfig %q get nodes
+  without kubectl:               docker exec -it %s kubectl get nodes
+`, c.KubeconfigPath, cluster.ControlPlaneNode)
+}
+
+func runDown(stdout io.Writer) error {
+	c, err := cluster.New()
+	if err != nil {
+		return err
+	}
+	if err := c.Delete(); err != nil {
+		return fmt.Errorf("delete cluster: %w", err)
+	}
+	fmt.Fprintf(stdout, "cluster %s is deleted\n", cluster.Name)
 	return nil
 }
 

@@ -1,0 +1,5 @@
+# Since Kubernetes 1.35 the kubelet refuses to start on cgroup v1 unless told otherwise.
+kubeadmConfigPatches:
+  - |
+    kind: KubeletConfiguration
+    failCgroupV1: false

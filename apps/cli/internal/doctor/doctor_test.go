@@ -9,76 +9,11 @@ import (
 	"testing"
 )
 
-type fakeSystem struct {
-	goos         string
-	dockerOnPath bool
-	infoJSON     string
-	infoErr      error
-	procFiles    map[string]string
-}
-
-func (f fakeSystem) System() System {
-	return System{
-		GOOS: f.goos,
-		LookPath: func(string) (string, error) {
-			if !f.dockerOnPath {
-				return "", errors.New("not found")
-			}
-			return "/usr/bin/docker", nil
-		},
-		Run: func(context.Context, string, ...string) ([]byte, error) {
-			return []byte(f.infoJSON), f.infoErr
-		},
-		ReadFile: func(name string) ([]byte, error) {
-			content, ok := f.procFiles[name]
-			if !ok {
-				return nil, fs.ErrNotExist
-			}
-			return []byte(content), nil
-		},
-	}
-}
-
-func dockerInfoJSON(osType, operatingSystem, kernel string, cpus int, memory int64) string {
-	return fmt.Sprintf(`{"ServerVersion":"28.3.0","OSType":%q,"OperatingSystem":%q,"KernelVersion":%q,"NCPU":%d,"MemTotal":%d}`,
-		osType, operatingSystem, kernel, cpus, memory)
-}
-
-func healthyLinux() fakeSystem {
-	return fakeSystem{
-		goos:         "linux",
-		dockerOnPath: true,
-		infoJSON:     dockerInfoJSON("linux", "Ubuntu 24.04", "6.8.0", 8, 16<<30),
-		procFiles: map[string]string{
-			"/proc/sys/fs/inotify/max_user_watches":   "524288\n",
-			"/proc/sys/fs/inotify/max_user_instances": "512\n",
-		},
-	}
-}
-
-func find(results []Result, name string) (Result, bool) {
-	for _, r := range results {
-		if r.Name == name {
-			return r, true
-		}
-	}
-	return Result{}, false
-}
-
-func mustFind(t *testing.T, results []Result, name string) Result {
-	t.Helper()
-	r, ok := find(results, name)
-	if !ok {
-		t.Fatalf("no %q result in %+v", name, results)
-	}
-	return r
-}
-
 func TestHealthyLinuxPassesEveryCheck(t *testing.T) {
 	results := Run(context.Background(), healthyLinux().System())
 
-	if len(results) != 6 {
-		t.Fatalf("got %d results, want 6: %+v", len(results), results)
+	if len(results) != 7 {
+		t.Fatalf("got %d results, want 7: %+v", len(results), results)
 	}
 	for _, r := range results {
 		if r.Status != OK {
@@ -156,6 +91,30 @@ func TestWindowsContainersFail(t *testing.T) {
 	}
 }
 
+func TestCgroupV1Warns(t *testing.T) {
+	tests := []struct {
+		name      string
+		kernel    string
+		wantInFix string
+	}{
+		{"WSL2", "5.15.167.4-microsoft-standard-WSL2", "cgroup_no_v1=all"},
+		{"plain linux", "6.8.0", "systemd.unified_cgroup_hierarchy=1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sys := healthyLinux()
+			sys.infoJSON = strings.Replace(dockerInfoJSON("linux", "Ubuntu 24.04", tt.kernel, 8, 16<<30),
+				`"CgroupVersion":"2"`, `"CgroupVersion":"1"`, 1)
+
+			r := mustFind(t, Run(context.Background(), sys.System()), "cgroup version")
+
+			if r.Status != Warn || !strings.Contains(r.Fix, tt.wantInFix) {
+				t.Errorf("got %+v, want a warning whose fix mentions %q", r, tt.wantInFix)
+			}
+		})
+	}
+}
+
 func TestLowResourcesPointToWhereTheLimitIsSet(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -226,4 +185,69 @@ func TestInotify(t *testing.T) {
 			}
 		})
 	}
+}
+
+type fakeSystem struct {
+	goos         string
+	dockerOnPath bool
+	infoJSON     string
+	infoErr      error
+	procFiles    map[string]string
+}
+
+func (f fakeSystem) System() System {
+	return System{
+		GOOS: f.goos,
+		LookPath: func(string) (string, error) {
+			if !f.dockerOnPath {
+				return "", errors.New("not found")
+			}
+			return "/usr/bin/docker", nil
+		},
+		Run: func(context.Context, string, ...string) ([]byte, error) {
+			return []byte(f.infoJSON), f.infoErr
+		},
+		ReadFile: func(name string) ([]byte, error) {
+			content, ok := f.procFiles[name]
+			if !ok {
+				return nil, fs.ErrNotExist
+			}
+			return []byte(content), nil
+		},
+	}
+}
+
+func dockerInfoJSON(osType, operatingSystem, kernel string, cpus int, memory int64) string {
+	return fmt.Sprintf(`{"ServerVersion":"28.3.0","OSType":%q,"OperatingSystem":%q,"KernelVersion":%q,"CgroupVersion":"2","NCPU":%d,"MemTotal":%d}`,
+		osType, operatingSystem, kernel, cpus, memory)
+}
+
+func healthyLinux() fakeSystem {
+	return fakeSystem{
+		goos:         "linux",
+		dockerOnPath: true,
+		infoJSON:     dockerInfoJSON("linux", "Ubuntu 24.04", "6.8.0", 8, 16<<30),
+		procFiles: map[string]string{
+			"/proc/sys/fs/inotify/max_user_watches":   "524288\n",
+			"/proc/sys/fs/inotify/max_user_instances": "512\n",
+		},
+	}
+}
+
+func find(results []Result, name string) (Result, bool) {
+	for _, r := range results {
+		if r.Name == name {
+			return r, true
+		}
+	}
+	return Result{}, false
+}
+
+func mustFind(t *testing.T, results []Result, name string) Result {
+	t.Helper()
+	r, ok := find(results, name)
+	if !ok {
+		t.Fatalf("no %q result in %+v", name, results)
+	}
+	return r
 }

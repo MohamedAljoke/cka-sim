@@ -51,6 +51,13 @@ write a comment, ask why the code needs it:
 
 A comment that repeats what the code says is noise. Say **why**, never **what**.
 
+**Test files.** Put the tests first and the helpers (fakes, builders, small `find` or `parse`
+functions) at the end of the file. Someone opening a test file wants to see what is being
+tested. How the setup works comes second.
+
+**Enums.** No `iota`. Give every constant an explicit value, and prefer string-typed constants
+(`type Status string` with `OK Status = "ok"`). They read well in output and need no `String()` method.
+
 ---
 
 ## Phase A: The environment, by hand

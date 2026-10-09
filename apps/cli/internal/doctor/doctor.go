@@ -66,6 +66,7 @@ type dockerInfo struct {
 	OSType          string
 	OperatingSystem string
 	KernelVersion   string
+	CgroupVersion   string
 	NCPU            int
 	MemTotal        int64
 }
@@ -84,7 +85,9 @@ func Run(ctx context.Context, sys System) []Result {
 	if running.Status == Fail {
 		return []Result{installed, running}
 	}
-	results := []Result{installed, running, checkLinuxContainers(info), checkCPUs(info), checkMemory(info)}
+	results := []Result{
+		installed, running, checkLinuxContainers(info), checkCgroupVersion(info), checkCPUs(info), checkMemory(info),
+	}
 
 	// Docker Desktop on Linux runs its own VM, so the host's inotify limits don't reach it.
 	// WSL2 distros share one kernel, so there they do.
@@ -163,6 +166,23 @@ func checkLinuxContainers(info dockerInfo) Result {
 		Detail: fmt.Sprintf("docker is running %s containers", info.OSType),
 		Fix:    "switch Docker Desktop to Linux containers (tray icon > Switch to Linux containers)",
 	}
+}
+
+func checkCgroupVersion(info dockerInfo) Result {
+	if info.CgroupVersion != "1" {
+		return Result{Name: "cgroup version", Status: OK, Detail: "v" + info.CgroupVersion}
+	}
+	result := Result{
+		Name: "cgroup version", Status: Warn,
+		Detail: "v1: Kubernetes is dropping support; cka-sim works around it for now",
+	}
+	if info.isWSL() {
+		result.Fix = "switch WSL2 to cgroup v2: add kernelCommandLine = cgroup_no_v1=all under [wsl2]" +
+			" in %UserProfile%\\.wslconfig, then run wsl --shutdown"
+	} else {
+		result.Fix = "boot with systemd.unified_cgroup_hierarchy=1 on the kernel command line to switch to cgroup v2"
+	}
+	return result
 }
 
 func checkCPUs(info dockerInfo) Result {

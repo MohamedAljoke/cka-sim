@@ -21,6 +21,12 @@ func TestKindConfigHasOneControlPlaneAndTwoWorkers(t *testing.T) {
 	}
 }
 
+func TestNodesMatchKindConfig(t *testing.T) {
+	if got := len(parse(t, kindConfig("2")).Nodes); got != len(Nodes) {
+		t.Errorf("kind.yaml has %d nodes, Nodes lists %d", got, len(Nodes))
+	}
+}
+
 func TestKubeletIsAllowedToRunOnCgroupV1(t *testing.T) {
 	config := parse(t, kindConfig("1"))
 

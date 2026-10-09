@@ -19,6 +19,15 @@ const Name = "cka-sim"
 
 const ControlPlaneNode = Name + "-control-plane"
 
+// kind names the nodes after the cluster, in the order of kind.yaml.
+var Nodes = []string{ControlPlaneNode, Name + "-worker", Name + "-worker2"}
+
+const (
+	Base      = Name + "-base"
+	BaseImage = "cka-sim/base:latest"
+	Candidate = "candidate"
+)
+
 // The tag must match the kindest/node version in node.Dockerfile.
 const NodeImage = "cka-sim/node:v1.37.0"
 
@@ -77,6 +86,9 @@ func RequireUp() error {
 	if !exists {
 		return fmt.Errorf("cluster %s is not up; run cka-sim up first", Name)
 	}
+	if !baseExists() {
+		return fmt.Errorf("the base host %s is missing; run cka-sim up", Base)
+	}
 	return nil
 }
 
@@ -88,10 +100,10 @@ func (c *Cluster) Create(ctx context.Context) error {
 	if err := os.MkdirAll(filepath.Dir(c.KubeconfigPath), 0o700); err != nil {
 		return err
 	}
-	if err := buildNodeImage(ctx); err != nil {
+	if err := buildImage(ctx, NodeImage, nodeDockerfile); err != nil {
 		return err
 	}
-	return c.provider.Create(Name,
+	err = c.provider.Create(Name,
 		kindcluster.CreateWithNodeImage(NodeImage),
 		kindcluster.CreateWithRawConfig([]byte(kindConfig(cgroupVersion))),
 		kindcluster.CreateWithKubeconfigPath(c.KubeconfigPath),
@@ -99,6 +111,10 @@ func (c *Cluster) Create(ctx context.Context) error {
 		kindcluster.CreateWithDisplayUsage(false),
 		kindcluster.CreateWithDisplaySalutation(false),
 	)
+	if err != nil {
+		return err
+	}
+	return c.Prepare(ctx)
 }
 
 func dockerCgroupVersion(ctx context.Context) (string, error) {
@@ -109,15 +125,16 @@ func dockerCgroupVersion(ctx context.Context) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func buildNodeImage(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "docker", "build", "--quiet", "--tag", NodeImage, "-")
-	cmd.Stdin = strings.NewReader(nodeDockerfile)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("build node image %s: %w\n%s", NodeImage, err, out)
+func buildImage(ctx context.Context, tag, dockerfile string) error {
+	if _, err := docker(ctx, dockerfile, "build", "--quiet", "--tag", tag, "-"); err != nil {
+		return fmt.Errorf("build image %s: %w", tag, err)
 	}
 	return nil
 }
 
-func (c *Cluster) Delete() error {
+func (c *Cluster) Delete(ctx context.Context) error {
+	if err := removeBase(ctx); err != nil {
+		return err
+	}
 	return c.provider.Delete(Name, c.KubeconfigPath)
 }

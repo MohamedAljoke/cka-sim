@@ -41,7 +41,7 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 	case "up":
 		return runUp(ctx, stdout)
 	case "down":
-		return runDown(stdout)
+		return runDown(ctx, stdout)
 	case "shell":
 		return runShell()
 	case "version", "--version", "-v":
@@ -88,6 +88,9 @@ func runUp(ctx context.Context, stdout io.Writer) error {
 		return err
 	}
 	if exists {
+		if err := c.Prepare(ctx); err != nil {
+			return err
+		}
 		fmt.Fprintf(stdout, "cluster %s is already up\n", cluster.Name)
 		printHowToConnect(stdout, c)
 		return nil
@@ -112,17 +115,17 @@ func runUp(ctx context.Context, stdout io.Writer) error {
 
 func printHowToConnect(stdout io.Writer, c *cluster.Cluster) {
 	fmt.Fprintf(stdout, `
+  like the exam:                 cka-sim shell, then ssh %s
   with kubectl on this machine:  kubectl --kubeconfig %q get nodes
-  without kubectl:               docker exec -it %s kubectl get nodes
-`, c.KubeconfigPath, cluster.ControlPlaneNode)
+`, cluster.ControlPlaneNode, c.KubeconfigPath)
 }
 
-func runDown(stdout io.Writer) error {
+func runDown(ctx context.Context, stdout io.Writer) error {
 	c, err := cluster.New()
 	if err != nil {
 		return err
 	}
-	if err := c.Delete(); err != nil {
+	if err := c.Delete(ctx); err != nil {
 		return fmt.Errorf("delete cluster: %w", err)
 	}
 	fmt.Fprintf(stdout, "cluster %s is deleted\n", cluster.Name)

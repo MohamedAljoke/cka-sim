@@ -7,7 +7,7 @@ export function openTerminal(pane: HTMLElement) {
     cursorBlink: true,
     fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
     fontSize: 14,
-    theme: { background: getComputedStyle(pane).getPropertyValue('--terminal').trim() },
+    theme: { background: getComputedStyle(pane).getPropertyValue('--color-terminal').trim() },
   })
   const fit = new FitAddon()
   term.loadAddon(fit)

@@ -1,5 +1,6 @@
 import { marked } from 'marked'
 import { listTasks, startTask, taskQuestion, type Task } from './api'
+import { icon } from './icons'
 
 export async function showTasks(pane: HTMLElement) {
   pane.replaceChildren(el('p', 'muted', 'Loading tasks…'))
@@ -28,8 +29,8 @@ function openTask(pane: HTMLElement, task: Task, number: number) {
   back.onclick = () => showTasks(pane)
   const status = el('p', 'status', 'Preparing the cluster…')
   const body = el('div', 'question-text')
-  const host = el('p', 'host', 'Connect first: ')
-  host.append(el('code', '', `ssh ${task.host}`))
+  const host = el('div', 'host')
+  host.append(el('span', 'host-label', 'Connect first'), copyable(`ssh ${task.host}`))
   pane.replaceChildren(back, el('h2', '', `${number}. ${task.title}`), chips(task), host, status, body)
 
   startTask(task.id).then(
@@ -46,6 +47,34 @@ function openTask(pane: HTMLElement, task: Task, number: number) {
 function setStatus(status: HTMLElement, kind: 'ready' | 'error', text: string) {
   status.className = `status ${kind}`
   status.textContent = text
+}
+
+function copyable(command: string): HTMLElement {
+  const button = el('button', 'copy-command')
+  button.type = 'button'
+  button.title = 'Copy to clipboard'
+  const label = el('span', 'copy-label', 'Copy')
+  const showCopied = (copied: boolean) => {
+    button.classList.toggle('copied', copied)
+    label.replaceChildren(icon(copied ? 'check' : 'copy', 14), copied ? 'Copied' : 'Copy')
+  }
+  showCopied(false)
+  button.append(el('code', '', command), label)
+
+  let reset: number | undefined
+  button.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(command)
+    } catch {
+      // No clipboard access (e.g. plain http on a remote host): select it for a manual copy.
+      getSelection()?.selectAllChildren(button.querySelector('code')!)
+      return
+    }
+    showCopied(true)
+    clearTimeout(reset)
+    reset = window.setTimeout(() => showCopied(false), 1500)
+  }
+  return button
 }
 
 function chips(task: Task): HTMLElement {

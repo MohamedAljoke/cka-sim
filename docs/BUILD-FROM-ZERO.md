@@ -11,6 +11,15 @@ only on one machine: it needed kind, kubectl, Go and bash installed, and it buil
 locally. The rebuild has one goal on top of v1's: **anyone can download one binary and study,
 with Docker as the only prerequisite.** Notes marked *(learned in v1)* are problems v1 already hit.
 
+cka-sim is built for three kinds of people:
+
+- **Practise only:** download a release binary, run it. Needs Docker and nothing else.
+- **Customise:** clone the repo, change tasks or the page, build a binary, and delete the clone
+  if they like. So the binary must never read the repo at runtime: everything it uses (the page,
+  the tasks, the kind config) goes inside it.
+- **Develop cka-sim:** run everything from source with fast reloads. This comes first; the
+  release build and the embedding come later (D14, D17), and nothing in the dev setup may block them.
+
 Every deliverable has the same parts:
 
 - **Goal**: what exists when you're done
@@ -25,7 +34,7 @@ Commands marked **host** run in your terminal. **node** means inside a node cont
 ```
 ✅ D0 skeleton + CI ─► ✅ D1 doctor ─► ✅ D2 up / down
                                             │
-   D3 shell ─► D4 task format ─► D5 runner + start ─► D6 grading + check ─► D7 selftest
+   ✅ D3 shell ─► D3b page + terminal ─► D4 task format ─► D5 runner + start ─► D6 grading + check ─► D7 selftest
                                                                               │
    D8 CNI ─► D9 node image ─► D10 base host + ssh ─► D11 status   ◄───────────┘
    (each pulled in when a task needs it)                │
@@ -44,12 +53,33 @@ tasks from the CLI. After **D15** you have the full timed exam. After **D17** st
 These apply to every deliverable.
 
 **Layout.** Each application lives in its own folder under `apps/`: `apps/cka-sim` is the Go module
-that builds the `cka-sim` binary, and `apps/web` is the browser page it serves. The repo root only
-holds what has to be there: `README.md`, `docs/` and `.github/`.
+that builds the `cka-sim` binary, and `apps/web` is the browser page (Vite + TypeScript). The repo
+root only holds what has to be there: `README.md`, `docs/` and `.github/`.
 
-**Inside `apps/cka-sim`.** `internal/` holds the engine: checking the machine, the cluster, tasks,
-grading. The CLI (`cmd/cli.go`) and the web server are two front doors onto the same packages,
-so anything a command can do, a web request can trigger too. Neither holds logic of its own.
+**Inside `apps/cka-sim`.** `internal/` holds the engine: checking the machine, the cluster, the
+terminal, tasks, grading. Two thin front doors drive it: the CLI (`cmd/main.go` is the entry point,
+`cmd/cli.go` the commands) and, later, the HTTP server the page talks to. Anything a command can do,
+a web request can trigger too. Neither front door holds logic of its own.
+
+**Swappable parts.** Anything that talks to the outside world sits behind a small interface that
+the engine owns: the cluster provider (kind today), how a shell is opened (`docker exec` today, ssh
+to a base host from D10), where task scripts run. Swapping one means writing a new implementation
+and changing the one line that picks it, not touching its callers. The same seam lets tests use a
+fake, like `doctor.System` already does. Don't add an interface before there's a second
+implementation or a test that needs it; do keep the outside-world calls in one package so adding
+one later stays easy.
+
+**Local development.** Go doesn't serve the page during development; Vite does.
+
+```sh
+cd apps/cka-sim
+make dev              # cluster up, then the page on http://localhost:5173 (hot reload)
+go run ./cmd doctor   # any command, straight from source; `make` lists the shortcuts
+```
+
+The browser only ever talks to Vite. When the page needs the engine (the terminal first), a small
+Go server answers on `127.0.0.1:7070` and Vite forwards `/ws` and `/api` to it, so the browser
+sees one origin. The Go server only listens on localhost: its terminal is root on the cluster.
 
 **Comments.** Write a comment only when it is really needed. About 90% of the time the code
 should explain itself through clear names, small functions and a simple structure. Before you
@@ -186,6 +216,35 @@ D2. Anything that needs Calico, a custom node image or the ssh setup waits for P
   - This is root on the control plane, not exam-like. D10 moves `shell` to a base host
     **without changing the command**.
 - **Done when:** `./bin/cka-sim shell`, then `kubectl get nodes` lists 3 nodes, on Linux, macOS and Windows.
+- [ ] done
+
+### D3b · The page and its terminal (pulled forward from D14)
+
+- **Goal:** the exam screen without the exam: a question pane that says "No task yet" and a
+  terminal into the cluster, in the browser. No timer, no tasks.
+- **Build:**
+  - `apps/web`: Vite + TypeScript, no framework. The two-pane exam layout. ✅
+  - `apps/cka-sim/Makefile`: `make dev` brings the cluster up and starts Vite. ✅
+  - `internal/terminal`: a shell on the cluster with a TTY, started at the browser's size,
+    resizable, ended when the browser leaves. Behind an interface, so D10 can swap `docker exec`
+    for ssh to the base host.
+  - A Go server on `127.0.0.1:7070` with `/ws/terminal`, and a Vite proxy for `/ws`.
+  - xterm.js in the page, connected to that websocket.
+- **Watch out:**
+  - v1 used creack/pty around the docker CLI, which has no Windows support. Use Docker's exec API
+    with `Tty: true` instead: Docker makes the TTY, and resizing is an API call.
+  - Start the shell only after the browser sends its size: a resize that arrives while the
+    process starts can get lost, leaving it at 80x24. *(learned in v1)*
+  - Closing the connection leaves bash running in the container. Tag each shell with an
+    environment variable and kill everything carrying the tag (HUP, then KILL); sweep leftovers at
+    startup. *(learned in v1)*
+  - Refuse websocket connections from other origins, or any website could open a root shell
+    through localhost. *(learned in v1)*
+  - Binary messages are keystrokes and output; text messages are JSON control
+    (`{"type":"resize","cols":…,"rows":…}`). Raise the read limit so a large paste fits.
+  - Leave for later: several terminal tabs, reattaching after a reload, copy/paste shortcuts.
+- **Done when:** `make dev`, open http://localhost:5173, and `kubectl get nodes` in the page lists 3 nodes.
+- **Learn:** what a TTY is across a network, websockets, and keeping the outside world behind an interface.
 - [ ] done
 
 ### D4 · The task format and loader

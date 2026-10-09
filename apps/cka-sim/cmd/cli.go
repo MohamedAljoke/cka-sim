@@ -5,20 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
 	"slices"
 	"strings"
-	"time"
 
 	"golang.org/x/term"
 
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/cluster"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/doctor"
-	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/web"
 )
 
 const usage = `cka-sim — a Kubernetes study environment on your own machine
@@ -27,7 +23,6 @@ const usage = `cka-sim — a Kubernetes study environment on your own machine
   cka-sim up         create the study cluster: 1 control plane, 2 workers
   cka-sim down       delete the study cluster
   cka-sim shell      open a shell on the cluster with kubectl ready
-  cka-sim web        open the study page in your browser
   cka-sim version    print the version
 `
 
@@ -49,8 +44,6 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 		return runDown(stdout)
 	case "shell":
 		return runShell()
-	case "web":
-		return runWeb(ctx, stdout)
 	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "cka-sim %s %s/%s\n", buildVersion(), runtime.GOOS, runtime.GOARCH)
 		return nil
@@ -165,31 +158,4 @@ func shellArgs(tty bool) []string {
 		args = append(args, "-t")
 	}
 	return append(args, cluster.ControlPlaneNode, "bash", "-l")
-}
-
-// Only this machine: the page's terminal will be root on the cluster.
-const webAddr = "127.0.0.1:7070"
-
-func runWeb(ctx context.Context, stdout io.Writer) error {
-	page, err := web.Page()
-	if err != nil {
-		return err
-	}
-	ln, err := net.Listen("tcp", webAddr)
-	if err != nil {
-		return fmt.Errorf("claim %s: %w", webAddr, err)
-	}
-	srv := &http.Server{Handler: web.New(page)}
-	go func() {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		srv.Shutdown(shutdownCtx)
-	}()
-
-	fmt.Fprintf(stdout, "open http://%s in your browser; Ctrl-C stops it\n", webAddr)
-	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
-		return err
-	}
-	return nil
 }

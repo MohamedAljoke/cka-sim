@@ -23,6 +23,15 @@ go build -o bin/cka-sim ./cmd
 ./bin/cka-sim down        # delete it
 ```
 
+## Develop
+
+Needs Go and Node. From `apps/cka-sim`, `make` lists the shortcuts:
+
+```sh
+make dev              # cluster up, then the page on http://localhost:5173 with hot reload
+go run ./cmd doctor   # or any other command, straight from source
+```
+
 ## Docs
 
 - [Build plan](docs/BUILD-FROM-ZERO.md): what's done, what's next, and the conventions.
@@ -33,5 +42,5 @@ go build -o bin/cka-sim ./cmd
 | Path | What |
 |---|---|
 | `apps/cka-sim` | the `cka-sim` binary: CLI, web server and the engine they share |
-| `apps/web` | the browser page `cka-sim web` serves |
+| `apps/web` | the browser page (Vite); `npm run dev` serves it on :5173 |
 | `docs/` | the build plan and study guide |

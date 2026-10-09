@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -36,6 +37,24 @@ func TestRun(t *testing.T) {
 			}
 			if !strings.Contains(out.String(), tt.wantOutput) {
 				t.Errorf("output %q does not contain %q", out.String(), tt.wantOutput)
+			}
+		})
+	}
+}
+
+func TestShellArgs(t *testing.T) {
+	tests := []struct {
+		name string
+		tty  bool
+		want []string
+	}{
+		{name: "terminal", tty: true, want: []string{"exec", "-i", "-t", "cka-sim-control-plane", "bash", "-l"}},
+		{name: "pipe", tty: false, want: []string{"exec", "-i", "cka-sim-control-plane", "bash", "-l"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shellArgs(tt.tty); !slices.Equal(got, tt.want) {
+				t.Errorf("shellArgs(%v) = %q, want %q", tt.tty, got, tt.want)
 			}
 		})
 	}

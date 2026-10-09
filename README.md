@@ -12,13 +12,21 @@ Being rebuilt from scratch. The first implementation is kept on the
 
 ## Build from source
 
-Needs Go 1.25 or newer.
+Needs Go 1.21 or newer. The `go` command downloads the exact toolchain pinned in
+`apps/cli/go.mod` (Go 1.26.9) the first time you build.
 
 ```sh
 cd apps/cli
 go build -o bin/cka-sim ./cmd/cka-sim
-./bin/cka-sim doctor
+./bin/cka-sim doctor      # check this machine
+./bin/cka-sim up          # create the cluster: 1 control plane, 2 workers
+./bin/cka-sim down        # delete it
 ```
+
+## Docs
+
+- [Build plan](docs/BUILD-FROM-ZERO.md): what's done, what's next, and the conventions.
+- [Study guide](docs/STUDY-GUIDE.md): how each piece works, with things to run and questions to answer.
 
 ## Layout
 

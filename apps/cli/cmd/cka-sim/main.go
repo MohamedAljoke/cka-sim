@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
 	"runtime"
 	"runtime/debug"
 	"slices"
 	"strings"
+
+	"golang.org/x/term"
 
 	"github.com/MohamedAljoke/cka-sim/apps/cli/internal/cluster"
 	"github.com/MohamedAljoke/cka-sim/apps/cli/internal/doctor"
@@ -21,6 +24,7 @@ const usage = `cka-sim — a Kubernetes study environment on your own machine
   cka-sim doctor     check that this machine can run cka-sim
   cka-sim up         create the study cluster: 1 control plane, 2 workers
   cka-sim down       delete the study cluster
+  cka-sim shell      open a shell on the cluster with kubectl ready
   cka-sim version    print the version
 `
 
@@ -30,11 +34,21 @@ var version = ""
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	if err := run(ctx, os.Args[1:], os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
+	err := run(ctx, os.Args[1:], os.Stdout)
+	if err == nil {
+		return
 	}
+	if code, ok := errors.AsType[exitCode](err); ok {
+		os.Exit(int(code))
+	}
+	fmt.Fprintln(os.Stderr, "error:", err)
+	os.Exit(1)
 }
+
+// exitCode ends cka-sim with that code and no message, because the command it ran already spoke for itself.
+type exitCode int
+
+func (c exitCode) Error() string { return fmt.Sprintf("exit status %d", int(c)) }
 
 func run(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) == 0 {
@@ -52,6 +66,8 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 		return runUp(ctx, stdout)
 	case "down":
 		return runDown(stdout)
+	case "shell":
+		return runShell()
 	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "cka-sim %s %s/%s\n", buildVersion(), runtime.GOOS, runtime.GOARCH)
 		return nil
@@ -134,6 +150,38 @@ func runDown(stdout io.Writer) error {
 	}
 	fmt.Fprintf(stdout, "cluster %s is deleted\n", cluster.Name)
 	return nil
+}
+
+func runShell() error {
+	c, err := cluster.New()
+	if err != nil {
+		return err
+	}
+	exists, err := c.Exists()
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("cluster %s is not up; run cka-sim up first", cluster.Name)
+	}
+
+	// Not CommandContext: Ctrl-C is meant for the shell in the container, so it must not kill docker.
+	cmd := exec.Command("docker", shellArgs(term.IsTerminal(int(os.Stdin.Fd())))...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	err = cmd.Run()
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
+		return exitCode(exitErr.ExitCode())
+	}
+	return err
+}
+
+// A login shell (-l) reads /etc/profile, so the prompt and PATH match a normal ssh session.
+func shellArgs(tty bool) []string {
+	args := []string{"exec", "-i"}
+	if tty {
+		args = append(args, "-t")
+	}
+	return append(args, cluster.ControlPlaneNode, "bash", "-l")
 }
 
 func buildVersion() string {

@@ -1,0 +1,164 @@
+---
+id: QuizAttemptLifecycle
+name: Quiz Attempt Lifecycle
+version: 0.0.1
+owners:
+  - mohamed
+summary: |
+  Big picture of hosted cka-sim: a user starts a quiz, gets their own sandbox VM, works in the terminal,
+  gets graded, and the VM is destroyed.
+badges:
+  - content: Planned
+    backgroundColor: yellow
+    textColor: yellow
+steps:
+  - id: user_start
+    title: Start quiz
+    actor:
+      name: User
+      summary: Clicks "Start quiz"
+    next_step:
+      id: web_start
+      label: Click
+
+  - id: web_start
+    title: Web app
+    service:
+      id: WebTerminal
+    next_step:
+      id: app_attempt
+      label: POST start attempt
+
+  - id: app_attempt
+    title: "attempt + sandbox: create attempt, get a VM"
+    service:
+      id: MainApp
+    next_steps:
+      - id: db_attempt
+        label: Save attempt, one active VM per user
+      - id: fly_claim
+        label: Claim warm VM or create one
+      - id: agent_setup
+        label: Run setup.sh per task
+      - id: web_work
+        label: Return tasks + terminal
+
+  - id: db_attempt
+    title: Attempts + sandboxes
+    container:
+      id: Postgres
+
+  - id: fly_claim
+    title: Fly Machines API
+    externalSystem:
+      name: Fly Machines API
+      summary: Creates and destroys the per-user sandbox VMs.
+      url: https://docs.fly.io/machines/
+
+  - id: agent_setup
+    title: "run-script: setup.sh"
+    service:
+      id: SandboxAgent
+    next_step:
+      id: cluster
+      label: kubectl as admin
+
+  - id: cluster
+    title: kind cluster in the user's VM
+    externalSystem:
+      name: Sandbox VM
+      summary: dockerd + kind cluster, one per active attempt, never public.
+
+  - id: web_work
+    title: Task panel + terminal
+    service:
+      id: WebTerminal
+    next_steps:
+      - id: app_terminal
+        label: WSS keystrokes / output
+      - id: user_check
+        label: User clicks Check / Submit
+
+  - id: app_terminal
+    title: "terminal: proxy to the user's VM"
+    service:
+      id: MainApp
+    next_step:
+      id: agent_shell
+      label: Private network (6PN)
+
+  - id: agent_shell
+    title: "shell: bash -l in control-plane"
+    service:
+      id: SandboxAgent
+    next_step:
+      id: cluster
+      label: User's commands
+
+  - id: user_check
+    title: Check / Submit
+    actor:
+      name: User
+    next_step:
+      id: app_grade
+      label: POST check
+
+  - id: app_grade
+    title: "grading: run checks, score"
+    service:
+      id: MainApp
+    next_steps:
+      - id: agent_check
+        label: Run check.sh
+      - id: db_score
+        label: Save PASS/FAIL points
+      - id: app_end
+        label: Submit, deadline or idle timeout
+
+  - id: agent_check
+    title: "run-script: check.sh"
+    service:
+      id: SandboxAgent
+    next_step:
+      id: cluster
+      label: Inspect live state
+
+  - id: db_score
+    title: Scores
+    container:
+      id: Postgres
+
+  - id: app_end
+    title: "sandbox: attempt ended, VM expired"
+    service:
+      id: MainApp
+    next_step:
+      id: fly_destroy
+      label: Reaper destroys the VM
+
+  - id: fly_destroy
+    title: Destroy VM
+    externalSystem:
+      name: Fly Machines API
+      summary: The VM is never reused for another user.
+      url: https://docs.fly.io/machines/
+---
+
+## Overview
+
+This is the hosted design from `docs/ORCHESTRATION.md`: **one shared main app** (a Go monolith split by domain)
+and **one throwaway sandbox VM per active quiz attempt**, with at most one active VM per user.
+
+<NodeGraph />
+
+## Reading the graph
+
+1. **Start.** The attempt is saved, and the sandbox domain claims a warm VM through the Fly Machines API (or creates one).
+2. **Setup.** The agent runs each task's `setup.sh` against the kind cluster in that VM.
+3. **Work.** The browser's terminal websocket goes to the main app, which proxies it over Fly's private network to the
+   agent's shell. The VM is never public.
+4. **Grade.** Check or Submit runs `check.sh` through the agent, and the `PASS/FAIL <pts>` lines become the stored score.
+5. **End.** On submit, deadline or idle timeout the VM is marked expired, and the reaper destroys it.
+
+The terminal path in detail, as it works locally today, is documented on [Web Terminal](/docs/services/WebTerminal/0.0.1)
+and [cka-sim Server](/docs/services/CkaSimServer/0.0.1).

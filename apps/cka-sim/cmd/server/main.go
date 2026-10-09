@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/catalog"
@@ -23,7 +24,7 @@ import (
 const addr = "127.0.0.1:7070"
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)

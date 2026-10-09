@@ -25,9 +25,10 @@ serve: ## run the backend for the page on 127.0.0.1:7070
 web: $(WEB)/node_modules ## serve the page with hot reload on http://localhost:5173
 	cd $(WEB) && npm run dev
 
-# kill 0 stops the other server when one of them exits.
+# The binary runs directly, not via go run, so Ctrl-C reaches it and the trap can wait for it.
 dev: up $(WEB)/node_modules ## cluster up, then the backend and the page together
-	@trap 'kill 0' EXIT; go run ./cmd/server & cd $(WEB) && npm run dev
+	@go build -o bin/server ./cmd/server
+	@bin/server & server=$$!; trap 'kill $$server 2>/dev/null; wait $$server' INT TERM EXIT; cd $(WEB) && npm run dev
 
 test: ## vet and test the Go code
 	go vet ./... && go test ./...

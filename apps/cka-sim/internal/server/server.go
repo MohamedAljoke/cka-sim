@@ -28,6 +28,7 @@ func New(opener terminal.Opener, practice Practice) http.Handler {
 		serveTerminal(w, r, opener)
 	})
 	mux.HandleFunc("GET /api/tasks", a.listTasks)
+	mux.HandleFunc("GET /api/tasks/{id}/question", a.question)
 	mux.HandleFunc("POST /api/tasks/{id}/start", a.startTask)
 	return http.NewCrossOriginProtection().Handler(mux)
 }

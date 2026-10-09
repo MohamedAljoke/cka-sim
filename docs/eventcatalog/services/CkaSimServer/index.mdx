@@ -1,0 +1,33 @@
+---
+id: CkaSimServer
+name: cka-sim Server
+version: 0.0.1
+owners:
+  - mohamed
+summary: |
+  The Go backend. Bridges each browser websocket to a bash shell inside the kind control-plane node.
+badges:
+  - content: Go
+    backgroundColor: teal
+    textColor: teal
+repository:
+  language: Go
+  url: https://github.com/MohamedAljoke/cka-sim/tree/main/apps/cka-sim
+---
+
+## Overview
+
+`cmd/server` listens on `127.0.0.1:7070`, only this machine, because the terminal is root on the cluster.
+At startup it checks the cluster is up and ends shells left over from a previous run.
+
+`internal/server` serves `GET /ws/terminal`:
+
+1. Accepts the websocket and waits for the first resize message (`openAtFirstResize`).
+2. Opens a shell with that size through a `terminal.Opener`.
+3. Copies shell output to the browser in a goroutine (`sendOutput`).
+4. Loops on browser frames: binary goes to the shell, text is parsed as a resize.
+5. When the socket closes, it closes the shell.
+
+The shell itself comes from `internal/terminal`. Today the `Opener` is `DockerOpener`, which uses Docker
+exec to run `bash -l` in the control-plane container. Because the server only depends on the `Opener`
+interface, a different cluster provider could be plugged in later.

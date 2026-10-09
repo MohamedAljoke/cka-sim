@@ -19,10 +19,17 @@ func (a *api) listTasks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.Tasks)
 }
 
-func (a *api) startTask(w http.ResponseWriter, r *http.Request) {
-	t, ok := tasks.Find(a.Tasks, r.PathValue("id"))
+func (a *api) question(w http.ResponseWriter, r *http.Request) {
+	t, ok := a.findTask(w, r)
 	if !ok {
-		http.Error(w, fmt.Sprintf("no task %q", r.PathValue("id")), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, map[string]string{"question": t.Question})
+}
+
+func (a *api) startTask(w http.ResponseWriter, r *http.Request) {
+	t, ok := a.findTask(w, r)
+	if !ok {
 		return
 	}
 	if !a.setup.TryLock() {
@@ -35,7 +42,16 @@ func (a *api) startTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, map[string]string{"question": t.Question})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *api) findTask(w http.ResponseWriter, r *http.Request) (tasks.Task, bool) {
+	id := r.PathValue("id")
+	t, ok := tasks.Find(a.Tasks, id)
+	if !ok {
+		http.Error(w, fmt.Sprintf("no task %q", id), http.StatusNotFound)
+	}
+	return t, ok
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

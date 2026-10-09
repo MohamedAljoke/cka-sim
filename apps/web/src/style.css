@@ -8,6 +8,7 @@
   --terminal: #101418;
   --accent: #2f5bd3;
   --error: #b42318;
+  --ok: #1a7f37;
 
   font-family: system-ui, sans-serif;
   color: var(--text);
@@ -114,6 +115,20 @@ body {
   background: none;
   border: none;
   cursor: pointer;
+}
+
+.status {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+.status.ready {
+  color: var(--ok);
+}
+
+.status.error {
+  color: var(--error);
 }
 
 .question-text {

@@ -1,0 +1,31 @@
+---
+id: SandboxAgent
+name: Sandbox Agent
+version: 0.0.1
+owners:
+  - mohamed
+summary: |
+  Small Go program inside each user's sandbox VM. Gives the main app a shell and a script runner.
+badges:
+  - content: Planned
+    backgroundColor: yellow
+    textColor: yellow
+  - content: Go
+    backgroundColor: teal
+    textColor: teal
+repository:
+  language: Go
+  url: https://github.com/MohamedAljoke/cka-sim/tree/main/apps/cka-sim
+---
+
+## Overview
+
+It runs inside the sandbox VM next to dockerd and the kind cluster, and listens on Fly's private network only.
+
+- `shell`: an interactive `bash -l` in the kind control-plane node. It reuses today's `DockerOpener`.
+- `run-script`: runs `setup.sh`, `check.sh` or `solution.sh` for a task and returns the output.
+
+It authenticates the main app with a per-sandbox secret set when the VM is created. It never calls the main
+app, so the VM holds no credentials.
+
+<NodeGraph />

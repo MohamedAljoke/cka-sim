@@ -1,5 +1,5 @@
 import { marked } from 'marked'
-import { listTasks, startTask, type Task } from './api'
+import { listTasks, startTask, taskQuestion, type Task } from './api'
 
 export async function showTasks(pane: HTMLElement) {
   pane.replaceChildren(el('p', 'muted', 'Loading tasks…'))
@@ -23,22 +23,27 @@ export async function showTasks(pane: HTMLElement) {
   pane.replaceChildren(el('h2', '', 'Tasks'), list)
 }
 
-async function openTask(pane: HTMLElement, task: Task, number: number) {
+function openTask(pane: HTMLElement, task: Task, number: number) {
   const back = el('button', 'back', '← Back to tasks')
   back.onclick = () => showTasks(pane)
-  const heading = el('h2', '', `${number}. ${task.title}`)
-  const body = el('div', 'muted', 'Setting up…')
-  pane.replaceChildren(back, heading, chips(task), body)
+  const status = el('p', 'status', 'Preparing the cluster…')
+  const body = el('div', 'question-text')
+  pane.replaceChildren(back, el('h2', '', `${number}. ${task.title}`), chips(task), status, body)
 
-  try {
-    const question = await startTask(task.id)
-    body.className = 'question-text'
+  startTask(task.id).then(
+    () => setStatus(status, 'ready', 'Ready: the cluster is set up.'),
+    (err) => setStatus(status, 'error', `Setup failed: ${message(err)}`),
+  )
+  taskQuestion(task.id).then(
     // The question comes from the bundled catalog, not from users, so it's rendered as is.
-    body.innerHTML = marked.parse(question, { async: false })
-  } catch (err) {
-    body.className = 'error'
-    body.textContent = `Setup failed: ${message(err)}`
-  }
+    (question) => (body.innerHTML = marked.parse(question, { async: false })),
+    (err) => setStatus(status, 'error', `Cannot load the question: ${message(err)}`),
+  )
+}
+
+function setStatus(status: HTMLElement, kind: 'ready' | 'error', text: string) {
+  status.className = `status ${kind}`
+  status.textContent = text
 }
 
 function chips(task: Task): HTMLElement {

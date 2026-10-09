@@ -30,11 +30,11 @@ func TestListsTasksWithoutAnswers(t *testing.T) {
 	}
 }
 
-func TestStartRunsSetupAndReturnsQuestion(t *testing.T) {
+func TestQuestionIsTheTaskText(t *testing.T) {
 	r := &fakeRunner{}
 	srv := newAPI(t, r)
 
-	status, body := call(t, srv, http.MethodPost, "/api/tasks/wl-scale/start")
+	status, body := call(t, srv, http.MethodGet, "/api/tasks/wl-scale/question")
 
 	if status != http.StatusOK {
 		t.Fatalf("status %d: %s", status, body)
@@ -45,6 +45,30 @@ func TestStartRunsSetupAndReturnsQuestion(t *testing.T) {
 	}
 	if reply.Question != "Scale it to 4." {
 		t.Errorf("question = %q", reply.Question)
+	}
+	if r.script != "" {
+		t.Errorf("reading the question ran %q", r.script)
+	}
+}
+
+func TestQuestionUnknownTaskIs404(t *testing.T) {
+	srv := newAPI(t, &fakeRunner{})
+
+	status, body := call(t, srv, http.MethodGet, "/api/tasks/nope/question")
+
+	if status != http.StatusNotFound || !strings.Contains(body, `no task "nope"`) {
+		t.Errorf("got %d %q", status, body)
+	}
+}
+
+func TestStartRunsSetup(t *testing.T) {
+	r := &fakeRunner{}
+	srv := newAPI(t, r)
+
+	status, body := call(t, srv, http.MethodPost, "/api/tasks/wl-scale/start")
+
+	if status != http.StatusNoContent {
+		t.Fatalf("status %d: %s", status, body)
 	}
 	if r.script != "fresh_ns wl-scale\n" {
 		t.Errorf("ran %q, want setup.sh", r.script)
@@ -77,7 +101,7 @@ func TestStartWhileSettingUpIs409(t *testing.T) {
 		t.Errorf("second start got %d %q, want 409", status, body)
 	}
 	close(r.release)
-	if first := <-done; first != http.StatusOK {
+	if first := <-done; first != http.StatusNoContent {
 		t.Errorf("first start got %d", first)
 	}
 }

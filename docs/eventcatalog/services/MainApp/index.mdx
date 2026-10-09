@@ -1,0 +1,37 @@
+---
+id: MainApp
+name: Main App
+version: 0.0.1
+owners:
+  - mohamed
+summary: |
+  The hosted Go monolith every user shares. Split by domain inside; proxies terminals to each user's sandbox VM.
+badges:
+  - content: Planned
+    backgroundColor: yellow
+    textColor: yellow
+  - content: Go
+    backgroundColor: teal
+    textColor: teal
+repository:
+  language: Go
+  url: https://github.com/MohamedAljoke/cka-sim/tree/main/apps/cka-sim
+---
+
+## Overview
+
+One binary and one deploy. It runs on 2 Fly Machines, stays stateless, and keeps its state in Postgres.
+See `docs/ORCHESTRATION.md` for the full plan.
+
+| Domain | Owns |
+|---|---|
+| identity | users, login, sessions |
+| catalog | tasks from the embedded `catalog/` FS |
+| attempt | quiz/exam sessions, timers, scores |
+| grading | runs `check.sh`, parses `PASS/FAIL <pts>` |
+| sandbox | VM lifecycle, warm pool, one VM per user, reaper |
+| terminal | browser websocket ⇄ agent shell |
+
+Sandbox VMs are reached only over Fly's private network and are never exposed to the internet.
+
+<NodeGraph />

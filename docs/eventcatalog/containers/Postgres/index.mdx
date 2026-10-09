@@ -1,0 +1,31 @@
+---
+id: Postgres
+name: Postgres
+version: 0.0.1
+owners:
+  - mohamed
+summary: |
+  The main app's database: users, attempts, scores and sandboxes.
+container_type: database
+technology: PostgreSQL
+authoritative: true
+access_mode: readWrite
+---
+
+## Overview
+
+Each domain owns its own tables.
+
+| Table | Domain |
+|---|---|
+| `users` | identity |
+| `attempts`, `attempt_tasks` | attempt |
+| `sandboxes` | sandbox |
+
+At most one active sandbox per user:
+
+```sql
+CREATE UNIQUE INDEX one_active_sandbox_per_user
+  ON sandboxes (user_id)
+  WHERE state IN ('provisioning', 'ready', 'assigned');
+```

@@ -1,0 +1,27 @@
+---
+id: WebTerminal
+name: Web Terminal
+version: 0.0.1
+owners:
+  - mohamed
+summary: |
+  The browser terminal. xterm.js in apps/web, connected to the Go server over a websocket.
+badges:
+  - content: Browser
+    backgroundColor: blue
+    textColor: blue
+repository:
+  language: TypeScript
+  url: https://github.com/MohamedAljoke/cka-sim/tree/main/apps/web
+---
+
+## Overview
+
+`apps/web/src/terminal.ts` draws an xterm.js terminal and opens a websocket to `/ws/terminal`.
+In development, Vite proxies `/ws` to the Go server on `127.0.0.1:7070` (`apps/web/vite.config.ts`).
+
+- On open, it sends the terminal size first; the server waits for it before starting the shell.
+- Every keystroke goes out as a binary frame.
+- Every binary frame that comes back is written straight into the terminal.
+- When the pane resizes, the addon refits the terminal and the new size is sent again.
+- When the socket closes, it prints `[disconnected]`.

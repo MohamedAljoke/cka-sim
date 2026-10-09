@@ -11,7 +11,7 @@ RUN rm -f /etc/dpkg/dpkg.cfg.d/docker \
  && apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       openssh-server sudo vim less man-db manpages bash-completion curl wget jq iputils-ping dnsutils netcat-openbsd \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --reinstall coreutils grep sed tar \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --reinstall coreutils grep sed tar systemd util-linux mount procps iproute2 \
  && mandb -q \
  && rm -rf /var/lib/apt/lists/*
 

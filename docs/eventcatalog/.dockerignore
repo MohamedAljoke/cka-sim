@@ -1,0 +1,9 @@
+.eventcatalog-core/
+.astro/
+.git/
+dist/
+node_modules/
+.gitignore
+.dockerignore
+Dockerfile
+README.md

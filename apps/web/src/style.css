@@ -6,6 +6,8 @@
   --muted: #59636e;
   --topbar: #1f2a44;
   --terminal: #101418;
+  --accent: #2f5bd3;
+  --error: #b42318;
 
   font-family: system-ui, sans-serif;
   color: var(--text);
@@ -47,8 +49,82 @@ body {
   overflow-y: auto;
 }
 
-.question p {
+.muted {
   color: var(--muted);
+}
+
+.error {
+  color: var(--error);
+  white-space: pre-wrap;
+}
+
+.task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.task {
+  width: 100%;
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.7rem 0.8rem;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.task:hover {
+  border-color: var(--accent);
+}
+
+.task-title {
+  font-weight: 600;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.chip {
+  padding: 0.1rem 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: var(--bg);
+  border-radius: 999px;
+}
+
+.chip.domain {
+  color: #fff;
+  background: var(--accent);
+}
+
+.back {
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.question-text {
+  margin-top: 1rem;
+  line-height: 1.5;
+}
+
+.question-text code {
+  padding: 0.1rem 0.3rem;
+  background: var(--bg);
+  border-radius: 4px;
 }
 
 .terminal {

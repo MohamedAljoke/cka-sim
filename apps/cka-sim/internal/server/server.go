@@ -4,21 +4,32 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 
 	"github.com/coder/websocket"
 
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/tasks"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/terminal"
 )
 
 const pasteLimit = 1 << 20 // 1 MiB
 
-func New(opener terminal.Opener) http.Handler {
+type Practice struct {
+	Tasks  []tasks.Task
+	Files  fs.FS
+	Runner tasks.Runner
+}
+
+func New(opener terminal.Opener, practice Practice) http.Handler {
+	a := &api{Practice: practice}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ws/terminal", func(w http.ResponseWriter, r *http.Request) {
 		serveTerminal(w, r, opener)
 	})
-	return mux
+	mux.HandleFunc("GET /api/tasks", a.listTasks)
+	mux.HandleFunc("POST /api/tasks/{id}/start", a.startTask)
+	return http.NewCrossOriginProtection().Handler(mux)
 }
 
 type control struct {

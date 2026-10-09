@@ -4,14 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/catalog"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/cluster"
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/runner"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/server"
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/tasks"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/terminal"
 )
 
@@ -36,6 +40,10 @@ func run(ctx context.Context) error {
 	if err := cluster.RequireUp(); err != nil {
 		return err
 	}
+	practice, err := loadPractice()
+	if err != nil {
+		return err
+	}
 	shells, err := terminal.NewDockerOpener(cluster.ControlPlaneNode)
 	if err != nil {
 		return err
@@ -44,7 +52,7 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	srv := &http.Server{Handler: server.New(shells)}
+	srv := &http.Server{Handler: server.New(shells, practice)}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -60,4 +68,20 @@ func run(ctx context.Context) error {
 	endCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	return shells.EndAll(endCtx)
+}
+
+func loadPractice() (server.Practice, error) {
+	all, err := tasks.Load(catalog.FS)
+	if err != nil {
+		return server.Practice{}, fmt.Errorf("load the task catalog: %w", err)
+	}
+	lib, err := fs.ReadFile(catalog.FS, "lib.sh")
+	if err != nil {
+		return server.Practice{}, err
+	}
+	return server.Practice{
+		Tasks:  all,
+		Files:  catalog.FS,
+		Runner: runner.Node{Name: cluster.ControlPlaneNode, Lib: lib},
+	}, nil
 }

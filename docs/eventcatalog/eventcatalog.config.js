@@ -1,0 +1,42 @@
+/** @type {import('@eventcatalog/core/bin/eventcatalog.config').Config} */
+export default {
+  title: 'cka-sim',
+  tagline: 'How the parts of cka-sim talk to each other.',
+  organizationName: 'cka-sim',
+  theme: 'sunset',
+  homepageLink: 'https://github.com/MohamedAljoke/cka-sim',
+  editUrl: 'https://github.com/MohamedAljoke/cka-sim/edit/main/docs/eventcatalog',
+  // Supports static or server. Static renders a static site, server renders a server side rendered site
+  // large catalogs may benefit from server side rendering
+  output: 'static',
+  // By default set to false, add true to get urls ending in /
+  trailingSlash: false,
+  // Change to make the base url of the site different, by default https://{website}.com/docs,
+  // changing to /company would be https://{website}.com/company/docs,
+  base: '/',
+  // Resource search is the default lightweight search. Change this to { type: 'indexed' }
+  // to enable full-content search. Indexed search requires running a build to generate the index.
+  search: {
+    type: 'resource',
+  },
+  // Customize the navigation for your docs sidebar.
+  // read more at https://eventcatalog.dev/docs/development/customization/customize-sidebars/documentation-sidebar
+  navigation: {
+    pages: ['list:all'],
+  },
+  // Customize the logo, add your logo to public/ folder
+  logo: {
+    alt: 'cka-sim',
+    src: '/logo.png',
+    text: 'cka-sim',
+  },
+  // This lets you copy markdown contents from EventCatalog to your clipboard
+  // Including schemas for your events and services
+  llmsTxt: {
+    enabled: true,
+  },
+  // required random generated id used by eventcatalog
+  cId: 'bd75acb0-eac0-44fe-bd4a-019a2541209e',
+  // required by eventcatalog
+  tsd: 1791576161681,
+};

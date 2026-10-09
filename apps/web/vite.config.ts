@@ -6,6 +6,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/ws': { target: 'ws://127.0.0.1:7070', ws: true },
+      '/api': 'http://127.0.0.1:7070',
     },
   },
 })

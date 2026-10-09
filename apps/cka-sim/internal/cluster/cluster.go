@@ -59,6 +59,21 @@ func (c *Cluster) Exists() (bool, error) {
 	return slices.Contains(names, Name), nil
 }
 
+func RequireUp() error {
+	c, err := New()
+	if err != nil {
+		return err
+	}
+	exists, err := c.Exists()
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("cluster %s is not up; run cka-sim up first", Name)
+	}
+	return nil
+}
+
 func (c *Cluster) Create(ctx context.Context) error {
 	cgroupVersion, err := dockerCgroupVersion(ctx)
 	if err != nil {

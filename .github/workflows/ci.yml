@@ -23,7 +23,7 @@ jobs:
           cache-dependency-path: apps/cka-sim/go.sum
       - run: go vet ./...
       - run: go test ./...
-      - run: go run ./cmd version
+      - run: go run ./cmd/cli version
 
   cli-build:
     runs-on: ubuntu-latest
@@ -42,5 +42,5 @@ jobs:
         run: |
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
             echo "$target"
-            GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 go build -o /dev/null ./cmd
+            GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 go build -o /dev/null ./cmd/...
           done

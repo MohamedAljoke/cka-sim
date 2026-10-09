@@ -57,8 +57,9 @@ that builds the `cka-sim` binary, and `apps/web` is the browser page (Vite + Typ
 root only holds what has to be there: `README.md`, `docs/` and `.github/`.
 
 **Inside `apps/cka-sim`.** `internal/` holds the engine: checking the machine, the cluster, the
-terminal, tasks, grading. Two thin front doors drive it: the CLI (`cmd/main.go` is the entry point,
-`cmd/cli.go` the commands) and, later, the HTTP server the page talks to. Anything a command can do,
+terminal, tasks, grading. Two thin front doors drive it: the CLI (`cmd/cli`: `main.go` is the entry point,
+`cli.go` the commands) and the HTTP server the page talks to (`cmd/server`). They are separate
+`main` packages: the server is not a CLI command. Anything a command can do,
 a web request can trigger too. Neither front door holds logic of its own.
 
 **Swappable parts.** Anything that talks to the outside world sits behind a small interface that
@@ -74,7 +75,7 @@ one later stays easy.
 ```sh
 cd apps/cka-sim
 make dev              # cluster up, the Go backend, and the page on http://localhost:5173 (hot reload)
-go run ./cmd doctor   # any command, straight from source; `make` lists the shortcuts
+go run ./cmd/cli doctor   # any command, straight from source; `make` lists the shortcuts
 ```
 
 The browser only ever talks to Vite. When the page needs the engine (the terminal first), a small
@@ -114,8 +115,8 @@ deliverable against this.
 - **Goal:** a Go module under `apps/cka-sim` that builds a `cka-sim` binary for every OS, with CI proving it.
 - **Build:**
   - `apps/cka-sim/go.mod` (`module github.com/MohamedAljoke/cka-sim/apps/cka-sim`), plus `.gitignore` with `bin/`.
-  - `cmd/main.go`: Ctrl-C turned into cancellation with `signal.NotifyContext`, and the version.
-    `cmd/cli.go`: a `switch` on `args[0]` and what each command calls. The version comes from `-ldflags "-X main.version=…"`
+  - `cmd/cli/main.go`: Ctrl-C turned into cancellation with `signal.NotifyContext`, and the version.
+    `cmd/cli/cli.go`: a `switch` on `args[0]` and what each command calls. The version comes from `-ldflags "-X main.version=…"`
     in release builds, then `debug.ReadBuildInfo()`, then `dev`.
   - `.github/workflows/ci.yml`: vet + test on Ubuntu, macOS and Windows; gofmt; cross-compile
     linux/darwin/windows × amd64/arm64 with `CGO_ENABLED=0`.
@@ -123,11 +124,11 @@ deliverable against this.
   - The module is not at the repo root, so `setup-go` needs both `go-version-file` and
     `cache-dependency-path` pointing into `apps/cka-sim`.
   - A nested module is versioned with **prefixed tags**: `apps/cka-sim/v0.1.0`, not `v0.1.0`. Go names
-    a binary after its folder, so `go install …/apps/cka-sim/cmd@latest` would install `cmd`:
+    a binary after its folder, so `go install …/apps/cka-sim/cmd/cli@latest` would install `cli`:
     releases (D17) are the supported install, and local builds always pass `-o bin/cka-sim`.
 - **Done when:**
   ```sh
-  go build -o bin/cka-sim ./cmd && ./bin/cka-sim version    # host
+  go build -o bin/cka-sim ./cmd/cli && ./bin/cka-sim version    # host
   ```
   and CI is green on all three operating systems.
 - **Learn:** Go modules in subdirectories, cross-compilation, build info.
@@ -224,12 +225,12 @@ D2. Anything that needs Calico, a custom node image or the ssh setup waits for P
   terminal into the cluster, in the browser. No timer, no tasks.
 - **Build:**
   - `apps/web`: Vite + TypeScript, no framework. The two-pane exam layout. ✅
-  - `apps/cka-sim/Makefile`: `make dev` brings the cluster up, then runs `cka-sim serve` and
+  - `apps/cka-sim/Makefile`: `make dev` brings the cluster up, then runs the server (`cmd/server`) and
     Vite together. ✅
   - `internal/terminal`: a shell on the cluster with a TTY, started at the browser's size,
     resizable, ended when the browser leaves. Behind an interface, so D10 can swap `docker exec`
     for ssh to the base host. ✅
-  - `internal/server` + `cka-sim serve`: a Go server on `127.0.0.1:7070` with `/ws/terminal`,
+  - `internal/server` + `cmd/server`: a Go server on `127.0.0.1:7070` with `/ws/terminal`,
     and a Vite proxy for `/ws`. ✅
   - xterm.js in the page, connected to that websocket. ✅
 - **Watch out:**
@@ -484,7 +485,7 @@ v1's versions of most of these are on `archive/v1` under `tasks/`.
 ```sh
 cd apps/cka-sim
 go vet ./... && go test ./...           # D0–D7, D12–D13 code is sound
-go build -o bin/cka-sim ./cmd
+go build -o bin/cka-sim ./cmd/cli
 ./bin/cka-sim doctor                    # D1
 ./bin/cka-sim up                        # D2: environment from nothing
 ./bin/cka-sim selftest                  # D5–D7, D16: every task fair

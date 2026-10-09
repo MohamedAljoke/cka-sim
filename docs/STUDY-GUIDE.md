@@ -198,7 +198,7 @@ what it tells you that the code doesn't.
 
 | File | Concepts to look for |
 |---|---|
-| `cmd/main.go`, `cmd/cli.go` | a `switch` on the command; `signal.NotifyContext` turns Ctrl-C into cancellation; `runUp` races kind's uncancellable `Create` against `ctx.Done()`; the version from `-ldflags` or `debug.ReadBuildInfo` |
+| `cmd/cli/main.go`, `cmd/cli/cli.go` | a `switch` on the command; `signal.NotifyContext` turns Ctrl-C into cancellation; `runUp` races kind's uncancellable `Create` against `ctx.Done()`; the version from `-ldflags` or `debug.ReadBuildInfo` |
 | `internal/doctor/doctor.go` | a struct of functions (`System`) as the seam for tests; string-typed `Status` constants; decoding only the fields we need from `docker info` JSON |
 | `internal/cluster/cluster.go` | kind's public API (`NewProvider`, `Create` options); the config as plain YAML; `os.UserConfigDir` for a per-OS config folder |
 | `.github/workflows/ci.yml` | a test matrix over three operating systems; cross-compiling six targets with `CGO_ENABLED=0` |

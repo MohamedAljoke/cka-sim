@@ -17,7 +17,7 @@ Needs Go 1.21 or newer. The `go` command downloads the exact toolchain pinned in
 
 ```sh
 cd apps/cka-sim
-go build -o bin/cka-sim ./cmd
+go build -o bin/cka-sim ./cmd/cli
 ./bin/cka-sim doctor      # check this machine
 ./bin/cka-sim up          # create the cluster: 1 control plane, 2 workers
 ./bin/cka-sim down        # delete it
@@ -29,7 +29,7 @@ Needs Go and Node. From `apps/cka-sim`, `make` lists the shortcuts:
 
 ```sh
 make dev              # cluster up, the Go backend, and the page with a terminal on http://localhost:5173
-go run ./cmd doctor   # or any other command, straight from source
+go run ./cmd/cli doctor   # or any other command, straight from source
 ```
 
 ## Docs

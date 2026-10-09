@@ -8,26 +8,26 @@ help:
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-7s %s\n", $$1, $$2}'
 
 doctor: ## check this machine can run cka-sim
-	go run ./cmd doctor
+	go run ./cmd/cli doctor
 
 up: ## create the cluster (does nothing if it is already up)
-	go run ./cmd up
+	go run ./cmd/cli up
 
 down: ## delete the cluster
-	go run ./cmd down
+	go run ./cmd/cli down
 
 shell: ## open a shell on the control plane
-	go run ./cmd shell
+	go run ./cmd/cli shell
 
 serve: ## run the backend for the page on 127.0.0.1:7070
-	go run ./cmd serve
+	go run ./cmd/server
 
 web: $(WEB)/node_modules ## serve the page with hot reload on http://localhost:5173
 	cd $(WEB) && npm run dev
 
 # kill 0 stops the other server when one of them exits.
 dev: up $(WEB)/node_modules ## cluster up, then the backend and the page together
-	@trap 'kill 0' EXIT; go run ./cmd serve & cd $(WEB) && npm run dev
+	@trap 'kill 0' EXIT; go run ./cmd/server & cd $(WEB) && npm run dev
 
 test: ## vet and test the Go code
 	go vet ./... && go test ./...

@@ -38,6 +38,13 @@ func TestNoPatchesOnCgroupV2(t *testing.T) {
 	}
 }
 
+func TestNodeImageTagMatchesItsKindestBase(t *testing.T) {
+	version := strings.TrimPrefix(NodeImage, "cka-sim/node:")
+	if want := "FROM kindest/node:" + version + "\n"; !strings.HasPrefix(nodeDockerfile, want) {
+		t.Errorf("node.Dockerfile must start with %q to match NodeImage %s", want, NodeImage)
+	}
+}
+
 func parse(t *testing.T, raw string) v1alpha4.Cluster {
 	t.Helper()
 	var config v1alpha4.Cluster

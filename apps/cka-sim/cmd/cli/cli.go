@@ -93,6 +93,7 @@ func runUp(ctx context.Context, stdout io.Writer) error {
 		return nil
 	}
 
+	fmt.Fprintf(stdout, "building node image %s (the first build takes a minute)\n", cluster.NodeImage)
 	// kind's Create can't be cancelled, so Ctrl-C returns early and leaves the containers behind.
 	created := make(chan error, 1)
 	go func() { created <- c.Create(ctx) }()

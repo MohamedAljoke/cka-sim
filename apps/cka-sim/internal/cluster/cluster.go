@@ -19,11 +19,17 @@ const Name = "cka-sim"
 
 const ControlPlaneNode = Name + "-control-plane"
 
+// The tag must match the kindest/node version in node.Dockerfile.
+const NodeImage = "cka-sim/node:v1.37.0"
+
 //go:embed kind.yaml
 var baseKindConfig string
 
 //go:embed kind-cgroupv1-patch.yaml
 var allowCgroupV1Patch string
+
+//go:embed node.Dockerfile
+var nodeDockerfile string
 
 func kindConfig(dockerCgroupVersion string) string {
 	if dockerCgroupVersion == "1" {
@@ -82,7 +88,11 @@ func (c *Cluster) Create(ctx context.Context) error {
 	if err := os.MkdirAll(filepath.Dir(c.KubeconfigPath), 0o700); err != nil {
 		return err
 	}
+	if err := buildNodeImage(ctx); err != nil {
+		return err
+	}
 	return c.provider.Create(Name,
+		kindcluster.CreateWithNodeImage(NodeImage),
 		kindcluster.CreateWithRawConfig([]byte(kindConfig(cgroupVersion))),
 		kindcluster.CreateWithKubeconfigPath(c.KubeconfigPath),
 		kindcluster.CreateWithWaitForReady(5*time.Minute),
@@ -97,6 +107,15 @@ func dockerCgroupVersion(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("read docker's cgroup version: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func buildNodeImage(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, "docker", "build", "--quiet", "--tag", NodeImage, "-")
+	cmd.Stdin = strings.NewReader(nodeDockerfile)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("build node image %s: %w\n%s", NodeImage, err, out)
+	}
+	return nil
 }
 
 func (c *Cluster) Delete() error {

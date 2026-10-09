@@ -30,6 +30,27 @@ D10 exam draw ─► D11 session + HTTP API ─► D12 panel ─► D13 exam/stu
 Milestones: after **D5** the environment builds itself. After **D9** you can practise one
 task from the CLI. After **D13** you have the full timed exam.
 
+## Conventions
+
+These apply to every deliverable.
+
+**Layout.** Each application lives in its own folder under `apps/`, for example `apps/cli` for
+the `cka-sim` command and later `apps/web` for the web page. The repo root only holds what has
+to be there: `README.md`, `docs/` and `.github/`.
+
+**Comments.** Write a comment only when it is really needed. About 90% of the time the code
+should explain itself through clear names, small functions and a simple structure. Before you
+write a comment, ask why the code needs it:
+
+- **The code is confusing or badly written.** Refactor it instead: rename, extract a function,
+  simplify the logic. A comment here only covers up the problem.
+- **The code is clear, but something important can't be seen from reading it.** Then a short
+  comment is justified. Examples: a workaround for a bug in a tool, an outside constraint
+  (*"kind's docs recommend these inotify values"*), or a reason that isn't obvious (*"WSL2
+  shares one kernel between distros, so the host limits apply"*).
+
+A comment that repeats what the code says is noise. Say **why**, never **what**.
+
 ---
 
 ## Phase A: The environment, by hand

@@ -256,6 +256,10 @@ The bugs it caught:
 
 ### Step 10 · The Go program
 
+The code follows the [conventions](BUILD-FROM-ZERO.md#conventions): it should explain itself,
+so a comment means there is something you can't see from the code alone. When you find a
+comment, ask what it tells you that the code doesn't.
+
 Read in this order, about 15 minutes each:
 
 | File | Concepts to look for |

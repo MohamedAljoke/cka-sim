@@ -1,4 +1,4 @@
-# Sourced before every setup.sh, check.sh and solution.sh. They run in the control-plane node,
+# Sourced before every setup.sh, check.sh and solution.sh. They run as root on the task's host,
 # where kubectl is already admin. TASK_ID is set.
 
 # check <points> <description> <command...>
@@ -34,4 +34,27 @@ fresh_ns() {
   kubectl -n "$1" delete pods --all --force --grace-period=0 >/dev/null 2>&1
   kubectl delete namespace "$1" --ignore-not-found --wait=true --timeout=120s >/dev/null
   kubectl create namespace "$1" >/dev/null
+}
+
+# Exam-style answer files live in /opt/course/<task id>/ on the host.
+COURSE="/opt/course/$TASK_ID"
+
+# The candidate writes there without sudo, as in the exam.
+fresh_course() {
+  rm -rf "$COURSE"
+  mkdir -p "$COURSE"
+  chmod 0777 "$COURSE"
+}
+
+# The exam's control plane has etcdctl and etcdutl; kind's node image doesn't, so copy them out
+# of the etcd image the cluster already runs.
+etcd_tools() {
+  command -v etcdutl >/dev/null && return
+  local image mnt
+  image=$(ctr -n k8s.io images ls -q | grep -m1 '^registry.k8s.io/etcd:')
+  mnt=$(mktemp -d)
+  ctr -n k8s.io images mount "$image" "$mnt" >/dev/null
+  cp "$mnt/usr/local/bin/etcdctl" "$mnt/usr/local/bin/etcdutl" /usr/local/bin/
+  ctr -n k8s.io images unmount "$mnt" >/dev/null
+  rmdir "$mnt"
 }

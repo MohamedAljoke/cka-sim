@@ -10,9 +10,9 @@ import (
 )
 
 func TestNodeSourcesLibAndSetsTaskID(t *testing.T) {
-	n := Node{Name: requireNode(t), Lib: []byte(`greet() { echo "hello $TASK_ID"; }`)}
+	n := Node{Lib: []byte(`greet() { echo "hello $TASK_ID"; }`)}
 
-	out, err := n.Run(context.Background(), "wl-scale", []byte("greet\n"))
+	out, err := n.Run(context.Background(), requireNode(t), "wl-scale", []byte("greet\n"))
 
 	if err != nil {
 		t.Fatal(err)
@@ -23,9 +23,9 @@ func TestNodeSourcesLibAndSetsTaskID(t *testing.T) {
 }
 
 func TestNodeFailsWithTheScriptOutput(t *testing.T) {
-	n := Node{Name: requireNode(t)}
+	n := Node{}
 
-	_, err := n.Run(context.Background(), "wl-scale", []byte("echo broken >&2\nexit 3\n"))
+	_, err := n.Run(context.Background(), requireNode(t), "wl-scale", []byte("echo broken >&2\nexit 3\n"))
 
 	if err == nil || !strings.Contains(err.Error(), "broken") {
 		t.Errorf("got error %v, want one with the script's output", err)

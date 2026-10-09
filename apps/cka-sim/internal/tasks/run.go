@@ -9,7 +9,7 @@ import (
 )
 
 type Runner interface {
-	Run(ctx context.Context, taskID string, script []byte) (string, error)
+	Run(ctx context.Context, host, taskID string, script []byte) (string, error)
 }
 
 const scriptTimeout = 3 * time.Minute
@@ -21,7 +21,7 @@ func Start(ctx context.Context, fsys fs.FS, r Runner, t Task) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, scriptTimeout)
 	defer cancel()
-	if _, err := r.Run(ctx, t.ID, setup); err != nil {
+	if _, err := r.Run(ctx, t.Host, t.ID, setup); err != nil {
 		return fmt.Errorf("set up %s: %w", t.ID, err)
 	}
 	return nil

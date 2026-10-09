@@ -15,9 +15,9 @@ func TestParse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := Task{ID: "wl-scale", Title: "A task", Domain: Workloads, Topics: []string{"deployments", "scaling"}, Weight: 4, Question: "## Task\n\nScale it."}
+	want := Task{ID: "wl-scale", Title: "A task", Domain: Workloads, Topics: []string{"deployments", "scaling"}, Weight: 4, Host: "node-1", Question: "## Task\n\nScale it."}
 	if task.ID != want.ID || task.Title != want.Title || task.Domain != want.Domain ||
-		!slices.Equal(task.Topics, want.Topics) || task.Weight != want.Weight || task.Question != want.Question {
+		!slices.Equal(task.Topics, want.Topics) || task.Weight != want.Weight || task.Host != want.Host || task.Question != want.Question {
 		t.Errorf("got %+v\nwant %+v", task, want)
 	}
 }
@@ -32,7 +32,8 @@ func TestParseRejects(t *testing.T) {
 		{"unclosed frontmatter", "---\nid: x\n", "no closing ---"},
 		{"unknown key", taskMD("x", "domain: workloads\nweight: 1\ncluster: a"), "unknown field"},
 		{"no id", taskMD("", "domain: workloads\nweight: 1"), "id is required"},
-		{"no title", "---\nid: x\ndomain: workloads\nweight: 1\n---\n", "title is required"},
+		{"no title", "---\nid: x\nhost: n\ndomain: workloads\nweight: 1\n---\n", "title is required"},
+		{"no host", "---\nid: x\ntitle: A task\ndomain: workloads\nweight: 1\n---\n", "host is required"},
 		{"unknown domain", taskMD("x", "domain: security\nweight: 1"), `unknown domain "security"`},
 		{"no weight", taskMD("x", "domain: workloads"), "weight must be more than 0"},
 		{"capital topic", taskMD("x", "domain: workloads\nweight: 1\ntopics: [Deployments]"), "lowercase-kebab"},
@@ -111,13 +112,13 @@ func TestStartRunsSetup(t *testing.T) {
 	fsys["wl-scale/setup.sh"] = &fstest.MapFile{Data: []byte("kubectl create ns wl-scale\n")}
 	r := &fakeRunner{}
 
-	err := Start(context.Background(), fsys, r, Task{ID: "wl-scale", Dir: "wl-scale"})
+	err := Start(context.Background(), fsys, r, Task{ID: "wl-scale", Dir: "wl-scale", Host: "node-1"})
 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.taskID != "wl-scale" || r.script != "kubectl create ns wl-scale\n" {
-		t.Errorf("ran %q for %q", r.script, r.taskID)
+	if r.host != "node-1" || r.taskID != "wl-scale" || r.script != "kubectl create ns wl-scale\n" {
+		t.Errorf("ran %q for %q on %q", r.script, r.taskID, r.host)
 	}
 }
 
@@ -134,7 +135,7 @@ func TestStartReportsSetupFailure(t *testing.T) {
 }
 
 func taskMD(id, fields string) string {
-	return "---\nid: " + id + "\ntitle: A task\n" + fields + "\n---\n"
+	return "---\nid: " + id + "\ntitle: A task\nhost: node-1\n" + fields + "\n---\n"
 }
 
 func addTask(fsys fstest.MapFS, id string) {
@@ -146,11 +147,11 @@ func addTask(fsys fstest.MapFS, id string) {
 }
 
 type fakeRunner struct {
-	taskID, script string
-	err            error
+	host, taskID, script string
+	err                  error
 }
 
-func (r *fakeRunner) Run(_ context.Context, taskID string, script []byte) (string, error) {
-	r.taskID, r.script = taskID, string(script)
+func (r *fakeRunner) Run(_ context.Context, host, taskID string, script []byte) (string, error) {
+	r.host, r.taskID, r.script = host, taskID, string(script)
 	return "", r.err
 }

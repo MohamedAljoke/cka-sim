@@ -4,6 +4,7 @@ export type Task = {
   domain: string
   topics: string[]
   weight: number
+  host: string
 }
 
 export async function listTasks(): Promise<Task[]> {

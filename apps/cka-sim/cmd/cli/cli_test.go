@@ -48,8 +48,8 @@ func TestShellArgs(t *testing.T) {
 		tty  bool
 		want []string
 	}{
-		{name: "terminal", tty: true, want: []string{"exec", "-i", "-t", "cka-sim-control-plane", "bash", "-l"}},
-		{name: "pipe", tty: false, want: []string{"exec", "-i", "cka-sim-control-plane", "bash", "-l"}},
+		{name: "terminal", tty: true, want: []string{"exec", "-i", "-t", "-u", "candidate", "-w", "/home/candidate", "cka-sim-base", "bash", "-l"}},
+		{name: "pipe", tty: false, want: []string{"exec", "-i", "-u", "candidate", "-w", "/home/candidate", "cka-sim-base", "bash", "-l"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

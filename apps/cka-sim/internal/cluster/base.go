@@ -59,6 +59,10 @@ func provisionNodes(ctx context.Context, publicKey string) error {
 		if _, err := docker(ctx, publicKey, "exec", "-i", node, "install", "-o", Candidate, "-g", Candidate, "-m", "600", "/dev/stdin", home+"/.ssh/authorized_keys"); err != nil {
 			return err
 		}
+		// Task scripts run as root on the task's host, and only the control plane has a kubeconfig.
+		if _, err := docker(ctx, kubeconfig, "exec", "-i", node, "install", "-D", "-m", "600", "/dev/stdin", "/root/.kube/config"); err != nil {
+			return err
+		}
 	}
 	return nil
 }

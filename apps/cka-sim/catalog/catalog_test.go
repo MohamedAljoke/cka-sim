@@ -3,9 +3,11 @@ package catalog
 import (
 	"io/fs"
 	"path"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/cluster"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/tasks"
 )
 
@@ -18,6 +20,9 @@ func TestEveryShippedTaskLoads(t *testing.T) {
 		t.Fatal("the catalog has no tasks")
 	}
 	for _, task := range all {
+		if !slices.Contains(cluster.Nodes, task.Host) {
+			t.Errorf("%s: host %q is not a node, want one of %q", task.ID, task.Host, cluster.Nodes)
+		}
 		for _, script := range tasks.Scripts {
 			body, _ := fs.ReadFile(FS, path.Join(task.Dir, script))
 			if strings.TrimSpace(string(body)) == "" {

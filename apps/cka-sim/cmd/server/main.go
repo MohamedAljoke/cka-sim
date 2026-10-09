@@ -20,7 +20,7 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/terminal"
 )
 
-// Only this machine: the page's terminal is root on the cluster.
+// Only this machine: the page's terminal can sudo on every node.
 const addr = "127.0.0.1:7070"
 
 func main() {
@@ -45,7 +45,7 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	shells, err := terminal.NewDockerOpener(cluster.ControlPlaneNode)
+	shells, err := terminal.NewDockerOpener(cluster.Base, cluster.Candidate)
 	if err != nil {
 		return err
 	}
@@ -83,6 +83,6 @@ func loadPractice() (server.Practice, error) {
 	return server.Practice{
 		Tasks:  all,
 		Files:  catalog.FS,
-		Runner: runner.Node{Name: cluster.ControlPlaneNode, Lib: lib},
+		Runner: runner.Node{Lib: lib},
 	}, nil
 }

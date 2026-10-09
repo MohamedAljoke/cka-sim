@@ -117,6 +117,16 @@ body {
   cursor: pointer;
 }
 
+.host {
+  margin: 0.75rem 0 0;
+}
+
+.host code {
+  padding: 0.1rem 0.4rem;
+  background: var(--bg);
+  border-radius: 4px;
+}
+
 .status {
   margin: 0.75rem 0 0;
   color: var(--muted);

@@ -13,11 +13,13 @@ import (
 	"time"
 
 	"github.com/moby/moby/client"
+
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/cluster"
 )
 
 func TestOpenStartsTaggedLoginShellAtBrowserSize(t *testing.T) {
 	d := &fakeDocker{}
-	o := &DockerOpener{container: "node", docker: d}
+	o := &DockerOpener{container: "node", user: "candidate", docker: d}
 
 	if _, err := o.Open(context.Background(), Size{Cols: 120, Rows: 40}); err != nil {
 		t.Fatal(err)
@@ -29,6 +31,9 @@ func TestOpenStartsTaggedLoginShellAtBrowserSize(t *testing.T) {
 	}
 	if !created.TTY || !created.AttachStdin || !created.AttachStdout {
 		t.Errorf("want a TTY with stdin and stdout attached, got %+v", created)
+	}
+	if created.User != "candidate" || created.WorkingDir != "/home/candidate" {
+		t.Errorf("user, dir = %q, %q, want candidate in their home", created.User, created.WorkingDir)
 	}
 	if !slices.Equal(created.Cmd, []string{"bash", "-l"}) {
 		t.Errorf("cmd = %q, want a login shell", created.Cmd)
@@ -95,22 +100,24 @@ func TestCloseHangsUpOnlyThisShell(t *testing.T) {
 func TestEndAllHangsUpEveryShell(t *testing.T) {
 	d := &fakeDocker{}
 
-	if err := (&DockerOpener{docker: d}).EndAll(context.Background()); err != nil {
+	if err := (&DockerOpener{user: "candidate", docker: d}).EndAll(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
 	if got := hangupPattern(t, d.created[0]); got != ".*" {
 		t.Errorf("hung up %q, want every tag", got)
 	}
+	if d.created[0].User != "candidate" {
+		t.Errorf("hung up as %q, want the shells' own user", d.created[0].User)
+	}
 }
 
 func TestDockerShellOnCluster(t *testing.T) {
-	const node = "cka-sim-control-plane"
-	if exec.Command("docker", "inspect", node).Run() != nil {
-		t.Skip(node + " is not running; run cka-sim up to include this test")
+	if exec.Command("docker", "inspect", cluster.Base).Run() != nil {
+		t.Skip(cluster.Base + " is not running; run cka-sim up to include this test")
 	}
 	ctx := context.Background()
-	o, err := NewDockerOpener(node)
+	o, err := NewDockerOpener(cluster.Base, cluster.Candidate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +140,7 @@ func TestDockerShellOnCluster(t *testing.T) {
 	}
 
 	tag := shell.(*dockerShell).tag
-	out, _ := exec.Command("docker", "exec", node, "sh", "-c",
+	out, _ := exec.Command("docker", "exec", "-u", cluster.Candidate, cluster.Base, "sh", "-c",
 		"grep -lz '^"+tagVar+"="+tag+"$' /proc/[0-9]*/environ 2>/dev/null || true").Output()
 	if left := strings.TrimSpace(string(out)); left != "" {
 		t.Errorf("this shell's processes left after Close:\n%s", left)

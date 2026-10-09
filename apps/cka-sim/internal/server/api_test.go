@@ -135,7 +135,7 @@ func TestRefusesCrossSitePost(t *testing.T) {
 
 func newAPI(t *testing.T, r *fakeRunner) *httptest.Server {
 	files := fstest.MapFS{
-		"wl-scale/task.md":     {Data: []byte("---\nid: wl-scale\ntitle: Scale a Deployment\ndomain: workloads\nweight: 4\n---\nScale it to 4.\n")},
+		"wl-scale/task.md":     {Data: []byte("---\nid: wl-scale\ntitle: Scale a Deployment\nhost: node-1\ndomain: workloads\nweight: 4\n---\nScale it to 4.\n")},
 		"wl-scale/setup.sh":    {Data: []byte("fresh_ns wl-scale\n")},
 		"wl-scale/check.sh":    {Data: []byte("true\n")},
 		"wl-scale/solution.sh": {Data: []byte("true\n")},
@@ -172,7 +172,7 @@ type fakeRunner struct {
 	started, release chan struct{}
 }
 
-func (r *fakeRunner) Run(_ context.Context, _ string, script []byte) (string, error) {
+func (r *fakeRunner) Run(_ context.Context, _, _ string, script []byte) (string, error) {
 	r.script = string(script)
 	if r.started != nil {
 		close(r.started)

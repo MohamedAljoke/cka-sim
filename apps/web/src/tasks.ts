@@ -28,7 +28,9 @@ function openTask(pane: HTMLElement, task: Task, number: number) {
   back.onclick = () => showTasks(pane)
   const status = el('p', 'status', 'Preparing the cluster…')
   const body = el('div', 'question-text')
-  pane.replaceChildren(back, el('h2', '', `${number}. ${task.title}`), chips(task), status, body)
+  const host = el('p', 'host', 'Connect first: ')
+  host.append(el('code', '', `ssh ${task.host}`))
+  pane.replaceChildren(back, el('h2', '', `${number}. ${task.title}`), chips(task), host, status, body)
 
   startTask(task.id).then(
     () => setStatus(status, 'ready', 'Ready: the cluster is set up.'),

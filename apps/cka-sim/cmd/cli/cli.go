@@ -153,5 +153,5 @@ func shellArgs(tty bool) []string {
 	if tty {
 		args = append(args, "-t")
 	}
-	return append(args, cluster.ControlPlaneNode, "bash", "-l")
+	return append(args, "-u", cluster.Candidate, "-w", "/home/"+cluster.Candidate, cluster.Base, "bash", "-l")
 }

@@ -33,10 +33,11 @@ type docker interface {
 
 type DockerOpener struct {
 	container string
+	user      string
 	docker    docker
 }
 
-func NewDockerOpener(container string) (*DockerOpener, error) {
+func NewDockerOpener(container, user string) (*DockerOpener, error) {
 	opts := []client.Opt{client.FromEnv}
 	if os.Getenv("DOCKER_HOST") == "" {
 		host, err := currentContextHost()
@@ -49,7 +50,7 @@ func NewDockerOpener(container string) (*DockerOpener, error) {
 	if err != nil {
 		return nil, fmt.Errorf("connect to docker: %w", err)
 	}
-	return &DockerOpener{container: container, docker: c}, nil
+	return &DockerOpener{container: container, user: user, docker: c}, nil
 }
 
 // Docker's Go client ignores docker contexts, which Docker Desktop relies on.
@@ -70,6 +71,8 @@ func (o *DockerOpener) Open(ctx context.Context, size Size) (Shell, error) {
 		AttachStderr: true,
 		ConsoleSize:  consoleSize(size),
 		Env:          []string{tagVar + "=" + tag},
+		User:         o.user,
+		WorkingDir:   "/home/" + o.user,
 		Cmd:          []string{"bash", "-l"},
 	})
 	if err != nil {
@@ -90,7 +93,9 @@ func (o *DockerOpener) hangup(ctx context.Context, pattern string) error {
 	created, err := o.docker.ExecCreate(ctx, o.container, client.ExecCreateOptions{
 		AttachStdout: true,
 		AttachStderr: true,
-		Cmd:          []string{"sh", "-c", hangupScript, "sh", pattern},
+		// Reading another user's environ takes ptrace, which docker withholds even from root.
+		User: o.user,
+		Cmd:  []string{"sh", "-c", hangupScript, "sh", pattern},
 	})
 	if err != nil {
 		return fmt.Errorf("end shells in %s: %w", o.container, err)

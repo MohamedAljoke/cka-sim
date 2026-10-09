@@ -47,6 +47,7 @@ type Task struct {
 	Domain   Domain   `json:"domain"`
 	Topics   []string `json:"topics"`
 	Weight   int      `json:"weight"`
+	Host     string   `json:"host"`
 	Question string   `json:"-"`
 	Explain  string   `json:"-"`
 	Dir      string   `json:"-"`
@@ -58,6 +59,7 @@ type frontmatter struct {
 	Domain Domain   `json:"domain"`
 	Topics []string `json:"topics"`
 	Weight int      `json:"weight"`
+	Host   string   `json:"host"`
 }
 
 var kebab = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
@@ -84,6 +86,7 @@ func Parse(text string) (Task, error) {
 		Domain:   fm.Domain,
 		Topics:   fm.Topics,
 		Weight:   fm.Weight,
+		Host:     fm.Host,
 		Question: strings.TrimSpace(body),
 	}, nil
 }
@@ -96,6 +99,8 @@ func (fm frontmatter) validate() error {
 		return errors.New("title is required")
 	case fm.Weight <= 0:
 		return errors.New("weight must be more than 0")
+	case fm.Host == "":
+		return errors.New("host is required")
 	}
 	if _, ok := Weights[fm.Domain]; !ok {
 		return fmt.Errorf("unknown domain %q", fm.Domain)

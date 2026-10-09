@@ -2,6 +2,7 @@
 id: wl-scale
 title: Scale a Deployment
 domain: workloads
+host: cka-sim-control-plane
 topics: [deployments, scaling]
 weight: 4
 ---

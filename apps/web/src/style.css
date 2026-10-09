@@ -54,4 +54,11 @@ body {
 .terminal {
   background: var(--terminal);
   min-width: 0;
+  padding: 0.5rem;
+  overflow: hidden;
+}
+
+/* xterm.css paints the viewport black, around the themed text area. */
+#terminal .xterm-viewport {
+  background-color: var(--terminal);
 }

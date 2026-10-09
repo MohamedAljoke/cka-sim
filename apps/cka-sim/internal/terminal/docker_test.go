@@ -132,10 +132,11 @@ func TestDockerShellOnCluster(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	tag := shell.(*dockerShell).tag
 	out, _ := exec.Command("docker", "exec", node, "sh", "-c",
-		"grep -lz '^"+tagVar+"=' /proc/[0-9]*/environ 2>/dev/null || true").Output()
+		"grep -lz '^"+tagVar+"="+tag+"$' /proc/[0-9]*/environ 2>/dev/null || true").Output()
 	if left := strings.TrimSpace(string(out)); left != "" {
-		t.Errorf("tagged processes left after Close:\n%s", left)
+		t.Errorf("this shell's processes left after Close:\n%s", left)
 	}
 }
 

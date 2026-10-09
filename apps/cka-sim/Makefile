@@ -2,7 +2,7 @@
 
 WEB := ../web
 
-.PHONY: help doctor up down shell web dev test
+.PHONY: help doctor up down shell serve web dev test
 
 help:
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-7s %s\n", $$1, $$2}'
@@ -19,10 +19,15 @@ down: ## delete the cluster
 shell: ## open a shell on the control plane
 	go run ./cmd shell
 
+serve: ## run the backend for the page on 127.0.0.1:7070
+	go run ./cmd serve
+
 web: $(WEB)/node_modules ## serve the page with hot reload on http://localhost:5173
 	cd $(WEB) && npm run dev
 
-dev: up web ## cluster up, then the page
+# kill 0 stops the other server when one of them exits.
+dev: up $(WEB)/node_modules ## cluster up, then the backend and the page together
+	@trap 'kill 0' EXIT; go run ./cmd serve & cd $(WEB) && npm run dev
 
 test: ## vet and test the Go code
 	go vet ./... && go test ./...

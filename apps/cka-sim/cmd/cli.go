@@ -5,16 +5,21 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
 	"slices"
 	"strings"
+	"time"
 
 	"golang.org/x/term"
 
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/cluster"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/doctor"
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/server"
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/terminal"
 )
 
 const usage = `cka-sim — a Kubernetes study environment on your own machine
@@ -23,6 +28,7 @@ const usage = `cka-sim — a Kubernetes study environment on your own machine
   cka-sim up         create the study cluster: 1 control plane, 2 workers
   cka-sim down       delete the study cluster
   cka-sim shell      open a shell on the cluster with kubectl ready
+  cka-sim serve      run the backend for the web page on 127.0.0.1:7070
   cka-sim version    print the version
 `
 
@@ -44,6 +50,8 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 		return runDown(stdout)
 	case "shell":
 		return runShell()
+	case "serve":
+		return runServe(ctx, stdout)
 	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "cka-sim %s %s/%s\n", buildVersion(), runtime.GOOS, runtime.GOARCH)
 		return nil
@@ -129,22 +137,14 @@ func runDown(stdout io.Writer) error {
 }
 
 func runShell() error {
-	c, err := cluster.New()
-	if err != nil {
+	if err := requireCluster(); err != nil {
 		return err
-	}
-	exists, err := c.Exists()
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return fmt.Errorf("cluster %s is not up; run cka-sim up first", cluster.Name)
 	}
 
 	// Not CommandContext: Ctrl-C is meant for the shell in the container, so it must not kill docker.
 	cmd := exec.Command("docker", shellArgs(term.IsTerminal(int(os.Stdin.Fd())))...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	err = cmd.Run()
+	err := cmd.Run()
 	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		return exitCode(exitErr.ExitCode())
 	}
@@ -158,4 +158,57 @@ func shellArgs(tty bool) []string {
 		args = append(args, "-t")
 	}
 	return append(args, cluster.ControlPlaneNode, "bash", "-l")
+}
+
+func requireCluster() error {
+	c, err := cluster.New()
+	if err != nil {
+		return err
+	}
+	exists, err := c.Exists()
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("cluster %s is not up; run cka-sim up first", cluster.Name)
+	}
+	return nil
+}
+
+// Only this machine: the page's terminal is root on the cluster.
+const serveAddr = "127.0.0.1:7070"
+
+func runServe(ctx context.Context, stdout io.Writer) error {
+	ln, err := net.Listen("tcp", serveAddr)
+	if err != nil {
+		return fmt.Errorf("claim %s: %w", serveAddr, err)
+	}
+	defer ln.Close()
+	if err := requireCluster(); err != nil {
+		return err
+	}
+	shells, err := terminal.NewDockerOpener(cluster.ControlPlaneNode)
+	if err != nil {
+		return err
+	}
+	if err := shells.EndAll(ctx); err != nil {
+		return err
+	}
+
+	srv := &http.Server{Handler: server.New(shells)}
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		srv.Shutdown(shutdownCtx)
+	}()
+	fmt.Fprintf(stdout, "backend on http://%s; Ctrl-C stops it\n", serveAddr)
+	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+
+	// Shutdown doesn't wait for websockets, so end their shells here.
+	endCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	return shells.EndAll(endCtx)
 }

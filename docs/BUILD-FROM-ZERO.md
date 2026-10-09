@@ -34,7 +34,7 @@ Commands marked **host** run in your terminal. **node** means inside a node cont
 ```
 ✅ D0 skeleton + CI ─► ✅ D1 doctor ─► ✅ D2 up / down
                                             │
-   ✅ D3 shell ─► D3b page + terminal ─► D4 task format ─► D5 runner + start ─► D6 grading + check ─► D7 selftest
+   ✅ D3 shell ─► ✅ D3b page + terminal ─► D4 task format ─► D5 runner + start ─► D6 grading + check ─► D7 selftest
                                                                               │
    D8 CNI ─► D9 node image ─► D10 base host + ssh ─► D11 status   ◄───────────┘
    (each pulled in when a task needs it)                │
@@ -73,7 +73,7 @@ one later stays easy.
 
 ```sh
 cd apps/cka-sim
-make dev              # cluster up, then the page on http://localhost:5173 (hot reload)
+make dev              # cluster up, the Go backend, and the page on http://localhost:5173 (hot reload)
 go run ./cmd doctor   # any command, straight from source; `make` lists the shortcuts
 ```
 
@@ -218,18 +218,20 @@ D2. Anything that needs Calico, a custom node image or the ssh setup waits for P
 - **Done when:** `./bin/cka-sim shell`, then `kubectl get nodes` lists 3 nodes, on Linux, macOS and Windows.
 - [ ] done
 
-### D3b · The page and its terminal (pulled forward from D14)
+### D3b · The page and its terminal (pulled forward from D14) ✅
 
 - **Goal:** the exam screen without the exam: a question pane that says "No task yet" and a
   terminal into the cluster, in the browser. No timer, no tasks.
 - **Build:**
   - `apps/web`: Vite + TypeScript, no framework. The two-pane exam layout. ✅
-  - `apps/cka-sim/Makefile`: `make dev` brings the cluster up and starts Vite. ✅
+  - `apps/cka-sim/Makefile`: `make dev` brings the cluster up, then runs `cka-sim serve` and
+    Vite together. ✅
   - `internal/terminal`: a shell on the cluster with a TTY, started at the browser's size,
     resizable, ended when the browser leaves. Behind an interface, so D10 can swap `docker exec`
-    for ssh to the base host.
-  - A Go server on `127.0.0.1:7070` with `/ws/terminal`, and a Vite proxy for `/ws`.
-  - xterm.js in the page, connected to that websocket.
+    for ssh to the base host. ✅
+  - `internal/server` + `cka-sim serve`: a Go server on `127.0.0.1:7070` with `/ws/terminal`,
+    and a Vite proxy for `/ws`. ✅
+  - xterm.js in the page, connected to that websocket. ✅
 - **Watch out:**
   - v1 used creack/pty around the docker CLI, which has no Windows support. Use Docker's exec API
     with `Tty: true` instead: Docker makes the TTY, and resizing is an API call.
@@ -242,10 +244,15 @@ D2. Anything that needs Calico, a custom node image or the ssh setup waits for P
     through localhost. *(learned in v1)*
   - Binary messages are keystrokes and output; text messages are JSON control
     (`{"type":"resize","cols":…,"rows":…}`). Raise the read limit so a large paste fits.
-  - Leave for later: several terminal tabs, reattaching after a reload, copy/paste shortcuts.
+  - xterm.css paints its viewport black around the themed text area; override it with the pane colour.
+  - In WSL, a Windows browser reaches `localhost:5173` through WSL's port forwarding, so its
+    connections show up in `ss` with no owning process. An open tab keeps one shell alive; that's
+    not a leak.
+  - Leave for later: several terminal tabs, reattaching after a reload, copy/paste shortcuts,
+    pings to drop half-open connections (laptop sleep).
 - **Done when:** `make dev`, open http://localhost:5173, and `kubectl get nodes` in the page lists 3 nodes.
 - **Learn:** what a TTY is across a network, websockets, and keeping the outside world behind an interface.
-- [ ] done
+- [x] done
 
 ### D4 · The task format and loader
 

@@ -5,6 +5,7 @@ go 1.26.0
 toolchain go1.26.9
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/moby/moby/client v0.6.2
 	golang.org/x/term v0.47.0
 	sigs.k8s.io/kind v0.33.0

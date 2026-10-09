@@ -28,7 +28,7 @@ go build -o bin/cka-sim ./cmd
 Needs Go and Node. From `apps/cka-sim`, `make` lists the shortcuts:
 
 ```sh
-make dev              # cluster up, then the page on http://localhost:5173 with hot reload
+make dev              # cluster up, the Go backend, and the page with a terminal on http://localhost:5173
 go run ./cmd doctor   # or any other command, straight from source
 ```
 

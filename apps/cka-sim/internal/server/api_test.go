@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/exam"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/grader"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/tasks"
 )
@@ -227,13 +231,28 @@ func newAPI(t *testing.T, r *fakeRunner) *httptest.Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(New(newFakeOpener(), Practice{Tasks: all, Files: files, Runner: r}))
+	session, err := exam.Open(exam.Config{
+		Store:   exam.FileStore{Path: filepath.Join(t.TempDir(), "exam.json")},
+		Files:   files,
+		Runner:  r,
+		Catalog: all,
+		Now:     time.Now,
+		Rand:    rand.New(rand.NewPCG(1, 2)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(New(newFakeOpener(), Practice{Tasks: all, Files: files, Runner: r, Exam: session}))
 	t.Cleanup(srv.Close)
 	return srv
 }
 
 func call(t *testing.T, srv *httptest.Server, method, path string) (int, string) {
-	req, err := http.NewRequest(method, srv.URL+path, nil)
+	return request(t, srv, method, path, "")
+}
+
+func request(t *testing.T, srv *httptest.Server, method, path, payload string) (int, string) {
+	req, err := http.NewRequest(method, srv.URL+path, strings.NewReader(payload))
 	if err != nil {
 		t.Error(err)
 		return 0, ""

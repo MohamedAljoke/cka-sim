@@ -1,0 +1,144 @@
+---
+id: ExamMode
+name: Exam Mode
+version: 0.0.1
+owners:
+  - mohamed
+summary: |
+  A timed exam on the local cluster: tasks drawn by CKA domain weight, set up before the clock starts,
+  scored together at the end against the 66% pass mark.
+steps:
+  - id: user_start
+    title: Start exam
+    actor:
+      name: User
+      summary: Picks the number of tasks and minutes
+    next_step:
+      id: page_start
+      label: Click
+
+  - id: page_start
+    title: Exam form
+    service:
+      id: PracticePage
+    next_step:
+      id: server_begin
+      label: POST /api/exam
+
+  - id: server_begin
+    title: "Take the script lock, draw tasks, reply 202"
+    service:
+      id: CkaSimServer
+    next_steps:
+      - id: exam_file
+        label: Save the exam
+      - id: setup_parallel
+        label: In the background
+
+  - id: exam_file
+    title: exam.json
+    container:
+      id: ExamFile
+
+  - id: setup_parallel
+    title: "setup.sh for every task, in parallel"
+    summary: Each finished setup is saved, so a restart only redoes the unfinished ones.
+    next_step:
+      id: setup_last
+      label: Then
+
+  - id: setup_last
+    title: "order: last tasks, one at a time"
+    summary: The etcd snapshot must include every other task's objects, and a broken scheduler or kubelet would stall the others.
+    next_steps:
+      - id: cluster
+        label: docker exec bash -s on each task's node
+      - id: clock
+        label: All set up
+
+  - id: cluster
+    title: kind cluster
+    externalSystem:
+      name: kind cluster
+      summary: cka-sim-base plus the control plane and two workers, in Docker on this machine.
+
+  - id: clock
+    title: "Start the clock, release the lock"
+    service:
+      id: CkaSimServer
+    next_step:
+      id: page_running
+      label: GET /api/exam (polled)
+
+  - id: page_running
+    title: Timer, questions, flags
+    service:
+      id: PracticePage
+    next_steps:
+      - id: terminal
+        label: User works
+      - id: user_end
+        label: Done
+
+  - id: terminal
+    title: "Terminal: ssh to the task's node"
+    service:
+      id: WebTerminal
+    next_step:
+      id: cluster
+      label: kubectl, systemctl, …
+
+  - id: user_end
+    title: End exam
+    actor:
+      name: User
+    next_step:
+      id: server_end
+      label: POST /api/exam/end
+
+  - id: server_end
+    title: "check.sh for every task, weighted score"
+    service:
+      id: CkaSimServer
+    next_steps:
+      - id: cluster
+        label: Inspect live state
+      - id: page_results
+        label: Percent, PASS/FAIL
+
+  - id: page_results
+    title: Results, checks, solutions
+    service:
+      id: PracticePage
+    next_step:
+      id: back
+      label: Back to practice
+
+  - id: back
+    title: "DELETE /api/exam"
+    summary: Deletes exam.json; the page shows the practice list again.
+    service:
+      id: CkaSimServer
+---
+
+## Overview
+
+Exam mode as it works locally today, started from the page with no CLI step. The hop-by-hop prose is
+in `docs/FLOWS.md` section 6.
+
+<NodeGraph />
+
+## Reading the graph
+
+1. **Start.** `POST /api/exam` takes the script lock, draws tasks by CKA domain weight (largest-remainder
+   quotas), saves [exam.json](/docs/containers/ExamFile/0.0.1) and replies 202 straight away.
+2. **Setup.** Every `setup.sh` runs at once, then the `order: last` tasks run one by one. The page polls and
+   shows "N of M tasks set up". Practice check and solution answer 409 while the exam runs.
+3. **Clock.** Only when every task is set up does the deadline start, so setup time is not exam time. The
+   script lock is released.
+4. **Work.** The candidate uses the terminal and `ssh`es to each task's node. Flags are saved as they change.
+   If the server restarts, it reloads the exam with the same deadline and redoes any unfinished setup.
+5. **End.** `POST /api/exam/end` runs every `check.sh` at once. Each task counts by its weight and 66% passes.
+6. **Back.** `DELETE /api/exam` removes the file and practice mode returns.
+
+The hosted plan for the same journey is [Quiz Attempt Lifecycle](/docs/flows/QuizAttemptLifecycle/0.0.1).

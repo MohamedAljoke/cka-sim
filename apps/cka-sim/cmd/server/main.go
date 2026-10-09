@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/catalog"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/cluster"
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/exam"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/runner"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/server"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/tasks"
@@ -80,9 +82,26 @@ func loadPractice() (server.Practice, error) {
 	if err != nil {
 		return server.Practice{}, err
 	}
+	node := runner.Node{Lib: lib}
+	path, err := exam.DefaultPath()
+	if err != nil {
+		return server.Practice{}, err
+	}
+	session, err := exam.Open(exam.Config{
+		Store:   exam.FileStore{Path: path},
+		Files:   catalog.FS,
+		Runner:  node,
+		Catalog: all,
+		Now:     time.Now,
+		Rand:    rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
+	})
+	if err != nil {
+		return server.Practice{}, fmt.Errorf("%w (delete %s to start fresh)", err, path)
+	}
 	return server.Practice{
 		Tasks:  all,
 		Files:  catalog.FS,
-		Runner: runner.Node{Lib: lib},
+		Runner: node,
+		Exam:   session,
 	}, nil
 }

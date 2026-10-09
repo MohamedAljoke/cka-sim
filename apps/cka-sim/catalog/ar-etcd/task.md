@@ -5,6 +5,7 @@ domain: architecture
 host: cka-sim-control-plane
 topics: [etcd, backup, restore]
 weight: 8
+order: last
 ---
 ## Context
 

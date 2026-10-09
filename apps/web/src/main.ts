@@ -3,7 +3,7 @@ import '@fontsource/barlow-semi-condensed/600.css'
 import '@fontsource/barlow-semi-condensed/700.css'
 import './style.css'
 import { openTerminal } from './terminal'
-import { showTasks } from './tasks'
+import { showExam } from './exam'
 
 openTerminal(document.querySelector<HTMLElement>('#terminal')!)
-showTasks(document.querySelector<HTMLElement>('#question')!)
+showExam(document.querySelector<HTMLElement>('#question')!)

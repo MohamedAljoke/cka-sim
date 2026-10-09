@@ -38,6 +38,7 @@ domain: troubleshooting | architecture | networking | workloads | storage
 host: cka-sim-control-plane        # the node the user ssh-es into
 topics: [kebab-case, words]
 weight: <1-8, rough exam points>
+order: last                        # optional, see below
 ---
 ## Context        (optional: what exists, in exam voice)
 
@@ -48,8 +49,10 @@ weight: <1-8, rough exam points>
 
 - **Id prefixes:** `tr-` troubleshooting, `ar-` architecture, `nw-` networking, `wl-` workloads,
   `st-` storage.
+- **`order: last`** only when setup snapshots etcd or breaks the cluster (a control-plane manifest,
+  a kubelet). An exam sets these up one by one after every other task.
 - **No other frontmatter fields.** The parser is strict and the server won't start with unknown
-  fields such as v1's `cluster:` or `order:`.
+  fields such as v1's `cluster:`.
 - **Exam voice:** state the goal, never the fix. Add constraints like "Do not modify Deployment X"
   when they matter.
 
@@ -88,11 +91,11 @@ weight: <1-8, rough exam points>
 ```sh
 cd apps/cka-sim
 go test ./catalog/...          # the frontmatter parses, the host is a real node, no script is empty
-make try TASK=<id>             # setup → every check FAILs → solution → every check PASSes
+make selftest TASK=<id>        # setup → every check FAILs → solution → every check PASSes
 ```
 
-`make try` needs the cluster up (`make up`). Also break the "don't modify" rule by hand once and
-re-run `check.sh` to see that check fail. The command is in `scripts/try-task.sh`.
+`make selftest` needs the cluster up (`make up`). Also break the "don't modify" rule by hand once and
+re-run `check.sh` to see that check fail.
 
 If the task came from the question bank, fill in its **Covered** cell with `main \`<id>\``.
 

@@ -62,7 +62,7 @@ Things the exam environment does that our tasks should copy:
 
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
-| T1 | A worker node is `NotReady`. Find out why and fix it so that it survives a reboot. Example causes: kubelet stopped or disabled, wrong flag in the kubelet config, bad CA path. | ★★ | systemd kubelet on node | v1 `tr-kubelet` |
+| T1 | A worker node is `NotReady`. Find out why and fix it so that it survives a reboot. Example causes: kubelet stopped or disabled, wrong flag in the kubelet config, bad CA path. | ★★ | systemd kubelet on node | main `tr-kubelet` (selftest not run yet) |
 | T2 | A node is `NotReady` because the container runtime is down or its socket path is wrong in the kubelet config. Fix it. | ★★ | containerd on node | |
 | T3 | A node shows `DiskPressure` or `MemoryPressure` and Pods are being evicted. Find the cause and free the node. | ★★★ | fill a disk on node | |
 | T4 | A node was cordoned and left `SchedulingDisabled`. Find which one and make it schedulable again without restarting anything. | ★ | | |
@@ -73,7 +73,7 @@ Things the exam environment does that our tasks should copy:
 
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
-| T7 | New Pods stay `Pending` forever. The scheduler is broken through its static Pod manifest. Fix it without touching the Pods. | ★★ | static Pods | v1 `tr-scheduler` |
+| T7 | New Pods stay `Pending` forever. The scheduler is broken through its static Pod manifest. Fix it without touching the Pods. | ★★ | static Pods | main `tr-scheduler` |
 | T8 | `kubectl` cannot reach the API server. The kube-apiserver manifest has a bad flag, port, cert path or etcd endpoint. Fix it. | ★★★ | static Pods | |
 | T9 | Deployments don't create Pods, or scaling has no effect. kube-controller-manager is broken. Fix it. | ★★ | static Pods | |
 | T10 | Write how kube-scheduler, controller-manager, etcd and DNS are run in this cluster (static Pod, Deployment, systemd process) to a file. | ★ | | |
@@ -101,7 +101,7 @@ Things the exam environment does that our tasks should copy:
 
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
-| T20 | A Service times out. Its selector or `targetPort` doesn't match the Pods. Fix the Service, not the Deployment. | ★★ | | v1 `tr-service` |
+| T20 | A Service times out. Its selector or `targetPort` doesn't match the Pods. Fix the Service, not the Deployment. | ★★ | | main `tr-service` |
 | T21 | DNS lookups fail inside Pods. CoreDNS is scaled to 0, its ConfigMap is broken, or kube-dns has no endpoints. Fix it. | ★★ | | |
 | T22 | Pods on one node cannot reach Pods on another. The CNI config is missing or broken on that node. Fix it. | ★★★ | CNI on node | |
 | T23 | kube-proxy is not running, or uses the wrong mode, so ClusterIPs don't route. Fix it. | ★★ | | |
@@ -115,7 +115,7 @@ Things the exam environment does that our tasks should copy:
 
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
-| A1 | Create a ServiceAccount, a Role and a RoleBinding with least privilege, then check with `kubectl auth can-i --as=system:serviceaccount:...`. | ★★ | | v1 `ar-rbac` |
+| A1 | Create a ServiceAccount, a Role and a RoleBinding with least privilege, then check with `kubectl auth can-i --as=system:serviceaccount:...`. | ★★ | | main `ar-rbac` |
 | A2 | Create a ClusterRole that can only `list` and `get` nodes and PersistentVolumes, and bind it to a user or group. | ★ | | |
 | A3 | Bind a **ClusterRole** with a **RoleBinding** so the subject gets its rights in one namespace only. Explain the difference in a file. | ★★ | | |
 | A4 | Create a new user from a CSR (key → CSR object → approve → kubeconfig entry), then give that user read-only access to one namespace. | ★★★ | | |
@@ -135,7 +135,7 @@ Things the exam environment does that our tasks should copy:
 
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
-| A11 | Back up etcd with `etcdctl snapshot save` (endpoints and certs), then restore from an older snapshot and get the cluster healthy. | ★★★ | etcd static Pod | v1 `ar-etcd` |
+| A11 | Back up etcd with `etcdctl snapshot save` (endpoints and certs), then restore from an older snapshot and get the cluster healthy. | ★★★ | etcd static Pod | main `ar-etcd` (selftest not run yet) |
 | A12 | Find etcd's version, data dir and member list, and write them to a file. | ★ | | |
 
 ### Highly-available control plane
@@ -187,7 +187,7 @@ Things the exam environment does that our tasks should copy:
 
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
-| N3 | Allow ingress to `app=api` only from one label in the same namespace and from any Pod in another namespace, on one port. | ★★ | policy-enforcing CNI | v1 `nw-netpol` |
+| N3 | Allow ingress to `app=api` only from one label in the same namespace and from any Pod in another namespace, on one port. | ★★ | policy-enforcing CNI | v1 `nw-netpol` · later: kindnet does not enforce NetworkPolicy |
 | N4 | Default-deny all ingress and egress in a namespace, then allow egress to DNS (UDP/TCP 53) only. | ★★ | policy-enforcing CNI | |
 | N5 | Allow egress from a backend to a database Pod on one port and to nothing else. | ★★ | policy-enforcing CNI | |
 | N6 | Several NetworkPolicies are given. Pick the one that meets the requirement with least privilege and apply it. | ★★ | policy-enforcing CNI | |
@@ -236,7 +236,7 @@ Things the exam environment does that our tasks should copy:
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
 | W1 | Scale a Deployment and make sure all replicas are Ready. | ★ | | main `wl-scale` |
-| W2 | Roll back a broken rollout to the last good revision, write the revision number to a file, and set `maxSurge`/`maxUnavailable`. | ★★ | | v1 `wl-rollout` |
+| W2 | Roll back a broken rollout to the last good revision, write the revision number to a file, and set `maxSurge`/`maxUnavailable`. | ★★ | | main `wl-rollout` |
 | W3 | Update a Deployment's image and record the change cause. Pause the rollout, make two changes, then resume it. | ★★ | | |
 | W4 | Change a Deployment to the `Recreate` strategy and explain when you would choose it, in a file. | ★ | | |
 
@@ -288,7 +288,7 @@ Things the exam environment does that our tasks should copy:
 
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
-| S1 | Create a hostPath PV (capacity, access mode, `Retain`, storageClassName), a PVC that binds to it, and a Pod that writes to it. | ★★ | | v1 `st-pvc` |
+| S1 | Create a hostPath PV (capacity, access mode, `Retain`, storageClassName), a PVC that binds to it, and a Pod that writes to it. | ★★ | | main `st-pvc` |
 | S2 | Create a StorageClass with a provisioner, `reclaimPolicy` and `volumeBindingMode: WaitForFirstConsumer`, and make it the default. | ★★ | dynamic provisioner | |
 | S3 | Create a PVC with no PV and get it bound through dynamic provisioning. Check that the PV it creates gets deleted with the PVC. | ★★ | dynamic provisioner | |
 | S4 | A PVC stays `Pending`. Find out why (wrong class, access mode, or too big a size) and fix the PVC without changing the PV. | ★★ | | |
@@ -304,17 +304,73 @@ Things the exam environment does that our tasks should copy:
 
 | Domain | Weight | Questions | Covered |
 |---|---|---|---|
-| Troubleshooting | 30% | 24 | 3 (v1) |
-| Cluster Architecture | 25% | 26 | 2 (v1) |
-| Services & Networking | 20% | 21 | 1 (v1) |
-| Workloads & Scheduling | 15% | 26 | 1 (main) + 1 (v1) |
-| Storage | 10% | 9 | 1 (v1) |
+| Troubleshooting | 30% | 24 | 3 (main) |
+| Cluster Architecture | 25% | 26 | 2 (main) |
+| Services & Networking | 20% | 21 | 0 (v1 `nw-netpol` waits for a policy-enforcing CNI) |
+| Workloads & Scheduling | 15% | 26 | 2 (main) |
+| Storage | 10% | 9 | 1 (main) |
+
+## Build progress
+
+The work of turning these questions into catalog tasks, kept here so it survives between sessions.
+
+**Rules:**
+- Only questions the current cluster can host get built now.
+- Each task is proven with `go test ./catalog -run 'TestSelftest/^<id>$' -selftest -count=1 -v`.
+- Changes stay in `apps/cka-sim/catalog/` and `docs/`.
+- At the end, every question that wasn't built gets a `later: <reason>` note in its Covered cell.
+
+**What the cluster can do (probed 2026-10-09):**
+- kind v1.37 with 1 control plane and 2 workers, kindnet, CoreDNS, kube-proxy, and the `standard` local-path StorageClass (`WaitForFirstConsumer`, no expansion).
+- Root on every node, workers included, has an admin kubeconfig, so a task can be hosted on a worker.
+- kindnet does **not** enforce NetworkPolicy, so N3–N7 wait.
+- The nodes have no `etcdctl`/`etcdutl`. `etcd_tools` in `catalog/lib.sh` copies them out of the etcd image.
+- `catalog/lib.sh` gives answer files `COURSE=/opt/course/<task id>`, and `fresh_course` resets that folder.
+
+**Waves (the build order):**
+
+| # | Theme | Questions | State |
+|---|---|---|---|
+| 1 | Port the v1 tasks | T1, T7, A11, A1, S1, W2 | Done and staged. Selftest for T1 `tr-kubelet` and A11 `ar-etcd` not run yet. |
+| 2 | Quick troubleshooting | T4, T14, T15, T16, T19 | next |
+| 3 | Control plane and node | T2, T6, T8, T9, T18 (T11 folded in) | |
+| 4 | Network plumbing | T5, T21, T22, T23, N12 | |
+| 5 | RBAC and certs | A2, A3, A4, A5, A9 | |
+| 6 | Cluster facts (answer files) | T10, A10, A12, A20, A21 | |
+| 7 | Kustomize and CRDs | A18, A19, A24, A26 | |
+| 8 | Services | N1, N8, N9, N10, N11 | |
+| 9 | DNS and addressing | N2, N19, N20, N21 | |
+| 10 | Rollouts and config | W3, W4, W5, W6, W7, W8 | |
+| 11 | Self-healing | W13–W18 | |
+| 12 | Scheduling I | W19–W23 | |
+| 13 | Scheduling II and logs | W24, W25, W26, T17 | |
+| 14 | Storage | S2, S3, S4, S6, S7, S8, S9 | |
+
+**Rewrites so the answer can be checked:**
+- T10 becomes `component: static-pod|deployment|daemonset|systemd` lines.
+- W4: the check reads `strategy.type: Recreate`.
+- S9: write the access mode for 4 given scenarios.
+- T11 is merged into T18.
+
+**Left for later, and why:**
+
+| Questions | Waiting for |
+|---|---|
+| T12, T13, W9–W11 | metrics-server |
+| W12 | the VPA CRDs |
+| N3–N7 | a CNI that enforces NetworkPolicy |
+| N13–N18, T24 | Gateway API or an ingress controller |
+| A15–A17 | helm |
+| A7, A8, A13, A14 | a spare node, kubeadm packages, or an HA control plane |
+| A6, A22, T3 | a safe way to do them; they would damage the shared kind/docker host |
+| A23, S5 | a CSI driver; local-path can't expand volumes |
+| A25 | an operator image |
 
 ## What the cluster still needs
 
 These are grouped by how many questions each one unblocks:
 
-1. **2+ worker nodes:** T5, W18, W22, and many scheduling questions read better with them.
+1. ~~**2+ worker nodes**~~: done; the cluster has 2 workers.
 2. **metrics-server:** T12, T13, W9–W11.
 3. **NetworkPolicy-enforcing CNI** (Calico or Cilium instead of kindnet): N3–N7.
 4. **Gateway API CRDs + a controller** (e.g. Envoy Gateway or NGINX Gateway Fabric): N13–N16, T24.

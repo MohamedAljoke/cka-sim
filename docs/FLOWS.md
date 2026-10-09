@@ -55,12 +55,73 @@ The page shows "Preparing the cluster…", then "Ready" on 204, or the script's 
 then follow the "Connect first" line: `ssh <host>` logs you in with base's key and no password, and you
 solve the task with `k`.
 
-## 4. Not built yet
+## 4. Check, Solution, Reset
 
-- **Check:** runs `check.sh` on the same host and turns its `PASS|FAIL <points> <description>` lines into a
-  score.
-- **Solution:** shows `explain.md`.
-- **Reset:** runs `start` again.
-- **`make selftest`:** for every task, runs setup → check (must score 0) → solution → check (must score
-  full).
-- **Exam mode:** the same pieces, with tasks drawn by domain weight, set up together, and a timer.
+**Check.** You solve the task in the page terminal (`ssh <host>`, then `k …`) and press **Check**. The page
+disables Check and Reset, shows "Checking…" and sends `POST /api/tasks/{id}/check`. `checkTask`
+(`internal/server/api.go`) takes the same lock as setup, so a check during setup gets 409 "a script is
+already running". It calls `tasks.Check` (`internal/tasks/run.go`), which runs `check.sh` on the task's
+host through the same runner as setup, with `lib.sh` in front. Each `check <points> <description> <cmd>`
+in the script prints `PASS` or `FAIL` with its points and description. `grader.Parse`
+(`internal/grader/grader.go`) keeps only those lines, ignoring kubectl noise, and adds up earned and total.
+The page shows a bold `2 / 4` and one ✓/✗ line per check. If `check.sh` itself crashes, the server answers
+500 with its output, and the page shows "Check failed: …" rather than a silent 0.
+
+**Solution.** **Solution** sends `GET /api/tasks/{id}/solution`, which returns the task's `explain.md`,
+loaded at startup. No script runs. The page renders it with `marked` under the question; pressing again
+hides it.
+
+**Reset.** **Reset** clears the result, sets the status back to "Preparing the cluster…" and sends the same
+`POST /api/tasks/{id}/start` as opening the task. `fresh_ns` wipes the namespace and `setup.sh` rebuilds
+the broken state. While it runs, Check is disabled.
+
+## 5. `make selftest`: proving every task is fair
+
+`make selftest` runs `go test ./catalog -run TestSelftest -selftest`. The `-selftest` flag keeps
+`go test ./...` from touching the cluster. `catalog/selftest_test.go` loads every task and `lib.sh` and
+builds the same `runner.Node` the server uses. For each task, `tasks.Selftest` runs setup, then check,
+which must earn 0 of more than 0 points (nothing to earn for doing nothing). It then runs `solution.sh`
+(`tasks.Solve`) and checks again, which must earn every point. A failure names the task and the checks
+at fault, for example:
+`wl-scale: earns 0/4 after the solution: "Deployment web wants 4 replicas", …`.
+
+## 6. Exam mode
+
+**Starting.** Above the practice list, **Start exam** opens a small form (`apps/web/src/tasks.ts`): how many
+tasks (1 to the catalog size, default 16 or fewer) and the minutes (default 120). Submitting sends
+`POST /api/exam {count, minutes}`. `beginExam` (`internal/server/exam.go`) checks the numbers (400 if they are
+out of range) and takes the script lock, so a running practice setup gets 409. It then calls
+`exam.Session.Begin` (`internal/exam/session.go`). `tasks.Draw` (`internal/tasks/draw.go`) picks the tasks:
+each domain gets its share of the count by the CKA weights, with any shortfall moved to the heaviest domains,
+and the result is shuffled. The exam is saved with every task `preparing` to
+`~/.local/state/cka-sim/exam.json`, and the request answers 202 right away. In the background, every
+`setup.sh` runs at once through `tasks.Start`. Tasks marked `order: last` then run one by one, because an
+etcd snapshot or a broken scheduler or kubelet would spoil the setups beside it. Each task turns `ready` or
+`failed`, and the file is saved after each. When all are done, the lock is released and the clock starts
+(`started`, and `deadline` = started + minutes), so setup time is not exam time.
+
+**Taking it.** The page loads through `showExam` (`apps/web/src/exam.ts`), which asks `GET /api/exam`
+first. A 404 means no exam, so it shows the practice list. While the exam is preparing, the page shows
+"N of M tasks set up" and asks again every 2 seconds. Then you see:
+- A countdown. It is timed against the `now` the server sends, so a wrong browser clock doesn't matter. It
+  turns red under 10 minutes, and after 0:00 it shows "Time's up +…", but nothing ends on its own.
+- Question pills. A flagged question shows ⚑, and a failed setup shows in red with its error on the question.
+- **Flag for later**, which sends `PUT` or `DELETE /api/exam/flags/{id}`.
+- **End exam**.
+
+You work in the same terminal (`ssh <host>`, then `k …`). While the exam runs, practice start, check and
+solution answer 409 "not during an exam". Questions stay readable.
+
+**Restart.** `cmd/server/main.go` opens the session from `exam.json`. If the file names a task the catalog
+no longer has, the server refuses to start and says which file to delete. Any task still `preparing` is set
+up again, with the lock held (`resumeExam`). A reload finds the same exam, with the same deadline and flags.
+
+**Ending.** **End exam** asks for confirmation, then sends `POST /api/exam/end`. With the lock held, every
+`check.sh` runs at once through `tasks.Check`. A check that crashes counts as 0 and keeps its error. Each
+`grader.Result` and the end time are saved. The reply includes the score, worked out on the server by
+`exam.Score`: each task's earned/total times its weight, over the sum of the weights, passing at 66%. The
+results page shows the percentage with PASS or FAIL and one row per task with its points. Opening a row
+shows the ✓/✗ checks and the solution, which is allowed now that the exam is over.
+
+**Back to practice.** This sends `DELETE /api/exam`, which removes `exam.json`, and the practice list
+comes back.

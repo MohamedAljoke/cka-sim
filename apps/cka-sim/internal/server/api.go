@@ -29,10 +29,7 @@ func (a *api) question(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) startTask(w http.ResponseWriter, r *http.Request) {
 	t, ok := a.findTask(w, r)
-	if !ok {
-		return
-	}
-	if !a.lock(w) {
+	if !ok || a.duringExam(w) || !a.lock(w) {
 		return
 	}
 	defer a.busy.Unlock()
@@ -46,10 +43,7 @@ func (a *api) startTask(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) checkTask(w http.ResponseWriter, r *http.Request) {
 	t, ok := a.findTask(w, r)
-	if !ok {
-		return
-	}
-	if !a.lock(w) {
+	if !ok || a.duringExam(w) || !a.lock(w) {
 		return
 	}
 	defer a.busy.Unlock()
@@ -63,7 +57,7 @@ func (a *api) checkTask(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) solution(w http.ResponseWriter, r *http.Request) {
 	t, ok := a.findTask(w, r)
-	if !ok {
+	if !ok || a.duringExam(w) {
 		return
 	}
 	writeJSON(w, map[string]string{"explain": t.Explain})
@@ -76,6 +70,15 @@ func (a *api) lock(w http.ResponseWriter) bool {
 		return false
 	}
 	return true
+}
+
+// duringExam keeps practice's checks and solutions away from a running exam.
+func (a *api) duringExam(w http.ResponseWriter) bool {
+	if a.Exam != nil && a.Exam.Running() {
+		http.Error(w, "not during an exam", http.StatusConflict)
+		return true
+	}
+	return false
 }
 
 func (a *api) findTask(w http.ResponseWriter, r *http.Request) (tasks.Task, bool) {

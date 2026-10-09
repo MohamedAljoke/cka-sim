@@ -29,12 +29,17 @@ Needs Go and Node. From `apps/cka-sim`, `make` lists the shortcuts:
 
 ```sh
 make dev              # cluster up, the Go backend, and the page with a terminal on http://localhost:5173
+make selftest         # prove every task scores 0 before its solution and full after (needs the cluster)
 go run ./cmd/cli doctor   # or any other command, straight from source
 ```
+
+In the page, practise one task at a time, or press **Start exam** for a timed exam. Its tasks are drawn by
+CKA domain weight, and it is scored at the end against the 66% pass mark.
 
 ## Docs
 
 - [Build plan](docs/BUILD-FROM-ZERO.md): what's done, what's next, and the conventions.
+- [Flows](docs/FLOWS.md): what happens, hop by hop, when you run a command or press a button.
 - [Study guide](docs/STUDY-GUIDE.md): how each piece works, with things to run and questions to answer.
 
 ## Layout

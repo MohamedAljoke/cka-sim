@@ -5,7 +5,7 @@ version: 0.0.1
 owners:
   - mohamed
 summary: |
-  The Go backend. Bridges each browser websocket to a bash shell inside the kind control-plane node.
+  The Go backend. Bridges the browser terminal to a shell on the base host, and runs task scripts for practice and exam mode.
 badges:
   - content: Go
     backgroundColor: teal
@@ -13,12 +13,19 @@ badges:
 repository:
   language: Go
   url: https://github.com/MohamedAljoke/cka-sim/tree/main/apps/cka-sim
+readsFrom:
+  - id: ExamFile
+writesTo:
+  - id: ExamFile
 ---
 
 ## Overview
 
-`cmd/server` listens on `127.0.0.1:7070`, only this machine, because the terminal is root on the cluster.
-At startup it checks the cluster is up and ends shells left over from a previous run.
+`cmd/server` listens on `127.0.0.1:7070`, only this machine, because the terminal can sudo on every node.
+At startup it checks the cluster is up, ends shells left over from a previous run, and loads the task
+catalog plus any saved exam from [exam.json](/docs/containers/ExamFile/0.0.1).
+
+## Terminal
 
 `internal/server` serves `GET /ws/terminal`:
 
@@ -28,6 +35,30 @@ At startup it checks the cluster is up and ends shells left over from a previous
 4. Loops on browser frames: binary goes to the shell, text is parsed as a resize.
 5. When the socket closes, it closes the shell.
 
-The shell itself comes from `internal/terminal`. Today the `Opener` is `DockerOpener`, which uses Docker
-exec to run `bash -l` in the control-plane container. Because the server only depends on the `Opener`
-interface, a different cluster provider could be plugged in later.
+The `Opener` is `DockerOpener`, which uses Docker exec to run `bash -l` as user `candidate` in the
+`cka-sim-base` container, the host the exam starts on. The candidate then `ssh`es to the node a task names.
+
+## Task API
+
+| Route | Does |
+|---|---|
+| `GET /api/tasks`, `GET /api/tasks/{id}/question` | the catalog, embedded in the binary |
+| `POST /api/tasks/{id}/start` | runs `setup.sh` |
+| `POST /api/tasks/{id}/check` | runs `check.sh`, parses `PASS/FAIL <pts>` lines |
+| `GET /api/tasks/{id}/solution` | the task's explanation |
+
+Scripts run through `runner.Node`: `lib.sh` plus the script, piped into `docker exec -i <host> bash -s` on
+the task's node. A single script lock lets only one run at a time (409 "a script is already running").
+While an exam runs, practice check and solution answer 409 "not during an exam".
+
+## Exam API
+
+| Route | Does |
+|---|---|
+| `POST /api/exam` | draws tasks by domain weight, saves the exam, sets every task up in the background (202) |
+| `GET /api/exam` | the exam plus the server's `now`, so the page's timer follows the server clock |
+| `PUT` / `DELETE /api/exam/flags/{id}` | flags a question for later |
+| `POST /api/exam/end` | runs every `check.sh` and returns the weighted score (pass at 66%) |
+| `DELETE /api/exam` | deletes the exam and goes back to practice |
+
+The engine is `internal/exam.Session`. See [Exam Mode](/docs/flows/ExamMode/0.0.1) for the whole path.

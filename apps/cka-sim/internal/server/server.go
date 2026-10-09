@@ -9,6 +9,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/exam"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/tasks"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/terminal"
 )
@@ -19,6 +20,7 @@ type Practice struct {
 	Tasks  []tasks.Task
 	Files  fs.FS
 	Runner tasks.Runner
+	Exam   *exam.Session
 }
 
 func New(opener terminal.Opener, practice Practice) http.Handler {
@@ -32,6 +34,15 @@ func New(opener terminal.Opener, practice Practice) http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/start", a.startTask)
 	mux.HandleFunc("POST /api/tasks/{id}/check", a.checkTask)
 	mux.HandleFunc("GET /api/tasks/{id}/solution", a.solution)
+	if practice.Exam != nil {
+		a.resumeExam()
+		mux.HandleFunc("GET /api/exam", a.getExam)
+		mux.HandleFunc("POST /api/exam", a.beginExam)
+		mux.HandleFunc("PUT /api/exam/flags/{id}", a.flag)
+		mux.HandleFunc("DELETE /api/exam/flags/{id}", a.flag)
+		mux.HandleFunc("POST /api/exam/end", a.endExam)
+		mux.HandleFunc("DELETE /api/exam", a.discardExam)
+	}
 	return http.NewCrossOriginProtection().Handler(mux)
 }
 

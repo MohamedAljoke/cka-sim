@@ -279,6 +279,79 @@ code {
   margin-top: 1rem;
 }
 
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.action {
+  padding: 0.4rem 0.9rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-foreground);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 150ms, border-color 150ms;
+}
+
+.action:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border-strong);
+}
+
+.action.primary {
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.action.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-primary) 85%, black);
+}
+
+.action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.result:not(:empty) {
+  margin-top: 0.75rem;
+}
+
+.score {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.checks {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checks .mark {
+  display: inline-block;
+  width: 1.25rem;
+  font-weight: 700;
+}
+
+.checks .passed .mark {
+  color: var(--color-success);
+}
+
+.checks .failed .mark {
+  color: var(--color-danger);
+}
+
+.solution {
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
 .terminal {
   background: var(--color-terminal);
   min-width: 0;
@@ -289,4 +362,147 @@ code {
 /* xterm.css paints the viewport black, around the themed text area. */
 #terminal .xterm-viewport {
   background-color: var(--color-terminal);
+}
+
+.exam-start {
+  margin-bottom: 1rem;
+}
+
+.exam-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.exam-form label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-foreground-subtle);
+}
+
+.exam-form input {
+  width: 6rem;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+  color: var(--color-foreground);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.exam-form .error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.exam-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.timer {
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.timer.low {
+  color: var(--color-danger);
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+}
+
+.pill {
+  min-width: 2.25rem;
+  padding: 0.25rem 0.5rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-foreground);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.pill.flagged {
+  color: var(--color-warning);
+  border-color: color-mix(in srgb, var(--color-warning) 50%, transparent);
+}
+
+.pill.failed {
+  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 50%, transparent);
+}
+
+.pill.current {
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.exam-question {
+  margin-top: 1rem;
+}
+
+.exam-question-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.exam-question-head h2 {
+  margin: 0;
+}
+
+.verdict {
+  margin: 0.5rem 0 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.verdict.pass {
+  color: var(--color-success);
+}
+
+.verdict.fail {
+  color: var(--color-danger);
+}
+
+.results {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.result-row {
+  padding: 0.5rem 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.result-row summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.result-row .points {
+  font-variant-numeric: tabular-nums;
 }

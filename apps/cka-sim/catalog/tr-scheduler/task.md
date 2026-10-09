@@ -5,6 +5,7 @@ domain: troubleshooting
 host: cka-sim-control-plane
 topics: [kube-scheduler, static-pods]
 weight: 7
+order: last
 ---
 ## Context
 

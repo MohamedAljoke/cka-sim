@@ -1,0 +1,34 @@
+---
+id: PracticePage
+name: Practice & Exam Page
+version: 0.0.1
+owners:
+  - mohamed
+summary: |
+  The task pane next to the terminal in apps/web: the practice list, one task at a time, and the timed exam.
+badges:
+  - content: Browser
+    backgroundColor: blue
+    textColor: blue
+repository:
+  language: TypeScript
+  url: https://github.com/MohamedAljoke/cka-sim/tree/main/apps/web
+---
+
+## Overview
+
+`apps/web/src/main.ts` asks for `GET /api/exam` first. With no exam it shows the practice list
+(`tasks.ts`); with one it shows the exam (`exam.ts`). Vite proxies `/api` to the Go server on `127.0.0.1:7070`.
+
+**Practice.** Pick a task to run its setup, read the question, then **Check** for the score and **Solution**
+for the explanation.
+
+**Exam.** **Start exam** asks for the number of tasks and minutes and posts `POST /api/exam`.
+
+- While tasks are set up it polls every 2 seconds and shows "N of M tasks set up".
+- Then it shows a countdown against the server's clock, a numbered button per question, **Flag for later**,
+  and **End exam**.
+- After the end it shows the percent, PASS or FAIL, and per task the checks and the solution.
+- **Back to practice** deletes the exam.
+
+The terminal beside it is the [Web Terminal](/docs/services/WebTerminal/0.0.1).

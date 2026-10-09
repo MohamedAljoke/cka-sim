@@ -39,7 +39,7 @@ Commands marked **host** run in your terminal. **node** means inside a node cont
    D8 CNI ─► D9 node image ─► D10 base host + ssh ─► D11 status   ◄───────────┘
    (each pulled in when a task needs it)                │
                                                         ▼
-   D12 exam draw ─► D13 session + API ─► D14 web panel ─► D15 exam / study
+   ✅ D12 exam draw ─► ✅ D13 session + API ─► ✅ D14 web panel ─► ✅ D15 exam from the page
                                                               │
                                   D16 task catalogue ◄────────┘
                                   D17 releases + install
@@ -396,50 +396,55 @@ Pull each deliverable in when a task needs it, not before.
 
 ## Phase D: The exam
 
-### D12 · Drawing an exam that follows the curriculum
+### D12 · Drawing an exam that follows the curriculum ✅
 
 - **Goal:** `tasks.Draw(all, n, rng)` picks n tasks whose domain mix follows the CKA weights, then shuffles them.
-- **Build:** each domain's quota is `round(n × weight / 100)`, capped at the tasks it has. Fill any
-  shortfall from the heaviest domains, trim any excess from the lightest, then shuffle (the real
-  exam doesn't group by domain). Pass the RNG in, so tests can fix the seed.
+- **Build:** largest-remainder quotas: each domain gets the whole part of `n × weight / 100`, and the
+  leftover seats go to the biggest remainders. A quota is capped at the tasks the domain has, and any
+  shortfall moves to the heaviest domains that still have tasks. Then shuffle (the real exam doesn't
+  group by domain). Pass the RNG in, so tests can fix the seed.
 - **Watch out:** an etcd snapshot-and-restore task rewinds every object created after its
-  snapshot, so it must be set up **after** all the others (`order: last`). *(learned in v1)*
+  snapshot, so it must be set up **after** all the others. The same goes for tasks that break the
+  scheduler or a kubelet. They carry `order: last` in their frontmatter, and the exam sets them up
+  one by one after the rest. *(learned in v1)*
 - **Done when:** `go test ./internal/tasks -run Draw` passes.
-- [ ] done
+- [x] done
 
-### D13 · Session store and HTTP API
+### D13 · Session store and HTTP API ✅
 
-- **Goal:** an HTTP server for the panel. If it restarts, it resumes the same exam.
-- **Build:** the exam state (tasks, flags, start time, results) saved as a JSON file, written to a
-  temp file then renamed. Routes on Go's `ServeMux` patterns (`POST /api/flag/{id}` …).
-  **In an exam, results and solutions stay hidden until it ends.** Study mode always shows them.
+- **Goal:** the server runs exams. If it restarts, it resumes the same exam.
+- **Build:** `internal/exam` owns the exam. Its state (tasks, setup status, flags, start, deadline, results)
+  goes to `~/.local/state/cka-sim/exam.json` behind a small `Store` interface, written to a temp file then
+  renamed. Routes on Go's `ServeMux` patterns (`POST /api/exam`, `PUT /api/exam/flags/{id}` …).
+  **In an exam, results and solutions stay hidden until it ends.** Practice check and solution answer 409.
 - **Watch out:** *(learned in v1)* grade with `context.WithoutCancel(r.Context())`, so closing
-  the tab doesn't cancel grading halfway. A mutex stops a double-clicked "End exam" from grading twice.
-- **Done when:** `go test ./internal/server` passes: partial-credit scoring, and study-only actions refused during an exam.
+  the tab doesn't cancel grading halfway. One mutex covers every script, so a double-clicked "End exam"
+  can't grade twice.
+- **Done when:** `go test ./internal/exam ./internal/server` passes: weighted scoring, resume, and
+  practice actions refused during an exam.
 - **Learn:** keeping state in a file so a restarted process can carry on, and deciding on the server what the browser may see.
-- [ ] done
+- [x] done
 
-### D14 · The web panel
+### D14 · The web panel ✅
 
-- **Goal:** the question list, the current question, flags, a countdown, End exam and results.
-  Study mode adds Check, Reset and Solution. A terminal in the page (xterm.js over a websocket).
-- **Build:** the frontend lives in `apps/web`. The Go server lives in `apps/cka-sim` (`cka-sim exam`
-  serves it), so users still download one binary.
-- **Watch out:** `go:embed` can't read outside `apps/cka-sim`, so the build has to copy the web files
-  into `apps/cka-sim` first. Decide how: a build step, or a generated folder that's ignored by git.
-  Time the countdown against the server's clock, not the browser's. *(learned in v1)*
-- **Done when:** with a hand-written session file, the panel shows the questions and the clock counts down.
-- [ ] done
+- **Goal:** the question pills, the current question, flags, a countdown, End exam and results, beside
+  the practice list (Check, Reset and Solution) and the page terminal.
+- **Build:** the frontend lives in `apps/web` (`exam.ts`). The Go server lives in `apps/cka-sim`.
+- **Watch out:** `go:embed` can't read outside `apps/cka-sim`, so the release build (D17) has to copy the
+  web files into `apps/cka-sim` first. Time the countdown against the server's clock, not the browser's.
+  *(learned in v1)*
+- **Done when:** with a hand-written `exam.json`, the panel shows the questions and the clock counts down.
+- [x] done
 
-### D15 · `cka-sim exam` and `cka-sim study`
+### D15 · Exam started from the page (no CLI) ✅
 
-- **Goal:** `exam [-n 16] [-minutes 120] [-resume]` and `study [id...]`, end to end.
-- **Build:** claim the port **first**, so a taken port fails right away and not after building
-  clusters. Then recreate a clean cluster, draw, set up, save the session, serve. Shut down
-  cleanly on Ctrl-C. *(learned in v1)*
-- **Done when:** `exam -n 4 -minutes 15`, work one task, End exam: that task is scored and the
-  rest are 0. Ctrl-C, `exam -resume`, and the same results come back.
-- [ ] done
+- **Goal:** the full timed exam end to end, started from the page's **Start exam** form. This replaced
+  the planned `cka-sim exam` / `cka-sim study` commands, since the page is the UI.
+- **Build:** `POST /api/exam` draws the tasks, sets them up, then starts the clock. There is no auto-end:
+  after 0:00 the clock shows overtime. Ctrl-C on `make dev` shuts down cleanly, and the exam survives it.
+- **Done when:** start an exam with 2 tasks and 5 minutes, solve one, restart the server, reload, End
+  exam: the solved task scores full, the other 0, and the percentage matches the weights.
+- [x] done
 
 ---
 
@@ -489,6 +494,6 @@ go build -o bin/cka-sim ./cmd/cli
 ./bin/cka-sim doctor                    # D1
 ./bin/cka-sim up                        # D2: environment from nothing
 ./bin/cka-sim selftest                  # D5–D7, D16: every task fair
-./bin/cka-sim exam -n 4 -minutes 30     # D12–D15
+make dev                                # D12–D15: Start exam in the page
 ./bin/cka-sim down
 ```

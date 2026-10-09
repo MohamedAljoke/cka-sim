@@ -22,6 +22,17 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestParseOrderLast(t *testing.T) {
+	task, err := Parse(taskMD("ar-etcd", "domain: architecture\nweight: 8\norder: last"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if task.Order != Last {
+		t.Errorf("order %q, want last", task.Order)
+	}
+}
+
 func TestParseRejects(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -37,6 +48,7 @@ func TestParseRejects(t *testing.T) {
 		{"unknown domain", taskMD("x", "domain: security\nweight: 1"), `unknown domain "security"`},
 		{"no weight", taskMD("x", "domain: workloads"), "weight must be more than 0"},
 		{"capital topic", taskMD("x", "domain: workloads\nweight: 1\ntopics: [Deployments]"), "lowercase-kebab"},
+		{"unknown order", taskMD("x", "domain: workloads\nweight: 1\norder: first"), `order must be empty or "last"`},
 		{"spaced topic", taskMD("x", "domain: workloads\nweight: 1\ntopics: [rolling update]"), "lowercase-kebab"},
 	}
 	for _, tt := range tests {

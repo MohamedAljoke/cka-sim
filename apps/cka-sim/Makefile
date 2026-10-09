@@ -2,7 +2,7 @@
 
 WEB := ../web
 
-.PHONY: help doctor up down shell serve web dev test try selftest
+.PHONY: help doctor up down shell serve web dev test selftest
 
 help:
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
@@ -33,11 +33,8 @@ dev: up $(WEB)/node_modules ## cluster up, then the backend and the page togethe
 test: ## vet and test the Go code
 	go vet ./... && go test ./...
 
-selftest: ## prove every task is graded fairly (needs the cluster)
-	go test ./catalog -run TestSelftest -selftest -count=1 -v -timeout 30m
-
-try: ## prove a task works on the cluster: make try TASK=<id>
-	@scripts/try-task.sh $(TASK)
+selftest: ## prove tasks are graded fairly (needs the cluster); one task: make selftest TASK=<id>
+	go test ./catalog -run 'TestSelftest$(if $(TASK),/^$(TASK)$$)' -selftest -count=1 -v -timeout 30m
 
 $(WEB)/node_modules: $(WEB)/package-lock.json
 	cd $(WEB) && npm ci

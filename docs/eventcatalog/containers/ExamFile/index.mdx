@@ -1,0 +1,27 @@
+---
+id: ExamFile
+name: exam.json
+version: 0.0.1
+owners:
+  - mohamed
+summary: |
+  The running exam, saved as a JSON file so a server restart keeps the same tasks, deadline and flags.
+container_type: other
+technology: JSON file
+authoritative: true
+access_mode: readWrite
+---
+
+## Overview
+
+`internal/exam.FileStore` keeps at most one exam at `~/.local/state/cka-sim/exam.json`
+(`$XDG_STATE_HOME/cka-sim/exam.json` when that is set).
+
+It holds the drawn task ids, each task's setup state (`preparing`, `ready` or `failed`), flags,
+the start time and deadline, and after the end each task's check result.
+
+- Saved on every change: draw, each finished setup, flag, end.
+- Read once at server start. Tasks still `preparing` are set up again, and the deadline stays the same.
+- Deleted by **Back to practice** (`DELETE /api/exam`).
+
+The hosted design keeps attempts in [Postgres](/docs/containers/Postgres/0.0.1) instead.

@@ -41,6 +41,11 @@ var Titles = map[Domain]string{
 
 var Scripts = []string{"setup.sh", "check.sh", "solution.sh"}
 
+type Order string
+
+// Last marks a task whose setup snapshots or breaks the cluster, so an exam sets it up after the rest.
+const Last Order = "last"
+
 type Task struct {
 	ID       string   `json:"id"`
 	Title    string   `json:"title"`
@@ -48,6 +53,7 @@ type Task struct {
 	Topics   []string `json:"topics"`
 	Weight   int      `json:"weight"`
 	Host     string   `json:"host"`
+	Order    Order    `json:"order,omitempty"`
 	Question string   `json:"-"`
 	Explain  string   `json:"-"`
 	Dir      string   `json:"-"`
@@ -60,6 +66,7 @@ type frontmatter struct {
 	Topics []string `json:"topics"`
 	Weight int      `json:"weight"`
 	Host   string   `json:"host"`
+	Order  Order    `json:"order"`
 }
 
 var kebab = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
@@ -87,6 +94,7 @@ func Parse(text string) (Task, error) {
 		Topics:   fm.Topics,
 		Weight:   fm.Weight,
 		Host:     fm.Host,
+		Order:    fm.Order,
 		Question: strings.TrimSpace(body),
 	}, nil
 }
@@ -101,6 +109,8 @@ func (fm frontmatter) validate() error {
 		return errors.New("weight must be more than 0")
 	case fm.Host == "":
 		return errors.New("host is required")
+	case fm.Order != "" && fm.Order != Last:
+		return errors.New(`order must be empty or "last"`)
 	}
 	if _, ok := Weights[fm.Domain]; !ok {
 		return fmt.Errorf("unknown domain %q", fm.Domain)

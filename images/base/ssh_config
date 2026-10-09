@@ -1,0 +1,6 @@
+# Exam hosts are rebuilt often; never stop on a changed host key.
+Host *
+  User candidate
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  LogLevel ERROR

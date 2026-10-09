@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en" data-color-scheme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CKA Exam Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* dyosmos design tokens */
+:root {
+  --dy-font-body: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --dy-font-display: "Barlow Semi Condensed", "IBM Plex Sans", ui-sans-serif, sans-serif;
+  --dy-font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --dy-color-canvas: #f4f7f5; --dy-color-surface: #ffffff; --dy-color-surface-raised: #ffffff;
+  --dy-color-surface-muted: #e9efec; --dy-color-foreground: #17201d; --dy-color-foreground-muted: #52605b;
+  --dy-color-foreground-subtle: #718079; --dy-color-border: #d7dfdb; --dy-color-border-strong: #aab8b1;
+  --dy-color-primary: #147d64; --dy-color-on-primary: #ffffff; --dy-color-success: #147d64;
+  --dy-color-warning: #a86600; --dy-color-danger: #b83c43; --dy-color-info: #315c75;
+  --dy-shadow-sm: 0 1px 2px rgb(23 32 29 / 0.08); --dy-shadow-md: 0 8px 24px rgb(23 32 29 / 0.12);
+  --dy-radius-sm: 4px; --dy-radius-md: 6px;
+  color-scheme: light;
+}
+:root[data-color-scheme="dark"] {
+  --dy-color-canvas: #101513; --dy-color-surface: #18201e; --dy-color-surface-raised: #202a27;
+  --dy-color-surface-muted: #26312e; --dy-color-foreground: #f3f7f5; --dy-color-foreground-muted: #aebbb5;
+  --dy-color-foreground-subtle: #82918a; --dy-color-border: #34413c; --dy-color-border-strong: #52625b;
+  --dy-color-primary: #3bc3a0; --dy-color-on-primary: #0d211b; --dy-color-success: #3bc3a0;
+  --dy-color-warning: #f0b23f; --dy-color-danger: #f26b70; --dy-color-info: #78b7d1;
+  --dy-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.25); --dy-shadow-md: 0 10px 28px rgb(0 0 0 / 0.32);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; min-height: 100dvh; background: var(--dy-color-canvas); color: var(--dy-color-foreground); font: 15px/1.55 var(--dy-font-body); }
+button { font: inherit; cursor: pointer; }
+code, pre { font-family: var(--dy-font-mono); }
+.display { font-family: var(--dy-font-display); font-weight: 600; letter-spacing: 0; }
+
+.topbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 16px; padding: 10px 20px; background: var(--dy-color-surface); border-bottom: 1px solid var(--dy-color-border); }
+.brand { font-size: 20px; }
+.brand small { color: var(--dy-color-foreground-subtle); font: 500 13px var(--dy-font-body); margin-left: 8px; }
+.spacer { flex: 1; }
+.timer { font: 600 20px var(--dy-font-mono); font-variant-numeric: tabular-nums; padding: 4px 12px; border-radius: var(--dy-radius-md); border: 1px solid var(--dy-color-border); }
+.timer.low { color: var(--dy-color-warning); border-color: color-mix(in srgb, var(--dy-color-warning) 40%, transparent); background: color-mix(in srgb, var(--dy-color-warning) 10%, transparent); }
+.timer.out { color: var(--dy-color-danger); }
+
+.btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: var(--dy-radius-md); border: 1px solid var(--dy-color-border); background: var(--dy-color-surface); color: var(--dy-color-foreground); font-weight: 600; font-size: 14px; }
+.btn:hover { background: var(--dy-color-surface-muted); }
+.btn.primary { background: var(--dy-color-primary); color: var(--dy-color-on-primary); border-color: transparent; box-shadow: var(--dy-shadow-sm); }
+.btn.primary:hover { filter: brightness(0.95); }
+.btn.danger { color: var(--dy-color-danger); border-color: color-mix(in srgb, var(--dy-color-danger) 40%, transparent); }
+.btn.on { color: var(--dy-color-warning); border-color: color-mix(in srgb, var(--dy-color-warning) 50%, transparent); background: color-mix(in srgb, var(--dy-color-warning) 10%, transparent); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn:focus-visible, .qbtn:focus-visible { outline: 2px solid var(--dy-color-primary); outline-offset: 2px; }
+.icon { width: 40px; padding: 0; justify-content: center; }
+
+.layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: calc(100dvh - 61px); }
+.sidebar { border-right: 1px solid var(--dy-color-border); background: var(--dy-color-surface); padding: 16px 12px; }
+.sidebar h2 { font-size: 12px; text-transform: uppercase; color: var(--dy-color-foreground-subtle); margin: 0 8px 8px; font-weight: 600; }
+.qbtn { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 6px 10px; margin-bottom: 4px; border-radius: var(--dy-radius-md); border: 1px solid transparent; background: none; color: var(--dy-color-foreground-muted); text-align: left; }
+.qbtn:hover { background: var(--dy-color-surface-muted); color: var(--dy-color-foreground); }
+.qbtn.active { border-color: var(--dy-color-border-strong); background: var(--dy-color-surface-muted); color: var(--dy-color-foreground); }
+.qnum { font: 600 13px var(--dy-font-mono); width: 26px; }
+.qbtn .w { margin-left: auto; font-size: 12px; color: var(--dy-color-foreground-subtle); }
+.flag { color: var(--dy-color-warning); font-size: 13px; }
+.docs { margin-top: 20px; padding: 12px 8px; border-top: 1px solid var(--dy-color-border); font-size: 13px; color: var(--dy-color-foreground-muted); }
+.docs a { color: var(--dy-color-info); display: block; margin-top: 4px; }
+
+main { padding: 28px clamp(16px, 4vw, 48px); max-width: 980px; min-width: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--dy-color-foreground-muted); font-size: 14px; }
+.badge { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: var(--dy-radius-sm); border: 1px solid var(--dy-color-border); background: var(--dy-color-surface-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--dy-color-foreground-muted); }
+.badge.teal { color: var(--dy-color-success); border-color: color-mix(in srgb, var(--dy-color-success) 30%, transparent); background: color-mix(in srgb, var(--dy-color-success) 10%, transparent); }
+.badge.rose { color: var(--dy-color-danger); border-color: color-mix(in srgb, var(--dy-color-danger) 30%, transparent); background: color-mix(in srgb, var(--dy-color-danger) 10%, transparent); }
+.badge.amber { color: var(--dy-color-warning); border-color: color-mix(in srgb, var(--dy-color-warning) 30%, transparent); background: color-mix(in srgb, var(--dy-color-warning) 10%, transparent); }
+h1 { font-size: 30px; margin: 6px 0 18px; }
+
+.infobox { border: 1px solid color-mix(in srgb, var(--dy-color-info) 40%, transparent); background: color-mix(in srgb, var(--dy-color-info) 10%, transparent); border-radius: var(--dy-radius-md); padding: 14px 16px; margin-bottom: 22px; }
+.infobox p { margin: 0 0 10px; }
+.cmd { display: flex; align-items: center; gap: 10px; background: var(--dy-color-surface); border: 1px solid var(--dy-color-border); border-radius: var(--dy-radius-sm); padding: 6px 6px 6px 12px; font-family: var(--dy-font-mono); }
+.cmd span { flex: 1; overflow-x: auto; white-space: nowrap; }
+.cmd .prompt { color: var(--dy-color-foreground-subtle); flex: none; }
+.copy { height: 32px; padding: 0 10px; font-size: 13px; }
+
+.body h2 { font-family: var(--dy-font-display); font-weight: 600; font-size: 21px; margin: 22px 0 8px; }
+.body p, .body li { color: var(--dy-color-foreground); }
+.body code { background: var(--dy-color-surface-muted); border: 1px solid var(--dy-color-border); border-radius: var(--dy-radius-sm); padding: 0 5px; font-size: .9em; }
+.body pre { background: var(--dy-color-surface-muted); border: 1px solid var(--dy-color-border); border-radius: var(--dy-radius-md); padding: 12px 14px; overflow-x: auto; font-size: 13px; }
+.body pre code { background: none; border: 0; padding: 0; }
+.nav { display: flex; gap: 8px; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--dy-color-border); }
+
+.card { background: var(--dy-color-surface); border: 1px solid var(--dy-color-border); border-radius: var(--dy-radius-md); padding: 18px 20px; margin-bottom: 14px; }
+.score { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.score .big { font: 700 56px var(--dy-font-display); }
+.checks { list-style: none; padding: 0; margin: 10px 0; }
+.checks li { display: flex; gap: 10px; padding: 4px 0; }
+.checks .ok { color: var(--dy-color-success); } .checks .no { color: var(--dy-color-danger); }
+details summary { cursor: pointer; font-weight: 600; color: var(--dy-color-foreground-muted); margin-top: 8px; }
+.bar { height: 6px; border-radius: 3px; background: var(--dy-color-surface-muted); overflow: hidden; margin-top: 8px; }
+.bar i { display: block; height: 100%; background: var(--dy-color-primary); }
+
+.overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--dy-color-canvas) 70%, transparent); backdrop-filter: blur(3px); }
+.dialog { max-width: 460px; width: 100%; background: var(--dy-color-surface-raised); border: 1px solid var(--dy-color-border); border-radius: var(--dy-radius-md); box-shadow: var(--dy-shadow-md); padding: 22px; }
+.dialog h2 { margin: 0 0 6px; font-size: 24px; }
+.dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.muted { color: var(--dy-color-foreground-muted); }
+.spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid currentColor; border-top-color: transparent; animation: spin 0.8s linear infinite; display: inline-block; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--dy-color-border); }
+  .qlist { display: flex; flex-wrap: wrap; gap: 4px; }
+  .qbtn { width: auto; margin: 0; }
+  .qbtn .w { display: none; }
+  .brand small { display: none; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand display">CKA <small>exam simulator · Kubernetes v1.35</small></div>
+  <div class="spacer"></div>
+  <div id="timer" class="timer" role="timer" aria-live="off">--:--:--</div>
+  <button id="theme" class="btn icon" aria-label="Toggle light and dark theme">◐</button>
+  <button id="end" class="btn danger">End exam</button>
+</header>
+<div class="layout">
+  <nav class="sidebar" aria-label="Questions">
+    <h2>Questions</h2>
+    <div id="qlist" class="qlist"></div>
+    <div class="docs">
+      Allowed during the exam:
+      <a href="https://kubernetes.io/docs/" target="_blank" rel="noopener">kubernetes.io/docs</a>
+      <a href="https://kubernetes.io/blog/" target="_blank" rel="noopener">kubernetes.io/blog</a>
+      <a href="https://github.com/kubernetes" target="_blank" rel="noopener">github.com/kubernetes</a>
+    </div>
+  </nav>
+  <main id="main" aria-live="polite"><p class="muted">Loading the exam…</p></main>
+</div>
+<div id="overlay"></div>
+
+<script>
+const state = { exam: null, current: 0, clockOffset: 0, grading: false };
+const $ = (sel) => document.querySelector(sel);
+
+const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+// A deliberately small Markdown renderer: headings, lists, fenced code, paragraphs,
+// inline code and bold — exactly what task.md and explain.md use.
+function md(text) {
+  const inline = (s) => esc(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  const out = [];
+  const lines = text.split("\n");
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.startsWith("```")) {
+      const code = [];
+      for (i++; i < lines.length && !lines[i].startsWith("```"); i++) code.push(lines[i]);
+      out.push(`<pre><code>${esc(code.join("\n"))}</code></pre>`);
+      i++;
+    } else if (/^#{1,3} /.test(line)) {
+      out.push(`<h2>${inline(line.replace(/^#+ /, ""))}</h2>`);
+      i++;
+    } else if (/^(\d+\.|-) /.test(line)) {
+      const ordered = /^\d+\./.test(line);
+      const items = [];
+      while (i < lines.length && /^(\d+\.|-) /.test(lines[i])) {
+        let item = lines[i].replace(/^(\d+\.|-) /, "");
+        for (i++; i < lines.length && /^ {2,}\S/.test(lines[i]); i++) item += " " + lines[i].trim();
+        items.push(`<li>${inline(item)}</li>`);
+      }
+      out.push(ordered ? `<ol>${items.join("")}</ol>` : `<ul>${items.join("")}</ul>`);
+    } else if (line.trim() === "") {
+      i++;
+    } else {
+      const para = [];
+      while (i < lines.length && lines[i].trim() !== "" && !/^(```|#{1,3} |(\d+\.|-) )/.test(lines[i])) para.push(lines[i++]);
+      out.push(`<p>${inline(para.join(" "))}</p>`);
+    }
+  }
+  return out.join("\n");
+}
+
+async function api(path, method = "GET") {
+  const res = await fetch(path, { method });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+function load(exam) {
+  state.exam = exam;
+  state.clockOffset = new Date(exam.now).getTime() - Date.now();
+  render();
+}
+
+function render() {
+  const { exam } = state;
+  $("#end").hidden = exam.ended;
+  renderList();
+  if (exam.ended) renderResults();
+  else renderQuestion();
+  tick();
+}
+
+function renderList() {
+  const { exam } = state;
+  $("#qlist").innerHTML = exam.questions.map((q, i) => {
+    const status = exam.ended && q.result
+      ? `<span class="w">${Math.round(q.fraction * 100)}%</span>`
+      : `<span class="w">${q.weight}%</span>`;
+    return `<button class="qbtn ${!exam.ended && i === state.current ? "active" : ""}" data-i="${i}" aria-label="Question ${q.number}${q.flagged ? ", flagged" : ""}">
+      <span class="qnum">${q.number}</span>${q.flagged ? '<span class="flag" aria-hidden="true">⚑</span>' : ""}${status}</button>`;
+  }).join("");
+  document.querySelectorAll(".qbtn").forEach((b) => b.addEventListener("click", () => {
+    state.current = Number(b.dataset.i);
+    if (state.exam.ended) document.getElementById(`r-${state.current}`)?.scrollIntoView({ behavior: "smooth" });
+    else render();
+  }));
+}
+
+function infobox(host) {
+  return `<div class="infobox">
+    <p><strong>You must connect to the correct host.</strong> Failure to do so may result in a zero score.</p>
+    <div class="cmd"><span class="prompt">[candidate@base] $</span><span>ssh ${esc(host)}</span>
+      <button class="btn copy" data-copy="ssh ${esc(host)}">Copy</button></div>
+  </div>`;
+}
+
+function renderQuestion() {
+  const { exam } = state;
+  const q = exam.questions[state.current];
+  $("#main").innerHTML = `
+    <div class="meta"><span>Question ${q.number} of ${exam.questions.length}</span><span class="badge">${q.weight}%</span><span>${esc(q.domain)}</span></div>
+    <h1 class="display">${esc(q.title)}</h1>
+    ${infobox(q.host)}
+    <div class="body">${md(q.body)}</div>
+    <div class="nav">
+      <button class="btn" id="prev" ${state.current === 0 ? "disabled" : ""}>← Previous</button>
+      <button class="btn ${q.flagged ? "on" : ""}" id="flag" aria-pressed="${q.flagged}">⚑ ${q.flagged ? "Flagged" : "Flag for review"}</button>
+      <div class="spacer"></div>
+      <button class="btn primary" id="next" ${state.current === exam.questions.length - 1 ? "disabled" : ""}>Next →</button>
+    </div>`;
+  $("#prev").onclick = () => { state.current--; render(); };
+  $("#next").onclick = () => { state.current++; render(); };
+  $("#flag").onclick = async () => load(await api(`/api/flag/${q.id}`, "POST"));
+  bindCopy();
+}
+
+function bindCopy() {
+  document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Copied"; }
+    catch { b.textContent = "Select & copy"; }
+    setTimeout(() => (b.textContent = "Copy"), 1500);
+  }));
+}
+
+function renderResults() {
+  const { exam } = state;
+  const passed = exam.score >= exam.passScore;
+  $("#main").innerHTML = `
+    <div class="card">
+      <div class="meta">Exam result</div>
+      <div class="score"><span class="big">${exam.score}%</span>
+        <span class="badge ${passed ? "teal" : "rose"}">${passed ? "Pass" : "Fail"}</span>
+        <span class="muted">pass mark ${exam.passScore}%</span></div>
+      <div class="bar"><i style="width:${exam.score}%"></i></div>
+    </div>
+    ${exam.questions.map((q, i) => {
+      const r = q.result;
+      const tone = !r ? "rose" : q.fraction === 1 ? "teal" : q.fraction > 0 ? "amber" : "rose";
+      return `<section class="card" id="r-${i}">
+        <div class="meta"><span>Question ${q.number}</span><span class="badge">${q.weight}%</span>
+          <span class="badge ${tone}">${r ? `${r.earned}/${r.total} points` : "not graded"}</span>
+          <span>ssh ${esc(q.host)}</span></div>
+        <h2 class="display" style="font-size:22px;margin:6px 0">${esc(q.title)}</h2>
+        <ul class="checks">${(r?.checks ?? []).map((c) => `<li><span class="${c.passed ? "ok" : "no"}">${c.passed ? "✓" : "✗"}</span><span>${esc(c.description)} <span class="muted">(${c.points})</span></span></li>`).join("")}</ul>
+        ${r?.error ? `<pre class="muted">${esc(r.error)}</pre>` : ""}
+        <details><summary>The task</summary><div class="body">${md(q.body)}</div></details>
+        ${q.explain ? `<details ${q.fraction < 1 ? "open" : ""}><summary>Explanation</summary><div class="body">${md(q.explain)}</div></details>` : ""}
+        ${q.solution ? `<details><summary>Reference solution</summary><div class="body"><pre><code>${esc(q.solution)}</code></pre></div></details>` : ""}
+      </section>`;
+    }).join("")}`;
+}
+
+function tick() {
+  if (!state.exam) return;
+  const el = $("#timer");
+  if (state.exam.ended) { el.textContent = "Ended"; el.className = "timer"; return; }
+  const left = Math.max(0, new Date(state.exam.deadline).getTime() - (Date.now() + state.clockOffset));
+  const s = Math.floor(left / 1000);
+  el.textContent = [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map((n) => String(n).padStart(2, "0")).join(":");
+  el.className = "timer" + (s === 0 ? " out" : s < 15 * 60 ? " low" : "");
+  el.setAttribute("aria-label", `${Math.floor(s / 60)} minutes left`);
+  if (s === 0 && !state.grading) endExam();
+}
+
+function dialog(html) {
+  $("#overlay").innerHTML = html ? `<div class="overlay"><div class="dialog" role="dialog" aria-modal="true">${html}</div></div>` : "";
+}
+
+async function endExam() {
+  state.grading = true;
+  dialog(`<h2 class="display">Grading…</h2><p class="muted"><span class="spinner"></span> Checking every task against the live clusters. This takes a minute or two.</p>`);
+  try {
+    load(await api("/api/end", "POST"));
+    dialog("");
+    window.scrollTo(0, 0);
+  } catch (e) {
+    dialog(`<h2 class="display">Grading failed</h2><p class="muted">${esc(e.message)}</p><div class="actions"><button class="btn" onclick="dialog('')">Close</button></div>`);
+  } finally {
+    state.grading = false;
+  }
+}
+
+$("#end").onclick = () => {
+  const flagged = state.exam.questions.filter((q) => q.flagged).length;
+  dialog(`<h2 class="display">End the exam?</h2>
+    <p class="muted">Every task is graded as it is now.${flagged ? ` You still have ${flagged} flagged question${flagged > 1 ? "s" : ""}.` : ""} This cannot be undone.</p>
+    <div class="actions"><button class="btn" id="cancel">Keep working</button><button class="btn primary" id="confirm">End exam</button></div>`);
+  $("#cancel").onclick = () => dialog("");
+  $("#confirm").onclick = endExam;
+  $("#cancel").focus();
+};
+
+$("#theme").onclick = () => {
+  const next = document.documentElement.dataset.colorScheme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.colorScheme = next;
+  try { localStorage.setItem("cka-sim:scheme", next); } catch {}
+};
+try { const s = localStorage.getItem("cka-sim:scheme"); if (s) document.documentElement.dataset.colorScheme = s; } catch {}
+
+api("/api/exam").then(load).catch((e) => {
+  $("#main").innerHTML = `<h1 class="display">No exam running</h1><p class="muted">${esc(e.message)}</p>`;
+});
+setInterval(tick, 1000);
+</script>
+</body>
+</html>

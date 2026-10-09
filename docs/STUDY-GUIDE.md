@@ -9,7 +9,7 @@ exists now. Steps 7–13 are **notes from v1**: the ideas still hold, but their 
 commands refer to the [`archive/v1`](https://github.com/MohamedAljoke/cka-sim/tree/archive/v1)
 branch. Each one says which deliverable will rewrite it.
 
-Have the cluster up while you study (`cd apps/cli && ./bin/cka-sim up`). Commands marked
+Have the cluster up while you study (`cd apps/cka-sim && ./bin/cka-sim up`). Commands marked
 **host** run in your terminal; **node** means inside a node container (`docker exec -it <node> bash`).
 
 ---
@@ -25,9 +25,9 @@ Everything else is either inside the binary or pulled by Docker.
 
 | Layer | Tool | Lives in | Status |
 |---|---|---|---|
-| Orchestration: check the machine, build the cluster, grade | Go | `apps/cli` | doctor, up, down |
-| Kubernetes nodes | kind, used as a Go library | `apps/cli/internal/cluster` | done |
-| Exam content: break, check, fix | bash | `apps/cli/tasks` | D4–D7 |
+| Orchestration: check the machine, build the cluster, grade | Go | `apps/cka-sim` | doctor, up, down |
+| Kubernetes nodes | kind, used as a Go library | `apps/cka-sim/internal/cluster` | done |
+| Exam content: break, check, fix | bash | `apps/cka-sim/tasks` | D4–D7 |
 | Exam panel | web | `apps/web` | D14 |
 
 Follow `cka-sim up` from end to end:
@@ -49,7 +49,7 @@ cka-sim up  →  main.go runUp()
 
 ### Step 2 · `doctor`: checking someone else's machine
 
-- [ ] Read: `apps/cli/internal/doctor/doctor.go` and its test.
+- [ ] Read: `apps/cka-sim/internal/doctor/doctor.go` and its test.
 
 You can't see the machines your users run cka-sim on, so doctor checks them for you. Each check
 returns a `Result` with a status (`ok`, `warn`, `fail`), a detail, and a **fix written for that
@@ -83,7 +83,7 @@ cat /proc/sys/fs/inotify/max_user_watches /proc/sys/fs/inotify/max_user_instance
 
 ### Step 3 · kind: Kubernetes nodes are containers
 
-- [ ] Read: `apps/cli/internal/cluster/cluster.go`, then kind's `pkg/cluster/internal/create/create.go`
+- [ ] Read: `apps/cka-sim/internal/cluster/cluster.go`, then kind's `pkg/cluster/internal/create/create.go`
       in your module cache (`go list -m -f '{{.Dir}}' sigs.k8s.io/kind`).
 
 kind runs every Kubernetes node as a Docker container that boots **systemd**. Inside it there is
@@ -198,14 +198,14 @@ what it tells you that the code doesn't.
 
 | File | Concepts to look for |
 |---|---|
-| `cmd/cka-sim/main.go` | a `switch` on the command; `signal.NotifyContext` turns Ctrl-C into cancellation; `runUp` races kind's uncancellable `Create` against `ctx.Done()`; the version from `-ldflags` or `debug.ReadBuildInfo` |
+| `cmd/main.go`, `cmd/cli.go` | a `switch` on the command; `signal.NotifyContext` turns Ctrl-C into cancellation; `runUp` races kind's uncancellable `Create` against `ctx.Done()`; the version from `-ldflags` or `debug.ReadBuildInfo` |
 | `internal/doctor/doctor.go` | a struct of functions (`System`) as the seam for tests; string-typed `Status` constants; decoding only the fields we need from `docker info` JSON |
 | `internal/cluster/cluster.go` | kind's public API (`NewProvider`, `Create` options); the config as plain YAML; `os.UserConfigDir` for a per-OS config folder |
 | `.github/workflows/ci.yml` | a test matrix over three operating systems; cross-compiling six targets with `CGO_ENABLED=0` |
 
 Run:
 ```sh
-cd apps/cli && go vet ./... && go test ./...                  # host
+cd apps/cka-sim && go vet ./... && go test ./...                  # host
 go mod why -m github.com/spf13/cobra                          # host: why an indirect dependency is there
 ```
 

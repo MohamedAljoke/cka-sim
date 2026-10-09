@@ -1,0 +1,57 @@
+:root {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --border: #d9dce1;
+  --text: #1f2328;
+  --muted: #59636e;
+  --topbar: #1f2a44;
+  --terminal: #101418;
+
+  font-family: system-ui, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  padding: 0.6rem 1rem;
+  background: var(--topbar);
+  color: #fff;
+}
+
+.brand {
+  font-weight: 600;
+}
+
+.exam {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(18rem, 1fr) 2fr;
+}
+
+.question {
+  padding: 1rem 1.25rem;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+.question p {
+  color: var(--muted);
+}
+
+.terminal {
+  background: var(--terminal);
+  min-width: 0;
+}

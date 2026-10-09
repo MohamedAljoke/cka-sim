@@ -14,33 +14,33 @@ jobs:
     runs-on: ${{ matrix.os }}
     defaults:
       run:
-        working-directory: apps/cli
+        working-directory: apps/cka-sim
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
-          go-version-file: apps/cli/go.mod
-          cache-dependency-path: apps/cli/go.sum
+          go-version-file: apps/cka-sim/go.mod
+          cache-dependency-path: apps/cka-sim/go.sum
       - run: go vet ./...
       - run: go test ./...
-      - run: go run ./cmd/cka-sim version
+      - run: go run ./cmd version
 
   cli-build:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/cli
+        working-directory: apps/cka-sim
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
-          go-version-file: apps/cli/go.mod
-          cache-dependency-path: apps/cli/go.sum
+          go-version-file: apps/cka-sim/go.mod
+          cache-dependency-path: apps/cka-sim/go.sum
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - name: Cross-compile for every release target
         run: |
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
             echo "$target"
-            GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 go build -o /dev/null ./cmd/cka-sim
+            GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 go build -o /dev/null ./cmd
           done

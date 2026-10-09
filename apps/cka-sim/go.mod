@@ -1,4 +1,4 @@
-module github.com/MohamedAljoke/cka-sim/apps/cli
+module github.com/MohamedAljoke/cka-sim/apps/cka-sim
 
 go 1.26.0
 

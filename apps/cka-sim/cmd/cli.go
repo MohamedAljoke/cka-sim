@@ -5,18 +5,20 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
-	"os/signal"
 	"runtime"
-	"runtime/debug"
 	"slices"
 	"strings"
+	"time"
 
 	"golang.org/x/term"
 
-	"github.com/MohamedAljoke/cka-sim/apps/cli/internal/cluster"
-	"github.com/MohamedAljoke/cka-sim/apps/cli/internal/doctor"
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/cluster"
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/doctor"
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/web"
 )
 
 const usage = `cka-sim — a Kubernetes study environment on your own machine
@@ -25,30 +27,9 @@ const usage = `cka-sim — a Kubernetes study environment on your own machine
   cka-sim up         create the study cluster: 1 control plane, 2 workers
   cka-sim down       delete the study cluster
   cka-sim shell      open a shell on the cluster with kubectl ready
+  cka-sim web        open the study page in your browser
   cka-sim version    print the version
 `
-
-// Set by release builds: -ldflags "-X main.version=v0.1.0"
-var version = ""
-
-func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
-	err := run(ctx, os.Args[1:], os.Stdout)
-	if err == nil {
-		return
-	}
-	if code, ok := errors.AsType[exitCode](err); ok {
-		os.Exit(int(code))
-	}
-	fmt.Fprintln(os.Stderr, "error:", err)
-	os.Exit(1)
-}
-
-// exitCode ends cka-sim with that code and no message, because the command it ran already spoke for itself.
-type exitCode int
-
-func (c exitCode) Error() string { return fmt.Sprintf("exit status %d", int(c)) }
 
 func run(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) == 0 {
@@ -68,6 +49,8 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 		return runDown(stdout)
 	case "shell":
 		return runShell()
+	case "web":
+		return runWeb(ctx, stdout)
 	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "cka-sim %s %s/%s\n", buildVersion(), runtime.GOOS, runtime.GOARCH)
 		return nil
@@ -184,12 +167,29 @@ func shellArgs(tty bool) []string {
 	return append(args, cluster.ControlPlaneNode, "bash", "-l")
 }
 
-func buildVersion() string {
-	if version != "" {
-		return version
+// Only this machine: the page's terminal will be root on the cluster.
+const webAddr = "127.0.0.1:7070"
+
+func runWeb(ctx context.Context, stdout io.Writer) error {
+	page, err := web.Page()
+	if err != nil {
+		return err
 	}
-	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
-		return info.Main.Version
+	ln, err := net.Listen("tcp", webAddr)
+	if err != nil {
+		return fmt.Errorf("claim %s: %w", webAddr, err)
 	}
-	return "dev"
+	srv := &http.Server{Handler: web.New(page)}
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		srv.Shutdown(shutdownCtx)
+	}()
+
+	fmt.Fprintf(stdout, "open http://%s in your browser; Ctrl-C stops it\n", webAddr)
+	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }

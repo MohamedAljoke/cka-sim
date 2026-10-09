@@ -20,7 +20,7 @@ Every deliverable has the same parts:
 - **Learn**: the concept the deliverable teaches
 
 Commands marked **host** run in your terminal. **node** means inside a node container
-(`docker exec -it <node> bash`). All Go commands run from `apps/cli`.
+(`docker exec -it <node> bash`). All Go commands run from `apps/cka-sim`.
 
 ```
 ✅ D0 skeleton + CI ─► ✅ D1 doctor ─► ✅ D2 up / down
@@ -43,9 +43,13 @@ tasks from the CLI. After **D15** you have the full timed exam. After **D17** st
 
 These apply to every deliverable.
 
-**Layout.** Each application lives in its own folder under `apps/`, for example `apps/cli` for
-the `cka-sim` command and later `apps/web` for the web page. The repo root only holds what has
-to be there: `README.md`, `docs/` and `.github/`.
+**Layout.** Each application lives in its own folder under `apps/`: `apps/cka-sim` is the Go module
+that builds the `cka-sim` binary, and `apps/web` is the browser page it serves. The repo root only
+holds what has to be there: `README.md`, `docs/` and `.github/`.
+
+**Inside `apps/cka-sim`.** `internal/` holds the engine: checking the machine, the cluster, tasks,
+grading. The CLI (`cmd/cli.go`) and the web server are two front doors onto the same packages,
+so anything a command can do, a web request can trigger too. Neither holds logic of its own.
 
 **Comments.** Write a comment only when it is really needed. About 90% of the time the code
 should explain itself through clear names, small functions and a simple structure. Before you
@@ -77,22 +81,23 @@ deliverable against this.
 
 ### D0 · Skeleton and CI ✅
 
-- **Goal:** a Go module under `apps/cli` that builds a `cka-sim` binary for every OS, with CI proving it.
+- **Goal:** a Go module under `apps/cka-sim` that builds a `cka-sim` binary for every OS, with CI proving it.
 - **Build:**
-  - `apps/cli/go.mod` (`module github.com/MohamedAljoke/cka-sim/apps/cli`), plus `.gitignore` with `bin/`.
-  - `cmd/cka-sim/main.go`: a `switch` on `args[0]`, Ctrl-C turned into cancellation with
-    `signal.NotifyContext`, and `version`. The version comes from `-ldflags "-X main.version=…"`
+  - `apps/cka-sim/go.mod` (`module github.com/MohamedAljoke/cka-sim/apps/cka-sim`), plus `.gitignore` with `bin/`.
+  - `cmd/main.go`: Ctrl-C turned into cancellation with `signal.NotifyContext`, and the version.
+    `cmd/cli.go`: a `switch` on `args[0]` and what each command calls. The version comes from `-ldflags "-X main.version=…"`
     in release builds, then `debug.ReadBuildInfo()`, then `dev`.
   - `.github/workflows/ci.yml`: vet + test on Ubuntu, macOS and Windows; gofmt; cross-compile
     linux/darwin/windows × amd64/arm64 with `CGO_ENABLED=0`.
 - **Watch out:**
   - The module is not at the repo root, so `setup-go` needs both `go-version-file` and
-    `cache-dependency-path` pointing into `apps/cli`.
-  - A nested module is versioned with **prefixed tags**: `apps/cli/v0.1.0`, not `v0.1.0`. The
-    `go install` path is `github.com/MohamedAljoke/cka-sim/apps/cli/cmd/cka-sim@latest`.
+    `cache-dependency-path` pointing into `apps/cka-sim`.
+  - A nested module is versioned with **prefixed tags**: `apps/cka-sim/v0.1.0`, not `v0.1.0`. Go names
+    a binary after its folder, so `go install …/apps/cka-sim/cmd@latest` would install `cmd`:
+    releases (D17) are the supported install, and local builds always pass `-o bin/cka-sim`.
 - **Done when:**
   ```sh
-  go build -o bin/cka-sim ./cmd/cka-sim && ./bin/cka-sim version    # host
+  go build -o bin/cka-sim ./cmd && ./bin/cka-sim version    # host
   ```
   and CI is green on all three operating systems.
 - **Learn:** Go modules in subdirectories, cross-compilation, build info.
@@ -187,7 +192,7 @@ D2. Anything that needs Calico, a custom node image or the ssh setup waits for P
 
 - **Goal:** every task is a folder that ships inside the binary and that Go can load and validate.
 - **Build:**
-  - `apps/cli/tasks/<id>/`: `task.md`, `setup.sh`, `check.sh`, `solution.sh`, `explain.md`.
+  - `apps/cka-sim/tasks/<id>/`: `task.md`, `setup.sh`, `check.sh`, `solution.sh`, `explain.md`.
     `task.md` has frontmatter, then the question in exam wording:
     ```
     ---
@@ -351,10 +356,10 @@ Pull each deliverable in when a task needs it, not before.
 
 - **Goal:** the question list, the current question, flags, a countdown, End exam and results.
   Study mode adds Check, Reset and Solution. A terminal in the page (xterm.js over a websocket).
-- **Build:** the frontend lives in `apps/web`. The Go server stays in the CLI (`cka-sim exam`
+- **Build:** the frontend lives in `apps/web`. The Go server lives in `apps/cka-sim` (`cka-sim exam`
   serves it), so users still download one binary.
-- **Watch out:** `go:embed` can't read outside `apps/cli`, so the build has to copy the web files
-  into the CLI module first. Decide how: a build step, or a generated folder that's ignored by git.
+- **Watch out:** `go:embed` can't read outside `apps/cka-sim`, so the build has to copy the web files
+  into `apps/cka-sim` first. Decide how: a build step, or a generated folder that's ignored by git.
   Time the countdown against the server's clock, not the browser's. *(learned in v1)*
 - **Done when:** with a hand-written session file, the panel shows the questions and the clock counts down.
 - [ ] done
@@ -399,7 +404,7 @@ v1's versions of most of these are on `archive/v1` under `tasks/`.
 
 - **Goal:** a stranger installs cka-sim with one command.
 - **Build:**
-  - On a tag `apps/cli/v*`, a workflow builds the six binaries with `-X main.version=…`, attaches
+  - On a tag `apps/cka-sim/v*`, a workflow builds the six binaries with `-X main.version=…`, attaches
     them to a GitHub Release with checksums, and publishes the images from D9/D10.
   - An `install.sh` for `curl -fsSL … | sh` on Linux and macOS, a Homebrew tap, and a Windows download.
   - The README's quick start becomes: install → `cka-sim doctor` → `cka-sim up` → `cka-sim study`.
@@ -411,9 +416,9 @@ v1's versions of most of these are on `archive/v1` under `tasks/`.
 ## Rebuild checklist (end to end)
 
 ```sh
-cd apps/cli
+cd apps/cka-sim
 go vet ./... && go test ./...           # D0–D7, D12–D13 code is sound
-go build -o bin/cka-sim ./cmd/cka-sim
+go build -o bin/cka-sim ./cmd
 ./bin/cka-sim doctor                    # D1
 ./bin/cka-sim up                        # D2: environment from nothing
 ./bin/cka-sim selftest                  # D5–D7, D16: every task fair

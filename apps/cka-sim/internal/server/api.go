@@ -12,7 +12,7 @@ import (
 
 type api struct {
 	Practice
-	setup sync.Mutex
+	busy sync.Mutex
 }
 
 func (a *api) listTasks(w http.ResponseWriter, r *http.Request) {
@@ -32,17 +32,50 @@ func (a *api) startTask(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !a.setup.TryLock() {
-		http.Error(w, "a task is already being set up", http.StatusConflict)
+	if !a.lock(w) {
 		return
 	}
-	defer a.setup.Unlock()
+	defer a.busy.Unlock()
 	// Closing the tab mid-setup would otherwise leave the namespace half built.
 	if err := tasks.Start(context.WithoutCancel(r.Context()), a.Files, a.Runner, t); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *api) checkTask(w http.ResponseWriter, r *http.Request) {
+	t, ok := a.findTask(w, r)
+	if !ok {
+		return
+	}
+	if !a.lock(w) {
+		return
+	}
+	defer a.busy.Unlock()
+	result, err := tasks.Check(context.WithoutCancel(r.Context()), a.Files, a.Runner, t)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, result)
+}
+
+func (a *api) solution(w http.ResponseWriter, r *http.Request) {
+	t, ok := a.findTask(w, r)
+	if !ok {
+		return
+	}
+	writeJSON(w, map[string]string{"explain": t.Explain})
+}
+
+// lock lets one script run at a time: setup and check would otherwise race on the same namespace.
+func (a *api) lock(w http.ResponseWriter) bool {
+	if !a.busy.TryLock() {
+		http.Error(w, "a script is already running", http.StatusConflict)
+		return false
+	}
+	return true
 }
 
 func (a *api) findTask(w http.ResponseWriter, r *http.Request) (tasks.Task, bool) {

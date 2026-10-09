@@ -109,16 +109,16 @@ func TestFind(t *testing.T) {
 func TestStartRunsSetup(t *testing.T) {
 	fsys := fstest.MapFS{}
 	addTask(fsys, "wl-scale")
-	fsys["wl-scale/setup.sh"] = &fstest.MapFile{Data: []byte("kubectl create ns wl-scale\n")}
 	r := &fakeRunner{}
 
-	err := Start(context.Background(), fsys, r, Task{ID: "wl-scale", Dir: "wl-scale", Host: "node-1"})
+	err := Start(context.Background(), fsys, r, wlScale)
 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.host != "node-1" || r.taskID != "wl-scale" || r.script != "kubectl create ns wl-scale\n" {
-		t.Errorf("ran %q for %q on %q", r.script, r.taskID, r.host)
+	want := []call{{"node-1", "wl-scale", "setup.sh"}}
+	if !slices.Equal(r.calls, want) {
+		t.Errorf("ran %+v, want %+v", r.calls, want)
 	}
 }
 
@@ -127,12 +127,106 @@ func TestStartReportsSetupFailure(t *testing.T) {
 	addTask(fsys, "wl-scale")
 	r := &fakeRunner{err: errors.New("namespace stuck")}
 
-	err := Start(context.Background(), fsys, r, Task{ID: "wl-scale", Dir: "wl-scale"})
+	err := Start(context.Background(), fsys, r, wlScale)
 
 	if err == nil || !strings.Contains(err.Error(), "set up wl-scale: namespace stuck") {
 		t.Errorf("got error %v", err)
 	}
 }
+
+func TestCheckGradesTheOutput(t *testing.T) {
+	fsys := fstest.MapFS{}
+	addTask(fsys, "wl-scale")
+	r := &fakeRunner{out: map[string]string{"check.sh": "noise\nPASS 2 scaled\nFAIL 3 ready\n"}}
+
+	result, err := Check(context.Background(), fsys, r, wlScale)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []call{{"node-1", "wl-scale", "check.sh"}}; !slices.Equal(r.calls, want) {
+		t.Errorf("ran %+v, want %+v", r.calls, want)
+	}
+	if result.Earned != 2 || result.Total != 5 || len(result.Checks) != 2 {
+		t.Errorf("got %+v, want 2/5 from two checks", result)
+	}
+}
+
+func TestCheckReportsScriptFailure(t *testing.T) {
+	fsys := fstest.MapFS{}
+	addTask(fsys, "wl-scale")
+	r := &fakeRunner{err: errors.New("kubectl: not found")}
+
+	_, err := Check(context.Background(), fsys, r, wlScale)
+
+	if err == nil || !strings.Contains(err.Error(), "check wl-scale: kubectl: not found") {
+		t.Errorf("got error %v", err)
+	}
+}
+
+func TestSolveRunsSolution(t *testing.T) {
+	fsys := fstest.MapFS{}
+	addTask(fsys, "wl-scale")
+	r := &fakeRunner{}
+
+	err := Solve(context.Background(), fsys, r, wlScale)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []call{{"node-1", "wl-scale", "solution.sh"}}; !slices.Equal(r.calls, want) {
+		t.Errorf("ran %+v, want %+v", r.calls, want)
+	}
+}
+
+func TestSelftestPassesAFairTask(t *testing.T) {
+	fsys := fstest.MapFS{}
+	addTask(fsys, "wl-scale")
+	r := &fakeRunner{
+		out:       map[string]string{"check.sh": "FAIL 2 scaled\nFAIL 2 ready\n"},
+		solvedOut: map[string]string{"check.sh": "PASS 2 scaled\nPASS 2 ready\n"},
+	}
+
+	err := Selftest(context.Background(), fsys, r, wlScale)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	var scripts []string
+	for _, c := range r.calls {
+		scripts = append(scripts, c.script)
+	}
+	if want := []string{"setup.sh", "check.sh", "solution.sh", "check.sh"}; !slices.Equal(scripts, want) {
+		t.Errorf("ran %q, want %q", scripts, want)
+	}
+}
+
+func TestSelftestRejects(t *testing.T) {
+	tests := []struct {
+		name          string
+		before, after string
+		wantErr       string
+	}{
+		{"points before the solution", "PASS 2 scaled\nFAIL 2 ready\n", "PASS 2 scaled\nPASS 2 ready\n", `earns 2/4 before the solution: "scaled"`},
+		{"points missing after the solution", "FAIL 2 scaled\nFAIL 2 ready\n", "PASS 2 scaled\nFAIL 2 ready\n", `earns 2/4 after the solution: "ready"`},
+		{"no checks", "all good\n", "all good\n", "check.sh prints no checks"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fsys := fstest.MapFS{}
+			addTask(fsys, "wl-scale")
+			r := &fakeRunner{out: map[string]string{"check.sh": tt.before}, solvedOut: map[string]string{"check.sh": tt.after}}
+
+			err := Selftest(context.Background(), fsys, r, wlScale)
+
+			if err == nil || !strings.Contains(err.Error(), "wl-scale: "+tt.wantErr) {
+				t.Errorf("got error %v, want one containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+var wlScale = Task{ID: "wl-scale", Dir: "wl-scale", Host: "node-1"}
 
 func taskMD(id, fields string) string {
 	return "---\nid: " + id + "\ntitle: A task\nhost: node-1\n" + fields + "\n---\n"
@@ -141,17 +235,30 @@ func taskMD(id, fields string) string {
 func addTask(fsys fstest.MapFS, id string) {
 	fsys[id+"/task.md"] = &fstest.MapFile{Data: []byte(taskMD(id, "domain: workloads\nweight: 1"))}
 	for _, script := range Scripts {
-		fsys[id+"/"+script] = &fstest.MapFile{Data: []byte("true\n")}
+		fsys[id+"/"+script] = &fstest.MapFile{Data: []byte(script + "\n")}
 	}
 	fsys[id+"/explain.md"] = &fstest.MapFile{Data: []byte("Why.\n")}
 }
 
+type call struct{ host, taskID, script string }
+
+// fakeRunner answers by script name (each fake script's body is its own name); after solution.sh
+// has run, solvedOut wins over out.
 type fakeRunner struct {
-	host, taskID, script string
-	err                  error
+	calls          []call
+	out, solvedOut map[string]string
+	solved         bool
+	err            error
 }
 
 func (r *fakeRunner) Run(_ context.Context, host, taskID string, script []byte) (string, error) {
-	r.host, r.taskID, r.script = host, taskID, string(script)
-	return "", r.err
+	name := strings.TrimSpace(string(script))
+	r.calls = append(r.calls, call{host, taskID, name})
+	if name == "solution.sh" {
+		r.solved = true
+	}
+	if out, ok := r.solvedOut[name]; ok && r.solved {
+		return out, r.err
+	}
+	return r.out[name], r.err
 }

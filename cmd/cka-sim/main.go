@@ -8,11 +8,15 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	"maps"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,14 +27,18 @@ import (
 	"github.com/MohamedAljoke/cka-sim/internal/grader"
 	"github.com/MohamedAljoke/cka-sim/internal/server"
 	"github.com/MohamedAljoke/cka-sim/internal/tasks"
+	"github.com/MohamedAljoke/cka-sim/internal/terminal"
 )
 
 const usage = `cka-sim — a local CKA exam simulator
 
   cka-sim up                  build images, create the clusters and the base host (once)
-  cka-sim shell               open a shell on base — where you work; ssh <host> per task
+  cka-sim shell               a shell on base in this terminal (the panel has one too); ssh <host> per task
   cka-sim exam [-n 16] [-minutes 120] [-port 8080] [-fresh=false] [-resume]
                               rebuild clean clusters, draw an exam, set it up, serve the panel
+  cka-sim study [-fresh=false] [-resume] [-port 8080] [id...]
+                              no clock: check, reset and read the solution of each task as you go
+  cka-sim status              what the simulator runs in docker, its memory, the current session
   cka-sim list                list every task
   cka-sim practice <id>       set up one task, untimed, and print it
   cka-sim check <id>          grade one task now
@@ -89,14 +97,16 @@ func run(ctx context.Context, args []string) error {
 	case "up":
 		return a.env.Up(ctx)
 	case "down":
-		return a.env.Down(ctx)
+		return a.down(ctx)
 	case "reset":
-		if err := a.env.Down(ctx); err != nil {
+		if err := a.down(ctx); err != nil {
 			return err
 		}
 		return a.env.Up(ctx)
 	case "shell":
 		return a.env.Shell(ctx)
+	case "status":
+		return a.status(ctx)
 	case "list":
 		return a.list()
 	case "practice":
@@ -112,6 +122,8 @@ func run(ctx context.Context, args []string) error {
 		return a.selftest(ctx, rest)
 	case "exam":
 		return a.exam(ctx, rest)
+	case "study":
+		return a.study(ctx, rest)
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 		return nil
@@ -130,8 +142,58 @@ func (a *app) withTask(args []string, fn func(tasks.Task) error) error {
 	return fn(t)
 }
 
+// curriculum is the domain order of the CKA curriculum, heaviest first.
+var curriculum = []tasks.Domain{tasks.Troubleshooting, tasks.Architecture, tasks.Networking, tasks.Workloads, tasks.Storage}
+
+func (a *app) status(ctx context.Context) error {
+	groups, err := a.env.Groups(ctx)
+	if err != nil {
+		return err
+	}
+	var running []string
+	for _, g := range groups {
+		if len(g.Containers) == 0 {
+			fmt.Printf("%-17s missing   run: cka-sim up\n", g.Name)
+			continue
+		}
+		names, states := make([]string, len(g.Containers)), map[string]bool{}
+		for i, c := range g.Containers {
+			names[i] = c.Name
+			states[c.State] = true
+			if c.State == "running" {
+				running = append(running, c.Name)
+			}
+		}
+		state := strings.Join(slices.Sorted(maps.Keys(states)), "/")
+		fmt.Printf("%-17s %-9s %s\n", g.Name, state, strings.Join(names, ", "))
+	}
+	if mem, err := a.env.Memory(ctx, running); err == nil && mem > 0 {
+		fmt.Printf("%-17s %.1f GiB\n", "memory", mem/(1<<30))
+	}
+	fmt.Printf("%-17s %s\n", "session", a.session())
+	fmt.Println("\nEvery container is named cka…: docker ps -a --filter name=cka")
+	return nil
+}
+
+func (a *app) session() string {
+	e, err := server.NewStore(a.env.StateDir).Load()
+	switch {
+	case err != nil:
+		return "none"
+	case e.EndedAt != nil:
+		return fmt.Sprintf("ended · scored %.1f%%", e.Score)
+	case e.Study:
+		return fmt.Sprintf("study · %d tasks · cka-sim study -resume", len(e.TaskIDs))
+	}
+	left := int(time.Until(e.Deadline()).Minutes())
+	if left <= 0 {
+		return "exam · time is up, end it in the panel"
+	}
+	return fmt.Sprintf("exam · %d tasks · %d min left · cka-sim exam -resume", len(e.TaskIDs), left)
+}
+
 func (a *app) list() error {
-	for _, d := range []tasks.Domain{tasks.Troubleshooting, tasks.Architecture, tasks.Networking, tasks.Workloads, tasks.Storage} {
+	for _, d := range curriculum {
 		fmt.Printf("\n%s (%d%%)\n", tasks.DomainTitles[d], tasks.DomainWeights[d])
 		for _, t := range a.tasks {
 			if t.Domain == d {
@@ -222,16 +284,9 @@ func (a *app) selftest(ctx context.Context, ids []string) error {
 	if err := a.env.Ready(ctx); err != nil {
 		return err
 	}
-	selected := a.tasks
-	if len(ids) > 0 {
-		selected = nil
-		for _, id := range ids {
-			t, ok := tasks.Find(a.tasks, id)
-			if !ok {
-				return fmt.Errorf("no task %q", id)
-			}
-			selected = append(selected, t)
-		}
+	selected, err := a.find(ids)
+	if err != nil {
+		return err
 	}
 	first, last := ordered(selected)
 	failed := 0
@@ -270,6 +325,26 @@ func (a *app) selftest(ctx context.Context, ids []string) error {
 	return nil
 }
 
+// find returns the tasks with these ids, or every task when none are given.
+func (a *app) find(ids []string) ([]tasks.Task, error) {
+	if len(ids) == 0 {
+		all := slices.Clone(a.tasks)
+		slices.SortStableFunc(all, func(x, y tasks.Task) int {
+			return slices.Index(curriculum, x.Domain) - slices.Index(curriculum, y.Domain)
+		})
+		return all, nil
+	}
+	var found []tasks.Task
+	for _, id := range ids {
+		t, ok := tasks.Find(a.tasks, id)
+		if !ok {
+			return nil, fmt.Errorf("no task %q — see: cka-sim list", id)
+		}
+		found = append(found, t)
+	}
+	return found, nil
+}
+
 func (a *app) exam(ctx context.Context, args []string) error {
 	fset := flag.NewFlagSet("exam", flag.ExitOnError)
 	n := fset.Int("n", 16, "number of tasks")
@@ -279,51 +354,136 @@ func (a *app) exam(ctx context.Context, args []string) error {
 	fresh := fset.Bool("fresh", true, "rebuild the clusters first, so no earlier attempt leaks into this exam")
 	_ = fset.Parse(args)
 
+	ln, err := listen(*port)
+	if err != nil {
+		return err
+	}
+	defer ln.Close()
 	store := server.NewStore(a.env.StateDir)
 	if !*resume {
-		if *fresh {
-			fmt.Println("rebuilding a clean environment (about 3 minutes; -fresh=false skips this)…")
-			if err := a.env.Down(ctx); err != nil {
-				return err
-			}
-			if err := a.env.Up(ctx); err != nil {
-				return err
-			}
-		}
-		if err := a.env.Ready(ctx); err != nil {
+		if err := a.prepare(ctx, *fresh); err != nil {
 			return err
 		}
 		exam := tasks.Draw(a.tasks, *n, rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0)))
 		if err := a.setupAll(ctx, exam); err != nil {
 			return err
 		}
-		ids := make([]string, len(exam))
-		for i, t := range exam {
-			ids[i] = t.ID
-		}
-		if err := store.Save(&server.Exam{StartedAt: time.Now(), Duration: *minutes * 60, TaskIDs: ids, Flags: map[string]bool{}}); err != nil {
+		if err := store.Save(&server.Exam{StartedAt: time.Now(), Duration: *minutes * 60, TaskIDs: ids(exam), Flags: map[string]bool{}}); err != nil {
 			return err
 		}
 	}
+	return a.serve(ctx, store, ln, "exam ready — the clock is running", "cka-sim exam -resume")
+}
 
+// study is the exam panel without a clock: every task (or the ones named) in curriculum order,
+// each with its own Check, Reset and Solution buttons.
+func (a *app) study(ctx context.Context, args []string) error {
+	fset := flag.NewFlagSet("study", flag.ExitOnError)
+	port := fset.Int("port", 8080, "port for the study panel")
+	resume := fset.Bool("resume", false, "serve the current session again without setting it up")
+	fresh := fset.Bool("fresh", true, "rebuild the clusters first, so no earlier attempt gets in the way")
+	_ = fset.Parse(args)
+
+	ln, err := listen(*port)
+	if err != nil {
+		return err
+	}
+	defer ln.Close()
+	store := server.NewStore(a.env.StateDir)
+	if !*resume {
+		selected, err := a.find(fset.Args())
+		if err != nil {
+			return err
+		}
+		if err := a.prepare(ctx, *fresh); err != nil {
+			return err
+		}
+		if err := a.setupAll(ctx, selected); err != nil {
+			return err
+		}
+		if err := store.Save(&server.Exam{Study: true, StartedAt: time.Now(), TaskIDs: ids(selected), Flags: map[string]bool{}}); err != nil {
+			return err
+		}
+	}
+	return a.serve(ctx, store, ln, "study session ready — no clock", "cka-sim study -resume")
+}
+
+// prepare makes sure the environment exists, rebuilding it first when fresh.
+func (a *app) prepare(ctx context.Context, fresh bool) error {
+	if fresh {
+		fmt.Println("rebuilding a clean environment (about 3 minutes; -fresh=false skips this)…")
+		if err := a.down(ctx); err != nil {
+			return err
+		}
+		if err := a.env.Up(ctx); err != nil {
+			return err
+		}
+	}
+	return a.env.Ready(ctx)
+}
+
+// down deletes the environment and forgets the session and task state that lived in it.
+func (a *app) down(ctx context.Context) error {
+	if err := a.env.Down(ctx); err != nil {
+		return err
+	}
+	if err := os.Remove(filepath.Join(a.env.StateDir, "exam.json")); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return os.RemoveAll(filepath.Join(a.runner.StateDir, "state"))
+}
+
+func ids(list []tasks.Task) []string {
+	out := make([]string, len(list))
+	for i, t := range list {
+		out[i] = t.ID
+	}
+	return out
+}
+
+// listen claims the panel's port before any setup, so a port already in use fails at once
+// instead of after minutes of building clusters.
+func listen(port int) (net.Listener, error) {
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		return nil, fmt.Errorf("port %d is taken — is another cka-sim panel running? (use -port to pick another): %w", port, err)
+	}
+	return ln, nil
+}
+
+func (a *app) serve(ctx context.Context, store *server.Store, ln net.Listener, ready, resume string) error {
 	ui, err := fs.Sub(ckasim.Assets, "web")
 	if err != nil {
 		return err
 	}
-	srv := &server.Server{Store: store, Tasks: a.tasks, Runner: a.runner, UI: ui}
-	addr := fmt.Sprintf("127.0.0.1:%d", *port)
-	httpServer := &http.Server{Addr: addr, Handler: srv.Handler()}
+	// The browser terminal's shells outlive a reload, not the panel. Their docker exec clients
+	// must not die with ctx: that would leave the shells running in base instead of ending them.
+	shells := &terminal.Manager{
+		Command: func(tag string) *exec.Cmd { return a.env.ShellCommand(context.WithoutCancel(ctx), tag) },
+		Hangup:  func(tag string) { a.endShells(tag) },
+	}
+	a.endShells("") // left behind by a panel that did not stop cleanly
+	srv := &server.Server{Store: store, Tasks: a.tasks, Runner: a.runner, UI: ui, Terminals: shells}
+	httpServer := &http.Server{Handler: srv.Handler()}
 	go func() {
 		<-ctx.Done()
+		shells.CloseAll()
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = httpServer.Shutdown(shutdown)
 	}()
-	fmt.Printf("\n✓ exam ready — the clock is running\n\n  exam panel:  http://localhost:%d\n  your shell:  cka-sim shell   (in another terminal)\n\nCtrl-C stops the panel; cka-sim exam -resume brings it back.\n", *port)
-	if err := httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+	port := ln.Addr().(*net.TCPAddr).Port
+	fmt.Printf("\n✓ %s\n\n  panel:     http://localhost:%d   — questions and a terminal on base, side by side\n  or a shell in your own terminal:  cka-sim shell\n\nCtrl-C stops the panel and its terminals; %s brings it back.\n", ready, port, resume)
+	if err := httpServer.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
+}
+
+func (a *app) endShells(tag string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_ = a.env.EndShells(ctx, tag)
 }
 
 func (a *app) setupAll(ctx context.Context, exam []tasks.Task) error {

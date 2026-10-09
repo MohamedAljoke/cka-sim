@@ -9,8 +9,9 @@ real one, on your own machine:
   `curl`, `wget`, `man`, `vim`, `crictl`, `etcdctl`/`etcdutl`, and `sudo -i` for root —
   systemd kubelet, static Pod manifests and etcd included, so troubleshooting is real.
 - **Kubernetes v1.35**, the exam's current version, across two clusters.
-- A **2-hour timed exam panel** in your browser: questions with their ssh infobox, flags,
-  allowed-docs links. **End exam** grades every task against the live clusters with
+- A **2-hour timed exam panel** in your browser, laid out like the exam: questions with their
+  ssh infobox, flags and allowed-docs links on the left, a **terminal on `base`** on the right
+  (tabs, Ctrl+Shift+C / Ctrl+Shift+V, shells that survive a page reload). **End exam** grades every task against the live clusters with
   **partial credit**; pass mark **66%**.
 - Afterwards, every question gets its check-by-check result, an **explanation of the
   concept** and a **reference solution**.
@@ -39,23 +40,48 @@ go install github.com/MohamedAljoke/cka-sim/cmd/cka-sim@latest
 
 ## Use
 
+From a clone, `make` lists shortcuts for the whole cycle:
+
+```sh
+make reset                 # drop everything and build it again
+make exam MINUTES=60       # the panel (or: make study TASKS="tr-kubelet")
+make open                  # in another terminal: open it — questions left, your shell on base right
+make down                  # done for the day
+```
+
+Or with the binary directly:
+
 ```sh
 cka-sim up                 # once: build images, create clusters cka7491 + cka3962 and base (~5 min)
 
 cka-sim exam               # rebuild clean clusters, draw 16 tasks, set them up, start the clock
                            #   exam panel: http://localhost:8080
-cka-sim shell              # in a second terminal: you are now candidate@base
+                           #   its terminal pane is your shell on base: candidate@base
+cka-sim shell              # or the same shell in your own terminal
+
+cka-sim study              # the same panel with no clock: check, reset and read each task's
+                           #   solution as you go (study tr-kubelet ar-etcd picks tasks)
 
 cka-sim list               # every task, by curriculum domain
 cka-sim practice tr-kubelet   # one task, untimed
 cka-sim check tr-kubelet      # grade it now
 cka-sim solution tr-kubelet   # explanation + reference solution
 
+cka-sim status             # what is running in docker, its memory, the current session
 cka-sim down               # delete everything
 ```
 
 `cka-sim exam -n 8 -minutes 60` makes a shorter mock exam. `-fresh=false` reuses the current
 clusters instead of rebuilding them; `-resume` re-opens the panel of an exam in progress.
+
+**Study mode** (`cka-sim study`) is for learning rather than testing yourself. The timer counts
+up instead of down, and every question gets **Check my work** (grade just that task, as often
+as you like), **Reset task** (run its setup again to retry from scratch), and the explanation
+and reference solution, there whenever you want them. **Finish** grades everything and shows
+the same report as an exam. Flags go before task ids: `cka-sim study -fresh=false tr-service`.
+
+Want to understand how it works, or run it on a server? Follow
+[docs/STUDY-GUIDE.md](docs/STUDY-GUIDE.md) step by step.
 
 ## Tasks
 
@@ -108,8 +134,15 @@ Scripts run on your machine with the helpers in [`tasks/lib.sh`](tasks/lib.sh)
 
 ```sh
 cka-sim selftest <id>      # setup → must fail its checks → solution → must score full marks
-go test -race ./...
+make check                 # what CI runs: gofmt, vet, go test -race, bash -n on every script
+make build | install | selftest | status
 ```
+
+## Which docker containers are mine?
+
+kind creates the cluster nodes itself, so there is no compose file: `cka-sim status` lists
+everything the simulator owns, and since every container is named `cka…`,
+`docker ps -a --filter name=cka` shows the same set. `cka-sim down` removes all of it.
 
 ## WSL2 notes
 

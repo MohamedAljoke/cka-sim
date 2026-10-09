@@ -94,11 +94,10 @@ func (e *Env) run(ctx context.Context, stdin []byte, name string, args ...string
 func (e *Env) logf(format string, args ...any) { fmt.Fprintf(e.Out, format+"\n", args...) }
 
 // Unpack writes the embedded assets to disk, because docker build and bash need real files.
+// Every command unpacks — cka-sim shell too, while an exam is grading — so a file is only
+// replaced when it changed, and then atomically: a running script never sees it half-written.
 func (e *Env) Unpack() (string, error) {
 	dir := filepath.Join(e.StateDir, "assets")
-	if err := os.RemoveAll(dir); err != nil {
-		return "", err
-	}
 	err := fs.WalkDir(e.Assets, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -111,11 +110,18 @@ func (e *Env) Unpack() (string, error) {
 		if err != nil {
 			return err
 		}
+		if old, err := os.ReadFile(target); err == nil && bytes.Equal(old, data) {
+			return nil
+		}
 		mode := os.FileMode(0o644)
 		if strings.HasSuffix(path, ".sh") {
 			mode = 0o755
 		}
-		return os.WriteFile(target, data, mode)
+		tmp := target + ".tmp"
+		if err := os.WriteFile(tmp, data, mode); err != nil {
+			return err
+		}
+		return os.Rename(tmp, target)
 	})
 	return dir, err
 }
@@ -137,7 +143,9 @@ func (e *Env) Up(ctx context.Context) error {
 	g, gctx := errgroup.WithContext(ctx)
 	for _, c := range Clusters {
 		if containsLine(existing, c.Name) {
+			// An earlier up may have stopped before its CNI was ready; finishing it is a no-op otherwise.
 			e.logf("• cluster %s already exists", c.Name)
+			g.Go(func() error { return e.installCNI(gctx, c) })
 			continue
 		}
 		g.Go(func() error {
@@ -186,11 +194,14 @@ const noSecurityFS = `{"spec":{"template":{"spec":{
 // which the WSL2 kernel lacks (no CONFIG_NFT_QUEUE), so policies would silently allow everything.
 // Calico enforces them with iptables, and it is what many exam clusters run.
 func (e *Env) installCNI(ctx context.Context, c Cluster) error {
-	e.logf("• installing Calico %s on %s", CalicoVersion, c.Name)
 	kctx := "kind-" + c.Name
-	manifest := "https://raw.githubusercontent.com/projectcalico/calico/" + CalicoVersion + "/manifests/calico.yaml"
-	if _, err := e.run(ctx, nil, "kubectl", "--context", kctx, "apply", "--server-side", "-f", manifest); err != nil {
-		return err
+	// Re-applying would bring back the securityfs mount patched out below, so apply only once.
+	if _, err := e.run(ctx, nil, "kubectl", "--context", kctx, "-n", "kube-system", "get", "daemonset", "calico-node"); err != nil {
+		e.logf("• installing Calico %s on %s", CalicoVersion, c.Name)
+		manifest := "https://raw.githubusercontent.com/projectcalico/calico/" + CalicoVersion + "/manifests/calico.yaml"
+		if _, err := e.run(ctx, nil, "kubectl", "--context", kctx, "apply", "--server-side", "-f", manifest); err != nil {
+			return err
+		}
 	}
 	// calico-node mounts securityfs only to detect kernel lockdown for its eBPF dataplane; hosts
 	// without securityfs (WSL2) cannot create that mount, so the container never starts.
@@ -249,7 +260,8 @@ func (e *Env) provisionNodes(ctx context.Context, authorizedKey []byte) error {
 // the exam's base host already holds a key every task host trusts.
 func (e *Env) startBase(ctx context.Context) (publicKey []byte, err error) {
 	_, _ = e.run(ctx, nil, "docker", "rm", "-f", BaseName)
-	if _, err := e.run(ctx, nil, "docker", "run", "-d", "--name", BaseName, "--hostname", "base",
+	// --init reaps what ended shells leave behind; sleep as PID 1 never would.
+	if _, err := e.run(ctx, nil, "docker", "run", "-d", "--init", "--name", BaseName, "--hostname", "base",
 		"--network", "kind", BaseImage); err != nil {
 		return nil, err
 	}
@@ -274,9 +286,44 @@ func (e *Env) Down(ctx context.Context) error {
 
 // Shell attaches the terminal to base as candidate — where every exam task starts.
 func (e *Env) Shell(ctx context.Context) error {
-	cmd := e.command(ctx, "docker", "exec", "-it", "-u", "candidate", "-w", "/home/candidate", BaseName, "bash", "-l")
+	cmd := e.ShellCommand(ctx, "")
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()
+}
+
+// TerminalVar marks the processes of a panel terminal, so EndShells can find them again.
+const TerminalVar = "CKA_TERMINAL"
+
+// ShellCommand is a login shell on base as candidate; it needs a terminal on stdin. A tag
+// marks it, and everything started from it, with TerminalVar.
+func (e *Env) ShellCommand(ctx context.Context, tag string) *exec.Cmd {
+	args := []string{"exec", "-it", "-u", "candidate", "-w", "/home/candidate"}
+	if tag != "" {
+		args = append(args, "-e", TerminalVar+"="+tag)
+	}
+	return e.command(ctx, "docker", append(args, BaseName, "bash", "-l")...)
+}
+
+// hangupScript hangs up every process in base whose TerminalVar matches $1 (a grep pattern),
+// then kills what ignored the hangup.
+const hangupScript = `pids=""
+for p in /proc/[0-9]*; do
+  grep -qz "^` + TerminalVar + `=$1\$" "$p/environ" 2>/dev/null && pids="$pids ${p#/proc/}"
+done
+[ -z "$pids" ] && exit 0
+kill -HUP $pids 2>/dev/null; sleep 1; kill -KILL $pids 2>/dev/null; exit 0`
+
+// EndShells ends the panel terminal with this tag and everything started from it, or every
+// panel terminal when tag is empty. Killing docker exec alone would leave them running in base.
+func (e *Env) EndShells(ctx context.Context, tag string) error {
+	pattern := tag // tags are hex, nothing to escape
+	if tag == "" {
+		pattern = ".*"
+	}
+	// As candidate: reading another user's /proc/<pid>/environ takes CAP_SYS_PTRACE, which
+	// docker withholds even from root.
+	_, err := e.run(ctx, nil, "docker", "exec", "-u", "candidate", BaseName, "bash", "-c", hangupScript, "hangup", pattern)
+	return err
 }
 
 // Ready reports whether the clusters and base container exist.

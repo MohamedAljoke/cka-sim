@@ -4,8 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CKA Exam Simulator</title>
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="vendor/xterm.css">
 <style>
 /* dyosmos design tokens */
 :root {
@@ -32,31 +34,37 @@
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html, body { margin: 0; min-height: 100dvh; background: var(--dy-color-canvas); color: var(--dy-color-foreground); font: 15px/1.55 var(--dy-font-body); }
+html, body { margin: 0; height: 100dvh; background: var(--dy-color-canvas); color: var(--dy-color-foreground); font: 15px/1.55 var(--dy-font-body); }
 button { font: inherit; cursor: pointer; }
 code, pre { font-family: var(--dy-font-mono); }
 .display { font-family: var(--dy-font-display); font-weight: 600; letter-spacing: 0; }
 
-.topbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 16px; padding: 10px 20px; background: var(--dy-color-surface); border-bottom: 1px solid var(--dy-color-border); }
+body { display: flex; flex-direction: column; overflow: hidden; }
+.topbar { flex: none; z-index: 10; display: flex; align-items: center; gap: 16px; padding: 10px 20px; background: var(--dy-color-surface); border-bottom: 1px solid var(--dy-color-border); }
 .brand { font-size: 20px; }
 .brand small { color: var(--dy-color-foreground-subtle); font: 500 13px var(--dy-font-body); margin-left: 8px; }
 .spacer { flex: 1; }
-.timer { font: 600 20px var(--dy-font-mono); font-variant-numeric: tabular-nums; padding: 4px 12px; border-radius: var(--dy-radius-md); border: 1px solid var(--dy-color-border); }
+.timer { white-space: nowrap; font: 600 20px var(--dy-font-mono); font-variant-numeric: tabular-nums; padding: 4px 12px; border-radius: var(--dy-radius-md); border: 1px solid var(--dy-color-border); }
 .timer.low { color: var(--dy-color-warning); border-color: color-mix(in srgb, var(--dy-color-warning) 40%, transparent); background: color-mix(in srgb, var(--dy-color-warning) 10%, transparent); }
 .timer.out { color: var(--dy-color-danger); }
+.timer.study { color: var(--dy-color-info); border-color: color-mix(in srgb, var(--dy-color-info) 40%, transparent); }
 
-.btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: var(--dy-radius-md); border: 1px solid var(--dy-color-border); background: var(--dy-color-surface); color: var(--dy-color-foreground); font-weight: 600; font-size: 14px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; white-space: nowrap; padding: 0 16px; border-radius: var(--dy-radius-md); border: 1px solid var(--dy-color-border); background: var(--dy-color-surface); color: var(--dy-color-foreground); font-weight: 600; font-size: 14px; }
 .btn:hover { background: var(--dy-color-surface-muted); }
 .btn.primary { background: var(--dy-color-primary); color: var(--dy-color-on-primary); border-color: transparent; box-shadow: var(--dy-shadow-sm); }
 .btn.primary:hover { filter: brightness(0.95); }
 .btn.danger { color: var(--dy-color-danger); border-color: color-mix(in srgb, var(--dy-color-danger) 40%, transparent); }
 .btn.on { color: var(--dy-color-warning); border-color: color-mix(in srgb, var(--dy-color-warning) 50%, transparent); background: color-mix(in srgb, var(--dy-color-warning) 10%, transparent); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn[aria-pressed="true"] { background: var(--dy-color-surface-muted); border-color: var(--dy-color-border-strong); }
 .btn:focus-visible, .qbtn:focus-visible { outline: 2px solid var(--dy-color-primary); outline-offset: 2px; }
 .icon { width: 40px; padding: 0; justify-content: center; }
 
-.layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: calc(100dvh - 61px); }
-.sidebar { border-right: 1px solid var(--dy-color-border); background: var(--dy-color-surface); padding: 16px 12px; }
+/* Like the exam: questions on the left, the terminal on the right, each scrolling on its own. */
+.layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr) 6px var(--term-w, 46%); }
+.layout.noterm { grid-template-columns: 240px minmax(0, 1fr); }
+.layout.noterm .divider, .layout.noterm .termpane { display: none; }
+.sidebar { border-right: 1px solid var(--dy-color-border); background: var(--dy-color-surface); padding: 16px 12px; overflow-y: auto; }
 .sidebar h2 { font-size: 12px; text-transform: uppercase; color: var(--dy-color-foreground-subtle); margin: 0 8px 8px; font-weight: 600; }
 .qbtn { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 6px 10px; margin-bottom: 4px; border-radius: var(--dy-radius-md); border: 1px solid transparent; background: none; color: var(--dy-color-foreground-muted); text-align: left; }
 .qbtn:hover { background: var(--dy-color-surface-muted); color: var(--dy-color-foreground); }
@@ -67,7 +75,8 @@ code, pre { font-family: var(--dy-font-mono); }
 .docs { margin-top: 20px; padding: 12px 8px; border-top: 1px solid var(--dy-color-border); font-size: 13px; color: var(--dy-color-foreground-muted); }
 .docs a { color: var(--dy-color-info); display: block; margin-top: 4px; }
 
-main { padding: 28px clamp(16px, 4vw, 48px); max-width: 980px; min-width: 0; }
+main { padding: 28px clamp(16px, 3vw, 40px); min-width: 0; overflow-y: auto; }
+main > * { max-width: 920px; }
 .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--dy-color-foreground-muted); font-size: 14px; }
 .badge { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: var(--dy-radius-sm); border: 1px solid var(--dy-color-border); background: var(--dy-color-surface-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--dy-color-foreground-muted); }
 .badge.teal { color: var(--dy-color-success); border-color: color-mix(in srgb, var(--dy-color-success) 30%, transparent); background: color-mix(in srgb, var(--dy-color-success) 10%, transparent); }
@@ -77,8 +86,8 @@ h1 { font-size: 30px; margin: 6px 0 18px; }
 
 .infobox { border: 1px solid color-mix(in srgb, var(--dy-color-info) 40%, transparent); background: color-mix(in srgb, var(--dy-color-info) 10%, transparent); border-radius: var(--dy-radius-md); padding: 14px 16px; margin-bottom: 22px; }
 .infobox p { margin: 0 0 10px; }
-.cmd { display: flex; align-items: center; gap: 10px; background: var(--dy-color-surface); border: 1px solid var(--dy-color-border); border-radius: var(--dy-radius-sm); padding: 6px 6px 6px 12px; font-family: var(--dy-font-mono); }
-.cmd span { flex: 1; overflow-x: auto; white-space: nowrap; }
+.cmd { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; background: var(--dy-color-surface); border: 1px solid var(--dy-color-border); border-radius: var(--dy-radius-sm); padding: 6px 6px 6px 12px; font-family: var(--dy-font-mono); }
+.cmd span { flex: 1 0 auto; white-space: nowrap; }
 .cmd .prompt { color: var(--dy-color-foreground-subtle); flex: none; }
 .copy { height: 32px; padding: 0 10px; font-size: 13px; }
 
@@ -87,7 +96,7 @@ h1 { font-size: 30px; margin: 6px 0 18px; }
 .body code { background: var(--dy-color-surface-muted); border: 1px solid var(--dy-color-border); border-radius: var(--dy-radius-sm); padding: 0 5px; font-size: .9em; }
 .body pre { background: var(--dy-color-surface-muted); border: 1px solid var(--dy-color-border); border-radius: var(--dy-radius-md); padding: 12px 14px; overflow-x: auto; font-size: 13px; }
 .body pre code { background: none; border: 0; padding: 0; }
-.nav { display: flex; gap: 8px; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--dy-color-border); }
+.nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--dy-color-border); }
 
 .card { background: var(--dy-color-surface); border: 1px solid var(--dy-color-border); border-radius: var(--dy-radius-md); padding: 18px 20px; margin-bottom: 14px; }
 .score { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
@@ -96,6 +105,8 @@ h1 { font-size: 30px; margin: 6px 0 18px; }
 .checks li { display: flex; gap: 10px; padding: 4px 0; }
 .checks .ok { color: var(--dy-color-success); } .checks .no { color: var(--dy-color-danger); }
 details summary { cursor: pointer; font-weight: 600; color: var(--dy-color-foreground-muted); margin-top: 8px; }
+.study { margin-top: 28px; }
+.study .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .bar { height: 6px; border-radius: 3px; background: var(--dy-color-surface-muted); overflow: hidden; margin-top: 8px; }
 .bar i { display: block; height: 100%; background: var(--dy-color-primary); }
 
@@ -108,13 +119,39 @@ details summary { cursor: pointer; font-weight: 600; color: var(--dy-color-foreg
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 
+.divider { cursor: col-resize; background: var(--dy-color-border); touch-action: none; }
+.divider:hover, .divider:focus-visible, .divider.dragging { background: var(--dy-color-primary); outline: none; }
+.termpane { --term-bg: #0b0f0e; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--term-bg); color: #e6ece9; }
+.tabs { flex: none; display: flex; align-items: stretch; gap: 2px; padding: 6px 6px 0; background: #151b19; border-bottom: 1px solid #26312e; overflow-x: auto; }
+.tab { display: flex; align-items: center; border-radius: var(--dy-radius-sm) var(--dy-radius-sm) 0 0; color: #9fb0a9; }
+.tab.active { background: var(--term-bg); color: #f3f7f5; }
+.tab button { background: none; border: 0; color: inherit; height: 32px; }
+.tabbtn { padding: 0 6px 0 12px; font: 500 13px var(--dy-font-body); white-space: nowrap; }
+.tabx { width: 26px; padding: 0; font-size: 16px; opacity: .6; border-radius: var(--dy-radius-sm); }
+.tabx:hover { opacity: 1; background: #26312e; }
+.newtab { flex: none; width: 32px; height: 32px; margin-left: 2px; background: none; border: 0; color: #9fb0a9; font-size: 18px; border-radius: var(--dy-radius-sm); }
+.newtab:hover { background: #26312e; color: #f3f7f5; }
+.tabs button:focus-visible { outline: 2px solid var(--dy-color-primary); outline-offset: -2px; }
+.tabs .hint { margin-left: auto; align-self: center; padding: 0 8px; font-size: 12px; color: #82918a; white-space: nowrap; }
+.terms { flex: 1; position: relative; min-height: 0; }
+.term { position: absolute; inset: 0; padding: 6px 4px 4px 10px; }
+.term-status { position: absolute; top: 10px; right: 14px; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: var(--dy-radius-sm); background: #202a27; border: 1px solid #34413c; font-size: 13px; color: #f3f7f5; }
+.term-status button { height: 28px; padding: 0 10px; font-size: 13px; }
+.term-empty { position: absolute; inset: 0; display: grid; place-content: center; gap: 12px; text-align: center; color: #9fb0a9; }
+
 @media (max-width: 860px) {
-  .layout { grid-template-columns: minmax(0, 1fr); }
+  body { overflow: auto; height: auto; }
+  .topbar { flex-wrap: wrap; gap: 8px 12px; padding: 10px 16px; }
+  .layout, .layout.noterm { grid-template-columns: minmax(0, 1fr); }
+  .divider { display: none; }
+  .termpane { height: 60vh; }
+  .tabs .hint { display: none; }
   .sidebar { border-right: 0; border-bottom: 1px solid var(--dy-color-border); }
   .qlist { display: flex; flex-wrap: wrap; gap: 4px; }
   .qbtn { width: auto; margin: 0; }
   .qbtn .w { display: none; }
   .brand small { display: none; }
+  .timer .label { display: none; }
 }
 </style>
 </head>
@@ -123,6 +160,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--dy-color-foreg
   <div class="brand display">CKA <small>exam simulator · Kubernetes v1.35</small></div>
   <div class="spacer"></div>
   <div id="timer" class="timer" role="timer" aria-live="off">--:--:--</div>
+  <button id="termToggle" class="btn" aria-pressed="true" title="Show or hide the terminal" hidden>Terminal</button>
   <button id="theme" class="btn icon" aria-label="Toggle light and dark theme">◐</button>
   <button id="end" class="btn danger">End exam</button>
 </header>
@@ -138,11 +176,20 @@ details summary { cursor: pointer; font-weight: 600; color: var(--dy-color-foreg
     </div>
   </nav>
   <main id="main" aria-live="polite"><p class="muted">Loading the exam…</p></main>
+  <div id="divider" class="divider" role="separator" aria-orientation="vertical" aria-label="Resize the terminal" tabindex="0"></div>
+  <section id="termpane" class="termpane" aria-label="Terminal on base">
+    <div class="tabs"><div id="tabs" role="tablist" style="display:contents"></div>
+      <button id="newtab" class="newtab" aria-label="New terminal" title="New terminal">+</button>
+      <span class="hint">Ctrl+Shift+C copy · Ctrl+Shift+V paste</span></div>
+    <div id="terms" class="terms"></div>
+  </section>
 </div>
 <div id="overlay"></div>
 
+<script src="vendor/xterm.js"></script>
+<script src="vendor/addon-fit.js"></script>
 <script>
-const state = { exam: null, current: 0, clockOffset: 0, grading: false };
+const state = { exam: null, current: 0, clockOffset: 0, grading: false, busy: "" };
 const $ = (sel) => document.querySelector(sel);
 
 const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -202,6 +249,7 @@ function load(exam) {
 function render() {
   const { exam } = state;
   $("#end").hidden = exam.ended;
+  $("#end").textContent = exam.study ? "Finish" : "End exam";
   renderList();
   if (exam.ended) renderResults();
   else renderQuestion();
@@ -211,8 +259,8 @@ function render() {
 function renderList() {
   const { exam } = state;
   $("#qlist").innerHTML = exam.questions.map((q, i) => {
-    const status = exam.ended && q.result
-      ? `<span class="w">${Math.round(q.fraction * 100)}%</span>`
+    const status = exam.ended && q.result ? `<span class="w">${Math.round(q.fraction * 100)}%</span>`
+      : exam.study && q.result ? `<span class="w">${q.result.earned}/${q.result.total} pts</span>`
       : `<span class="w">${q.weight}%</span>`;
     return `<button class="qbtn ${!exam.ended && i === state.current ? "active" : ""}" data-i="${i}" aria-label="Question ${q.number}${q.flagged ? ", flagged" : ""}">
       <span class="qnum">${q.number}</span>${q.flagged ? '<span class="flag" aria-hidden="true">⚑</span>' : ""}${status}</button>`;
@@ -245,11 +293,61 @@ function renderQuestion() {
       <button class="btn ${q.flagged ? "on" : ""}" id="flag" aria-pressed="${q.flagged}">⚑ ${q.flagged ? "Flagged" : "Flag for review"}</button>
       <div class="spacer"></div>
       <button class="btn primary" id="next" ${state.current === exam.questions.length - 1 ? "disabled" : ""}>Next →</button>
-    </div>`;
+    </div>
+    ${exam.study ? studyPanel(q) : ""}`;
   $("#prev").onclick = () => { state.current--; render(); };
   $("#next").onclick = () => { state.current++; render(); };
   $("#flag").onclick = async () => load(await api(`/api/flag/${q.id}`, "POST"));
+  if (exam.study) {
+    $("#check").onclick = () => studyAction(q, "check");
+    $("#reset").onclick = () => {
+      dialog(`<h2 class="display">Reset this task?</h2>
+        <p class="muted">Its setup runs again and puts the task back in its starting state. Your work on it is undone.</p>
+        <div class="actions"><button class="btn" id="cancel">Cancel</button><button class="btn primary" id="confirm">Reset task</button></div>`);
+      $("#cancel").onclick = () => dialog("");
+      $("#confirm").onclick = () => { dialog(""); studyAction(q, "reset"); };
+      $("#cancel").focus();
+    };
+  }
   bindCopy();
+}
+
+function checksList(r) {
+  return `<ul class="checks">${(r?.checks ?? []).map((c) => `<li><span class="${c.passed ? "ok" : "no"}">${c.passed ? "✓" : "✗"}</span><span>${esc(c.description)} <span class="muted">(${c.points})</span></span></li>`).join("")}</ul>
+    ${r?.error ? `<pre class="muted">${esc(r.error)}</pre>` : ""}`;
+}
+
+// The study panel: what the exam never gives you — feedback on one task while you work on it.
+function studyPanel(q) {
+  const r = q.result;
+  const tone = !r ? "" : q.fraction === 1 ? "teal" : q.fraction > 0 ? "amber" : "rose";
+  const busy = state.busy === q.id;
+  return `<section class="card study" aria-label="Study tools">
+    <div class="actions">
+      <button class="btn primary" id="check" ${busy ? "disabled" : ""}>Check my work</button>
+      <button class="btn" id="reset" ${busy ? "disabled" : ""}>Reset task</button>
+      ${busy ? `<span class="muted"><span class="spinner"></span> ${state.busyLabel}</span>` : ""}
+      ${r && !busy ? `<span class="badge ${tone}">${r.earned}/${r.total} points</span>` : ""}
+    </div>
+    ${r && !busy ? checksList(r) : ""}
+    ${q.explain ? `<details><summary>Explanation</summary><div class="body">${md(q.explain)}</div></details>` : ""}
+    ${q.solution ? `<details><summary>Reference solution</summary><div class="body"><pre><code>${esc(q.solution)}</code></pre></div></details>` : ""}
+  </section>`;
+}
+
+async function studyAction(q, action) {
+  state.busy = q.id;
+  state.busyLabel = action === "check" ? "Checking against the live cluster…" : "Running the task's setup again…";
+  render();
+  try {
+    const exam = await api(`/api/${action}/${q.id}`, "POST");
+    state.busy = "";
+    load(exam);
+  } catch (e) {
+    state.busy = "";
+    render();
+    dialog(`<h2 class="display">${action === "check" ? "Check" : "Reset"} failed</h2><pre class="muted" style="white-space:pre-wrap">${esc(e.message)}</pre><div class="actions"><button class="btn" onclick="dialog('')">Close</button></div>`);
+  }
 }
 
 function bindCopy() {
@@ -265,7 +363,7 @@ function renderResults() {
   const passed = exam.score >= exam.passScore;
   $("#main").innerHTML = `
     <div class="card">
-      <div class="meta">Exam result</div>
+      <div class="meta">${exam.study ? "Study session result" : "Exam result"}</div>
       <div class="score"><span class="big">${exam.score}%</span>
         <span class="badge ${passed ? "teal" : "rose"}">${passed ? "Pass" : "Fail"}</span>
         <span class="muted">pass mark ${exam.passScore}%</span></div>
@@ -279,8 +377,7 @@ function renderResults() {
           <span class="badge ${tone}">${r ? `${r.earned}/${r.total} points` : "not graded"}</span>
           <span>ssh ${esc(q.host)}</span></div>
         <h2 class="display" style="font-size:22px;margin:6px 0">${esc(q.title)}</h2>
-        <ul class="checks">${(r?.checks ?? []).map((c) => `<li><span class="${c.passed ? "ok" : "no"}">${c.passed ? "✓" : "✗"}</span><span>${esc(c.description)} <span class="muted">(${c.points})</span></span></li>`).join("")}</ul>
-        ${r?.error ? `<pre class="muted">${esc(r.error)}</pre>` : ""}
+        ${checksList(r)}
         <details><summary>The task</summary><div class="body">${md(q.body)}</div></details>
         ${q.explain ? `<details ${q.fraction < 1 ? "open" : ""}><summary>Explanation</summary><div class="body">${md(q.explain)}</div></details>` : ""}
         ${q.solution ? `<details><summary>Reference solution</summary><div class="body"><pre><code>${esc(q.solution)}</code></pre></div></details>` : ""}
@@ -292,6 +389,13 @@ function tick() {
   if (!state.exam) return;
   const el = $("#timer");
   if (state.exam.ended) { el.textContent = "Ended"; el.className = "timer"; return; }
+  if (state.exam.study) {
+    const s = Math.max(0, Math.floor((Date.now() + state.clockOffset - new Date(state.exam.startedAt).getTime()) / 1000));
+    el.innerHTML = '<span class="label">Study · </span>' + [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map((n) => String(n).padStart(2, "0")).join(":");
+    el.className = "timer study";
+    el.setAttribute("aria-label", `studying for ${Math.floor(s / 60)} minutes, no time limit`);
+    return;
+  }
   const left = Math.max(0, new Date(state.exam.deadline).getTime() - (Date.now() + state.clockOffset));
   const s = Math.floor(left / 1000);
   el.textContent = [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map((n) => String(n).padStart(2, "0")).join(":");
@@ -320,9 +424,10 @@ async function endExam() {
 
 $("#end").onclick = () => {
   const flagged = state.exam.questions.filter((q) => q.flagged).length;
-  dialog(`<h2 class="display">End the exam?</h2>
+  const what = state.exam.study ? "session" : "exam";
+  dialog(`<h2 class="display">${state.exam.study ? "Finish studying?" : "End the exam?"}</h2>
     <p class="muted">Every task is graded as it is now.${flagged ? ` You still have ${flagged} flagged question${flagged > 1 ? "s" : ""}.` : ""} This cannot be undone.</p>
-    <div class="actions"><button class="btn" id="cancel">Keep working</button><button class="btn primary" id="confirm">End exam</button></div>`);
+    <div class="actions"><button class="btn" id="cancel">Keep working</button><button class="btn primary" id="confirm">End ${what}</button></div>`);
   $("#cancel").onclick = () => dialog("");
   $("#confirm").onclick = endExam;
   $("#cancel").focus();
@@ -334,6 +439,255 @@ $("#theme").onclick = () => {
   try { localStorage.setItem("cka-sim:scheme", next); } catch {}
 };
 try { const s = localStorage.getItem("cka-sim:scheme"); if (s) document.documentElement.dataset.colorScheme = s; } catch {}
+
+// The terminal: shells on base that the server keeps alive, so a reload or a dropped
+// connection reattaches to the same shell and replays its recent output.
+const term = { tabs: [], active: null };
+const TERM_TAKEN_OVER = 4000, TERM_ENDED = 4001;
+const TERM_THEME = {
+  background: "#0b0f0e", foreground: "#e6ece9", cursor: "#3bc3a0", cursorAccent: "#0b0f0e",
+  selectionBackground: "#3bc3a055", black: "#1c2422", brightBlack: "#5d6c66",
+};
+const encoder = new TextEncoder();
+
+function prefs(key, value) {
+  try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); } catch {}
+  return null;
+}
+
+async function initTerminals() {
+  let list;
+  try { list = await api("/api/terminals"); } catch { return; } // this panel has no terminal
+  term.pending = list;
+  $("#termToggle").hidden = false;
+  const width = prefs("cka-sim:term-width");
+  if (width) $(".layout").style.setProperty("--term-w", width);
+  setTermVisible(prefs("cka-sim:terminal") !== "off");
+}
+
+// startTabs opens the shells once the pane is first shown: xterm.js measures its font when
+// it opens, which needs a visible element and the font loaded.
+async function startTabs() {
+  let list = term.pending;
+  term.pending = null;
+  await document.fonts?.load('14px "IBM Plex Mono"').catch(() => {});
+  if (!list.length) {
+    try { list = [await api("/api/terminals", "POST")]; }
+    catch (e) { renderTabs(e.message); return; }
+  }
+  list.forEach(openTab);
+  activate(term.tabs[0]);
+}
+
+function openTab(info) {
+  const el = document.createElement("div");
+  el.className = "term";
+  $("#terms").append(el);
+  const xt = new Terminal({
+    fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontSize: 14, cursorBlink: true,
+    scrollback: 5000, theme: TERM_THEME,
+  });
+  const fit = new FitAddon.FitAddon();
+  xt.loadAddon(fit);
+  xt.open(el);
+  const tab = { ...info, xt, fit, el, ws: null, retry: 0, ended: false, closing: false };
+  xt.attachCustomKeyEventHandler((e) => termKey(tab, e));
+  xt.onData((data) => termSend(tab, encoder.encode(data)));
+  xt.onBinary((data) => termSend(tab, Uint8Array.from(data, (c) => c.charCodeAt(0))));
+  xt.onResize(() => sendSize(tab));
+  term.tabs.push(tab);
+  connect(tab);
+  return tab;
+}
+
+// The exam's terminal copies and pastes with Ctrl+Shift+C and Ctrl+Shift+V.
+function termKey(tab, e) {
+  if (e.type !== "keydown" || !e.ctrlKey || !e.shiftKey) return true;
+  if (e.code === "KeyC") {
+    const sel = tab.xt.getSelection();
+    if (sel) navigator.clipboard?.writeText(sel).catch(() => {});
+    e.preventDefault(); // Chrome would open the element inspector
+    return false;
+  }
+  // Let the browser's own paste happen; xterm.js picks it up from its textarea.
+  if (e.code === "KeyV") return false;
+  return true;
+}
+
+function termSend(tab, bytes) {
+  if (tab.ended) { restart(tab); return; }
+  if (tab.ws?.readyState === WebSocket.OPEN) tab.ws.send(bytes);
+}
+
+function sendSize(tab) {
+  if (tab.ws?.readyState === WebSocket.OPEN) tab.ws.send(JSON.stringify({ type: "resize", cols: tab.xt.cols, rows: tab.xt.rows }));
+}
+
+function connect(tab) {
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/terminals/${tab.id}/ws`);
+  ws.binaryType = "arraybuffer";
+  tab.ws = ws;
+  ws.onopen = () => {
+    tab.retry = 0;
+    termStatus(tab, "");
+    tab.xt.reset(); // the server replays the recent output next
+    if (!tab.el.hidden) tab.fit.fit();
+    sendSize(tab);
+  };
+  ws.onmessage = (e) => tab.xt.write(new Uint8Array(e.data));
+  ws.onclose = (e) => {
+    if (tab.ws !== ws || tab.closing) return;
+    if (e.code === TERM_ENDED) return ended(tab, "shell ended");
+    if (e.code === TERM_TAKEN_OVER) {
+      termStatus(tab, "Opened in another window", "Use it here", () => connect(tab));
+      return;
+    }
+    termStatus(tab, "Reconnecting…");
+    setTimeout(() => reconnect(tab), Math.min(10000, 500 * 2 ** tab.retry++));
+  };
+}
+
+// reconnect attaches again, unless the server no longer has this shell (it was restarted).
+async function reconnect(tab) {
+  if (tab.closing || tab.ended) return;
+  try {
+    const list = await api("/api/terminals");
+    if (!list.some((t) => t.id === tab.id)) return ended(tab, "this shell is gone");
+    connect(tab);
+  } catch {
+    setTimeout(() => reconnect(tab), Math.min(10000, 500 * 2 ** tab.retry++));
+  }
+}
+
+function ended(tab, why) {
+  tab.ended = true;
+  termStatus(tab, "");
+  tab.xt.write(`\r\n\x1b[2m[${why} — press any key for a new one]\x1b[0m\r\n`);
+}
+
+async function restart(tab) {
+  if (tab.restarting) return;
+  tab.restarting = true;
+  try {
+    const info = await api("/api/terminals", "POST");
+    Object.assign(tab, info, { ended: false, retry: 0 });
+    connect(tab);
+    renderTabs();
+  } catch (e) {
+    tab.xt.write(`\r\n\x1b[31m${e.message}\x1b[0m\r\n`);
+  } finally {
+    tab.restarting = false;
+  }
+}
+
+function termStatus(tab, text, action, onAction) {
+  tab.el.querySelector(".term-status")?.remove();
+  if (!text) return;
+  const box = document.createElement("div");
+  box.className = "term-status";
+  box.setAttribute("role", "status");
+  box.textContent = text;
+  if (action) {
+    const b = document.createElement("button");
+    b.className = "btn";
+    b.textContent = action;
+    b.onclick = onAction;
+    box.append(b);
+  }
+  tab.el.append(box);
+}
+
+function activate(tab) {
+  term.active = tab;
+  for (const t of term.tabs) t.el.hidden = t !== tab;
+  renderTabs();
+  if (tab) requestAnimationFrame(() => { tab.fit.fit(); tab.xt.focus(); });
+}
+
+function renderTabs(error) {
+  $("#tabs").innerHTML = term.tabs.map((t, i) => `<div class="tab ${t === term.active ? "active" : ""}">
+    <button class="tabbtn" role="tab" aria-selected="${t === term.active}" data-i="${i}">${esc(t.title)}</button>
+    <button class="tabx" data-close="${i}" aria-label="Close ${esc(t.title)}" title="Close: ends this shell">×</button></div>`).join("");
+  document.querySelectorAll(".tabbtn").forEach((b) => b.onclick = () => activate(term.tabs[b.dataset.i]));
+  document.querySelectorAll(".tabx").forEach((b) => b.onclick = () => closeTab(term.tabs[b.dataset.close]));
+  const empty = $("#terms .term-empty");
+  if (term.tabs.length) { empty?.remove(); return; }
+  const box = empty ?? document.createElement("div");
+  box.className = "term-empty";
+  box.innerHTML = `${error ? `<p>${esc(error)}</p>` : "<p>No terminal open.</p>"}<p><button class="btn primary" id="firsttab">Open a shell on base</button></p>`;
+  $("#terms").append(box);
+  $("#firsttab").onclick = newTab;
+}
+
+async function newTab() {
+  try { activate(openTab(await api("/api/terminals", "POST"))); }
+  catch (e) { term.tabs.length ? term.active?.xt.write(`\r\n\x1b[31m${e.message}\x1b[0m\r\n`) : renderTabs(e.message); }
+}
+
+async function closeTab(tab) {
+  tab.closing = true;
+  tab.ws?.close();
+  fetch(`/api/terminals/${tab.id}`, { method: "DELETE" }).catch(() => {});
+  tab.xt.dispose();
+  tab.el.remove();
+  const i = term.tabs.indexOf(tab);
+  term.tabs.splice(i, 1);
+  if (term.active === tab) activate(term.tabs[Math.min(i, term.tabs.length - 1)] ?? null);
+  else renderTabs();
+}
+
+function setTermVisible(on) {
+  $(".layout").classList.toggle("noterm", !on);
+  $("#termToggle").setAttribute("aria-pressed", on);
+  if (on && term.pending) startTabs();
+  else if (on && term.active) requestAnimationFrame(() => term.active.fit.fit());
+}
+
+$("#termToggle").onclick = () => {
+  const on = $(".layout").classList.contains("noterm");
+  setTermVisible(on);
+  prefs("cka-sim:terminal", on ? "on" : "off");
+  if (on) term.active?.xt.focus();
+};
+$("#newtab").onclick = newTab;
+
+// Dragging the divider sizes the terminal; arrow keys do the same from the keyboard.
+function setTermWidth(px) {
+  const layout = $(".layout");
+  const max = layout.clientWidth - 240 - 420; // keep the question readable
+  const width = `${Math.round(Math.max(320, Math.min(max, px)))}px`;
+  layout.style.setProperty("--term-w", width);
+  prefs("cka-sim:term-width", width);
+}
+const divider = $("#divider");
+divider.addEventListener("pointerdown", (e) => {
+  divider.setPointerCapture(e.pointerId);
+  divider.classList.add("dragging");
+});
+divider.addEventListener("pointermove", (e) => {
+  if (divider.hasPointerCapture(e.pointerId)) setTermWidth($(".layout").getBoundingClientRect().right - e.clientX);
+});
+divider.addEventListener("pointerup", () => {
+  divider.classList.remove("dragging");
+  term.active?.xt.focus();
+});
+divider.addEventListener("keydown", (e) => {
+  const step = { ArrowLeft: 40, ArrowRight: -40 }[e.key];
+  if (step) { e.preventDefault(); setTermWidth($("#termpane").clientWidth + step); }
+});
+
+let fitFrame = 0;
+new ResizeObserver(() => {
+  cancelAnimationFrame(fitFrame);
+  fitFrame = requestAnimationFrame(() => { if (term.active && !term.active.el.hidden) term.active.fit.fit(); });
+}).observe($("#terms"));
+
+// Ctrl+W, from vim habit, closes the browser tab instead. The shells survive, but ask first.
+addEventListener("beforeunload", (e) => {
+  if (term.tabs.some((t) => !t.ended)) e.preventDefault();
+});
+
+initTerminals();
 
 api("/api/exam").then(load).catch((e) => {
   $("#main").innerHTML = `<h1 class="display">No exam running</h1><p class="muted">${esc(e.message)}</p>`;

@@ -13,8 +13,4 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
-      - run: go vet ./...
-      - run: go test -race ./...
-      - name: Task scripts parse
-        run: for f in tasks/lib.sh tasks/*/*/*.sh; do bash -n "$f"; done
+      - run: make check

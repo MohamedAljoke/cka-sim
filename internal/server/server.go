@@ -6,22 +6,29 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/MohamedAljoke/cka-sim/internal/grader"
 	"github.com/MohamedAljoke/cka-sim/internal/tasks"
+	"github.com/MohamedAljoke/cka-sim/internal/terminal"
 )
 
 const PassScore = 66
 
 // Exam is the persisted state of one sitting, so a restarted server resumes the same exam.
+// A study session is an Exam without a clock, where each task can be checked, reset and
+// explained on its own.
 type Exam struct {
+	Study     bool            `json:"study,omitempty"`
 	StartedAt time.Time       `json:"startedAt"`
 	Duration  int             `json:"durationSeconds"`
 	TaskIDs   []string        `json:"taskIds"`
@@ -72,6 +79,8 @@ type Server struct {
 	Tasks  []tasks.Task
 	Runner grader.Runner
 	UI     fs.FS
+	// Terminals backs the browser terminal; without it the panel shows none.
+	Terminals *terminal.Manager
 
 	grading sync.Mutex
 }
@@ -81,8 +90,50 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/exam", s.getExam)
 	mux.HandleFunc("POST /api/flag/{id}", s.toggleFlag)
 	mux.HandleFunc("POST /api/end", s.endExam)
+	mux.HandleFunc("POST /api/check/{id}", s.studyOnly(s.checkTask))
+	mux.HandleFunc("POST /api/reset/{id}", s.studyOnly(s.resetTask))
+	if s.Terminals != nil {
+		mux.HandleFunc("GET /api/terminals", s.listTerminals)
+		mux.HandleFunc("POST /api/terminals", s.startTerminal)
+		mux.HandleFunc("DELETE /api/terminals/{id}", s.closeTerminal)
+		mux.HandleFunc("GET /api/terminals/{id}/ws", func(w http.ResponseWriter, r *http.Request) {
+			s.Terminals.Attach(w, r, r.PathValue("id"))
+		})
+	}
 	mux.Handle("GET /", http.FileServerFS(s.UI))
-	return mux
+	return sameOrigin(mux)
+}
+
+// sameOrigin refuses changes requested by another website's page: the panel only listens on
+// localhost, but any page the browser opens can still send requests there.
+func sameOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			if origin := r.Header.Get("Origin"); origin != "" {
+				if u, err := url.Parse(origin); err != nil || u.Host != r.Host {
+					http.Error(w, "cross-origin request refused", http.StatusForbidden)
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) listTerminals(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, s.Terminals.List())
+}
+
+func (s *Server) startTerminal(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, s.Terminals.Start())
+}
+
+func (s *Server) closeTerminal(w http.ResponseWriter, r *http.Request) {
+	if !s.Terminals.Close(r.PathValue("id")) {
+		http.Error(w, "no such terminal", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type questionView struct {
@@ -101,6 +152,7 @@ type questionView struct {
 }
 
 type examView struct {
+	Study     bool           `json:"study"`
 	StartedAt time.Time      `json:"startedAt"`
 	Deadline  time.Time      `json:"deadline"`
 	Now       time.Time      `json:"now"`
@@ -112,6 +164,7 @@ type examView struct {
 
 func (s *Server) view(e *Exam) examView {
 	v := examView{
+		Study:     e.Study,
 		StartedAt: e.StartedAt,
 		Deadline:  e.Deadline(),
 		Now:       time.Now(),
@@ -138,10 +191,12 @@ func (s *Server) view(e *Exam) examView {
 			Body:    t.Body,
 			Flagged: e.Flags[t.ID],
 		}
-		// Explanations and solutions stay hidden until the exam is over.
-		if r, graded := results[id]; graded && v.Ended {
+		// In an exam, results, explanations and solutions stay hidden until it is over.
+		if r, graded := results[id]; graded && (v.Ended || e.Study) {
 			q.Result = &r
 			q.Fraction = r.Fraction()
+		}
+		if (q.Result != nil && v.Ended) || e.Study {
 			q.Explain = t.Explain
 			if data, err := os.ReadFile(filepath.Join(s.Runner.AssetsDir, t.Dir, "solution.sh")); err == nil {
 				q.Solution = string(data)
@@ -205,6 +260,54 @@ func (s *Server) endExam(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+	}
+	writeJSON(w, s.view(e))
+}
+
+// studyOnly guards the per-task actions: the real exam never tells you how a task is going.
+func (s *Server) studyOnly(next func(http.ResponseWriter, *http.Request, *Exam, tasks.Task)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.grading.Lock()
+		defer s.grading.Unlock()
+		e, err := s.Store.Load()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if !e.Study {
+			http.Error(w, "only available in study mode — start one with: cka-sim study", http.StatusForbidden)
+			return
+		}
+		t, ok := tasks.Find(s.Tasks, r.PathValue("id"))
+		if !ok || !slices.Contains(e.TaskIDs, t.ID) {
+			http.Error(w, "no such task in this session", http.StatusNotFound)
+			return
+		}
+		next(w, r, e, t)
+	}
+}
+
+func (s *Server) checkTask(w http.ResponseWriter, r *http.Request, e *Exam, t tasks.Task) {
+	result := s.Runner.Grade(context.WithoutCancel(r.Context()), t)
+	e.Results = slices.DeleteFunc(e.Results, func(old grader.Result) bool { return old.TaskID == t.ID })
+	e.Results = append(e.Results, result)
+	s.save(w, e)
+}
+
+// resetTask runs the task's setup again, so you can retry it from its starting state.
+func (s *Server) resetTask(w http.ResponseWriter, r *http.Request, e *Exam, t tasks.Task) {
+	if out, err := s.Runner.Script(context.WithoutCancel(r.Context()), t, "setup.sh", 6*time.Minute); err != nil {
+		http.Error(w, fmt.Sprintf("resetting %s: %v\n%s", t.ID, err, out), http.StatusInternalServerError)
+		return
+	}
+	e.Results = slices.DeleteFunc(e.Results, func(old grader.Result) bool { return old.TaskID == t.ID })
+	s.save(w, e)
+}
+
+func (s *Server) save(w http.ResponseWriter, e *Exam) {
+	if err := s.Store.Save(e); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	writeJSON(w, s.view(e))
 }

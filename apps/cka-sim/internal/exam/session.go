@@ -27,6 +27,8 @@ type Config struct {
 	Catalog []tasks.Task
 	Now     func() time.Time
 	Rand    *rand.Rand
+	// Ready, when set, waits until there is somewhere to run scripts.
+	Ready func(ctx context.Context) error
 }
 
 // Session owns the one exam there can be. Every change is saved before it's visible.
@@ -207,14 +209,18 @@ func (s *Session) setUp(e *Exam, release func()) {
 		}
 	}
 	go func() {
-		s.heal(context.Background(), func(t tasks.Task) bool { return !slices.Contains(done, t.ID) })
-		var wg sync.WaitGroup
-		for _, id := range together {
-			wg.Go(func() { s.start(e, id) })
-		}
-		wg.Wait()
-		for _, id := range last {
-			s.start(e, id)
+		if err := s.ready(); err != nil {
+			s.fail(e, append(together, last...), err)
+		} else {
+			s.heal(context.Background(), func(t tasks.Task) bool { return !slices.Contains(done, t.ID) })
+			var wg sync.WaitGroup
+			for _, id := range together {
+				wg.Go(func() { s.start(e, id) })
+			}
+			wg.Wait()
+			for _, id := range last {
+				s.start(e, id)
+			}
 		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -234,6 +240,23 @@ func (s *Session) start(e *Exam, id string) {
 		e.Tasks[i].Setup = Ready
 		if err != nil {
 			e.Tasks[i].Setup, e.Tasks[i].SetupError = Failed, err.Error()
+		}
+	})
+}
+
+func (s *Session) ready() error {
+	if s.cfg.Ready == nil {
+		return nil
+	}
+	return s.cfg.Ready(context.Background())
+}
+
+func (s *Session) fail(e *Exam, ids []string, err error) {
+	s.update(e, func() {
+		for i, t := range e.Tasks {
+			if slices.Contains(ids, t.ID) {
+				e.Tasks[i].Setup, e.Tasks[i].SetupError = Failed, err.Error()
+			}
 		}
 	})
 }

@@ -87,6 +87,31 @@ export async function discardExam(): Promise<void> {
   await call('DELETE', '/api/exam')
 }
 
+export type Lab = {
+  state: 'none' | 'starting' | 'ready' | 'failed'
+  provider: string
+  started?: string
+  ready?: string
+  error?: string
+}
+
+export type LabState = {
+  lab: Lab
+  now: string
+}
+
+export async function getLab(): Promise<LabState> {
+  return (await call('GET', '/api/lab')).json()
+}
+
+export async function startLab(): Promise<LabState> {
+  return (await call('POST', '/api/lab')).json()
+}
+
+export async function endLab(): Promise<void> {
+  await call('DELETE', '/api/lab')
+}
+
 async function call(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<Response> {
   const init: RequestInit = { method, signal }
   if (body !== undefined) {

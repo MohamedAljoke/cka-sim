@@ -7,11 +7,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/sandbox"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/tasks"
 )
 
 type api struct {
 	Practice
+	Lab  *sandbox.Lab
 	busy sync.Mutex
 }
 
@@ -29,17 +31,17 @@ func (a *api) question(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) startTask(w http.ResponseWriter, r *http.Request) {
 	t, ok := a.findTask(w, r)
-	if !ok || a.duringExam(w) || !a.lock(w, r) {
+	if !ok || a.duringExam(w) || !a.labReady(w) || !a.lock(w, r) {
 		return
 	}
 	defer a.busy.Unlock()
 	// A cancelled request stops the script; setup is idempotent, so the next start rebuilds it.
 	ctx := r.Context()
-	if err := tasks.Heal(ctx, a.Files, a.Runner, a.Tasks); err != nil {
+	if err := tasks.Heal(ctx, a.Files, a.Lab, a.Tasks); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := tasks.Start(ctx, a.Files, a.Runner, t); err != nil {
+	if err := tasks.Start(ctx, a.Files, a.Lab, t); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -48,11 +50,11 @@ func (a *api) startTask(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) checkTask(w http.ResponseWriter, r *http.Request) {
 	t, ok := a.findTask(w, r)
-	if !ok || a.duringExam(w) || !a.lock(w, r) {
+	if !ok || a.duringExam(w) || !a.labReady(w) || !a.lock(w, r) {
 		return
 	}
 	defer a.busy.Unlock()
-	result, err := tasks.Check(r.Context(), a.Files, a.Runner, t)
+	result, err := tasks.Check(r.Context(), a.Files, a.Lab, t)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -80,6 +82,14 @@ func (a *api) lock(w http.ResponseWriter, r *http.Request) bool {
 			return false
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+	return true
+}
+
+func (a *api) labReady(w http.ResponseWriter) bool {
+	if a.Lab.Status().State != sandbox.Ready {
+		http.Error(w, "start a lab first", http.StatusConflict)
+		return false
 	}
 	return true
 }

@@ -35,7 +35,7 @@ out without a rewrite. The terminal is the most likely candidate.
 | catalog | tasks (`task.md`, scripts), read-only from the embedded FS | `catalog/` |
 | attempt | quiz/exam sessions: chosen tasks, timers, scores, Check/Submit | — |
 | grading | runs `check.sh`, parses `PASS/FAIL <pts>` into a result | format in `catalog/lib.sh` |
-| sandbox | VM lifecycle, warm pool, one-per-user rule, idle timeout, reaper | `internal/cluster` (local kind) |
+| sandbox | VM lifecycle, warm pool, one-per-user rule, idle timeout, reaper | `internal/sandbox`: `Provider`, one `Lab`, the `Local` provider |
 | terminal | browser websocket ⇄ shell | `internal/terminal`, `internal/server` |
 
 The **agent** is a separate binary (`cmd/agent`) that runs inside each sandbox VM. It exposes `shell` and `run-script`

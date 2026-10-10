@@ -10,6 +10,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/exam"
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/sandbox"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/tasks"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/terminal"
 )
@@ -17,18 +18,21 @@ import (
 const pasteLimit = 1 << 20 // 1 MiB
 
 type Practice struct {
-	Tasks  []tasks.Task
-	Files  fs.FS
-	Runner tasks.Runner
-	Exam   *exam.Session
+	Tasks []tasks.Task
+	Files fs.FS
+	Exam  *exam.Session
 }
 
-func New(opener terminal.Opener, practice Practice) http.Handler {
-	a := &api{Practice: practice}
+// New serves the page's API. Every script and shell goes through lab to its current box.
+func New(lab *sandbox.Lab, practice Practice) http.Handler {
+	a := &api{Practice: practice, Lab: lab}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ws/terminal", func(w http.ResponseWriter, r *http.Request) {
-		serveTerminal(w, r, opener)
+		serveTerminal(w, r, lab)
 	})
+	mux.HandleFunc("GET /api/lab", a.getLab)
+	mux.HandleFunc("POST /api/lab", a.startLab)
+	mux.HandleFunc("DELETE /api/lab", a.endLab)
 	mux.HandleFunc("GET /api/tasks", a.listTasks)
 	mux.HandleFunc("GET /api/tasks/{id}/question", a.question)
 	mux.HandleFunc("POST /api/tasks/{id}/start", a.startTask)

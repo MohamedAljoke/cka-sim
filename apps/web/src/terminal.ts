@@ -2,7 +2,8 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
-export function openTerminal(pane: HTMLElement) {
+// openTerminal returns a close for when the lab behind the shell ends.
+export function openTerminal(pane: HTMLElement): () => void {
   const term = new Terminal({
     cursorBlink: true,
     fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
@@ -35,5 +36,13 @@ export function openTerminal(pane: HTMLElement) {
     if (isOpen()) socket.send(encoder.encode(keys))
   })
   term.onResize(sendSize)
-  new ResizeObserver(() => fit.fit()).observe(pane)
+  const resizes = new ResizeObserver(() => fit.fit())
+  resizes.observe(pane)
+
+  return () => {
+    socket.onclose = null
+    socket.close()
+    resizes.disconnect()
+    term.dispose()
+  }
 }

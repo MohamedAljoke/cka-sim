@@ -48,6 +48,8 @@ func (a *api) beginExam(w http.ResponseWriter, r *http.Request) {
 	if !a.lock(w, r) {
 		return
 	}
+	// The exam's setup waits for the lab, so starting an exam is enough to get one.
+	a.Lab.Start()
 	if err := a.Exam.Begin(req.Count, req.Minutes, a.busy.Unlock); err != nil {
 		a.busy.Unlock()
 		examError(w, err)

@@ -118,7 +118,7 @@ func TestShowsWhyShellFailedToOpen(t *testing.T) {
 }
 
 func TestRefusesOtherOrigins(t *testing.T) {
-	srv := httptest.NewServer(New(newFakeOpener(), Practice{}))
+	srv := httptest.NewServer(New(readyLab(t, &fakeRunner{}, newFakeOpener()), Practice{}))
 	t.Cleanup(srv.Close)
 
 	_, res, err := websocket.Dial(context.Background(), wsURL(srv), &websocket.DialOptions{
@@ -194,7 +194,7 @@ func (s *fakeShell) exit()             { s.outWriter.Close() }
 
 func dial(t *testing.T, opener *fakeOpener) *websocket.Conn {
 	t.Helper()
-	srv := httptest.NewServer(New(opener, Practice{}))
+	srv := httptest.NewServer(New(readyLab(t, &fakeRunner{}, opener), Practice{}))
 	t.Cleanup(srv.Close)
 	conn, _, err := websocket.Dial(context.Background(), wsURL(srv), nil)
 	if err != nil {

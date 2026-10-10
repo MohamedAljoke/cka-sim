@@ -18,6 +18,7 @@ import (
 
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/exam"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/grader"
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/sandbox"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/tasks"
 )
 
@@ -248,6 +249,15 @@ func TestRefusesCrossSitePost(t *testing.T) {
 }
 
 func newAPI(t *testing.T, r *fakeRunner) *httptest.Server {
+	srv, lab := newAPIWithoutLab(t, r)
+	if err := lab.Ensure(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return srv
+}
+
+func newAPIWithoutLab(t *testing.T, r *fakeRunner) (*httptest.Server, *sandbox.Lab) {
+	lab := sandbox.NewLab(fakeProvider{runner: r, shells: newFakeOpener()}, time.Now)
 	lockWait = 50 * time.Millisecond
 	files := fstest.MapFS{
 		"wl-scale/task.md":     {Data: []byte("---\nid: wl-scale\ntitle: Scale a Deployment\nhost: node-1\ndomain: workloads\nweight: 4\n---\nScale it to 4.\n")},
@@ -264,17 +274,26 @@ func newAPI(t *testing.T, r *fakeRunner) *httptest.Server {
 	session, err := exam.Open(exam.Config{
 		Store:   exam.FileStore{Path: filepath.Join(t.TempDir(), "exam.json")},
 		Files:   files,
-		Runner:  r,
+		Runner:  lab,
 		Catalog: all,
 		Now:     time.Now,
 		Rand:    rand.New(rand.NewPCG(1, 2)),
+		Ready:   lab.Ensure,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(New(newFakeOpener(), Practice{Tasks: all, Files: files, Runner: r, Exam: session}))
+	srv := httptest.NewServer(New(lab, Practice{Tasks: all, Files: files, Exam: session}))
 	t.Cleanup(srv.Close)
-	return srv
+	return srv, lab
+}
+
+func readyLab(t *testing.T, r *fakeRunner, shells *fakeOpener) *sandbox.Lab {
+	lab := sandbox.NewLab(fakeProvider{runner: r, shells: shells}, time.Now)
+	if err := lab.Ensure(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return lab
 }
 
 func call(t *testing.T, srv *httptest.Server, method, path string) (int, string) {
@@ -338,3 +357,16 @@ func (r *fakeRunner) ran() []string {
 	defer r.mu.Unlock()
 	return slices.Clone(r.scripts)
 }
+
+type fakeProvider struct {
+	runner *fakeRunner
+	shells *fakeOpener
+}
+
+func (fakeProvider) Name() string { return "Fake" }
+
+func (p fakeProvider) Create(context.Context) (sandbox.Box, error) {
+	return sandbox.Box{ID: "fake", Runner: p.runner, Shells: p.shells}, nil
+}
+
+func (fakeProvider) Destroy(context.Context, sandbox.Box) error { return nil }

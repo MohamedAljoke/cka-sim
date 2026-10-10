@@ -73,9 +73,8 @@ one later stays easy.
 **Local development.** Go doesn't serve the page during development; Vite does.
 
 ```sh
-cd apps/cka-sim
-make dev              # cluster up, the Go backend, and the page on http://localhost:5173 (hot reload)
-go run ./cmd/cli doctor   # any command, straight from source; `make` lists the shortcuts
+make dev              # from the repo root: cluster up, the Go backend, and the page on http://localhost:5173 (hot reload)
+make doctor           # any CLI command, straight from source; `make` lists the shortcuts
 ```
 
 The browser only ever talks to Vite. When the page needs the engine (the terminal first), a small
@@ -225,7 +224,7 @@ D2. Anything that needs Calico, a custom node image or the ssh setup waits for P
   terminal into the cluster, in the browser. No timer, no tasks.
 - **Build:**
   - `apps/web`: Vite + TypeScript, no framework. The two-pane exam layout. ✅
-  - `apps/cka-sim/Makefile`: `make dev` brings the cluster up, then runs the server (`cmd/server`) and
+  - `Makefile` (repo root): `make dev` brings the cluster up, then runs the server (`cmd/server`) and
     Vite together. ✅
   - `internal/terminal`: a shell on the cluster with a TTY, started at the browser's size,
     resizable, ended when the browser leaves. Behind an interface, so D10 can swap `docker exec`
@@ -496,6 +495,6 @@ go build -o bin/cka-sim ./cmd/cli
 ./bin/cka-sim doctor                    # D1
 ./bin/cka-sim up                        # D2: environment from nothing
 ./bin/cka-sim selftest                  # D5–D7, D16: every task fair
-make dev                                # D12–D15: Start exam in the page
+(cd ../.. && make dev)                  # D12–D15: Start exam in the page
 ./bin/cka-sim down
 ```

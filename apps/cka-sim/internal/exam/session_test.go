@@ -96,6 +96,41 @@ func TestBeginHealsBeforeAnySetup(t *testing.T) {
 	}
 }
 
+func TestBeginWaitsForTheLabBeforeAnySetup(t *testing.T) {
+	s, _, r := openSession(t, withReset("tr-svc"), nil)
+	lab := make(chan struct{})
+	s.cfg.Ready = func(context.Context) error { <-lab; return nil }
+
+	if err := s.Begin(2, 30, func() {}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if got := r.order(); len(got) != 0 {
+		t.Fatalf("ran %v before the lab was ready", got)
+	}
+	close(lab)
+	waitStarted(t, s)
+	if got := r.ran("setup.sh"); len(got) != 2 {
+		t.Errorf("setup ran for %v, want both tasks", got)
+	}
+}
+
+func TestBeginFailsEveryTaskWhenTheLabFails(t *testing.T) {
+	s, _, r := newSession(t, nil)
+	s.cfg.Ready = func(context.Context) error { return errors.New("cluster is not up") }
+
+	e := begin(t, s, 2)
+
+	for _, task := range e.Tasks {
+		if task.Setup != Failed || !strings.Contains(task.SetupError, "cluster is not up") {
+			t.Errorf("got %+v, want a failed setup with the lab's error", task)
+		}
+	}
+	if got := r.order(); len(got) != 0 {
+		t.Errorf("ran %v without a lab", got)
+	}
+}
+
 func TestBeginRefusesASecondExam(t *testing.T) {
 	s, _, _ := newSession(t, nil)
 	begin(t, s, 1)

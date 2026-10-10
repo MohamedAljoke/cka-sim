@@ -18,22 +18,41 @@ terminals survive a second `up`.
 
 Next, `make dev` builds `bin/server` and starts it in the background, then starts Vite on 5173.
 `vite.config.ts` forwards `/api` and `/ws` to the Go server on `127.0.0.1:7070`. The server
-(`cmd/server/main.go`) claims the port and checks that the cluster and base are up (`cluster.RequireUp`). It
-loads the catalog (`tasks.Load(catalog.FS)`: every `catalog/<id>/task.md` and its scripts, built into the
-binary) and `lib.sh`. It closes any shells left over from a previous run (`EndAll`), then serves.
+(`cmd/server/main.go`) claims the port, loads the catalog (`tasks.Load(catalog.FS)`: every
+`catalog/<id>/task.md` and its scripts, built into the binary) and `lib.sh`, and makes a **lab** with the
+`sandbox.Local` provider (`internal/sandbox`). It doesn't touch the cluster yet; that happens when a lab
+starts (flow 2). Then it serves.
 
 Ctrl-C reaches the server directly, because it runs as a binary and not through `go run`. The Makefile's
-trap waits for it, and on the way out the server closes every page shell.
+trap waits for it, and on the way out the server ends the lab, which closes every page shell.
 
-## 2. Opening the page: the terminal
+## 2. Opening the page: the lab and the terminal
 
-`main.ts` opens a websocket to `/ws/terminal`. The server's `DockerOpener` (`internal/terminal/docker.go`)
+**The lab.** A lab is the box your cluster lives in. Locally that's the kind cluster `make up` made; the
+hosted site will give each user a VM instead, behind the same `sandbox.Provider` interface. `main.ts` calls
+`showLab` (`src/lab.ts`), which asks `GET /api/lab`. With no lab, the topbar shows "No lab · Local Docker"
+and **Start lab**, and the left pane says to start one. **Start lab** sends `POST /api/lab`, which answers
+202 with state `starting`. In the background, `Lab.Start` (`internal/sandbox/lab.go`) calls the provider's
+`Create`. `Local.Create` (`internal/sandbox/local.go`) checks that the cluster and base are up
+(`cluster.RequireUp`), closes any shells left over from a crashed server (`EndAll`), and returns a box: the
+runner and the `DockerOpener` for this cluster. The page asks again every second and shows "Starting lab…
+0:03". When the state turns `ready`, the topbar shows "Lab ready in 0.4s · Local Docker" and **End lab**,
+and the server logs the same time. If `Create` fails (say the cluster is down), the topbar shows the error
+and **Try again**.
+
+The `Lab` is itself the runner and the opener the rest of the server uses: every script and shell goes
+through it to the current box, and without a ready lab they fail with "no lab is running". **End lab**
+sends `DELETE /api/lab` (409 while an exam runs), which takes the script lock and calls the provider's
+`Destroy`. Locally that closes the shells and keeps the cluster. The terminal closes and the page is back to
+**Start lab**.
+
+**The terminal.** Once the lab is ready, `main.ts` opens a websocket to `/ws/terminal`. The server's `DockerOpener` (`internal/terminal/docker.go`)
 answers with the equivalent of `docker exec -it -u candidate -w /home/candidate cka-sim-base bash` and pipes
 bytes both ways between xterm and that shell. So you land on `candidate@base` with no kubectl, as in the
 exam. When the tab closes, the shell is hung up as the same user. Root can't do it, because reading another
 user's process environment needs ptrace, which Docker withholds.
 
-At the same time, `showTasks` (`src/tasks.ts`) calls `GET /api/tasks` and draws the numbered list. The
+At the same time, `showExam` shows a running exam or, with none, `showTasks` (`src/tasks.ts`) calls `GET /api/tasks` and draws the numbered list. The
 server sends only metadata (title, domain, topics, weight, host), never the scripts.
 
 ## 3. Clicking a task: question and setup
@@ -41,13 +60,14 @@ server sends only metadata (title, domain, topics, weight, host), never the scri
 `openTask` sends two requests in parallel:
 
 - `GET /api/tasks/{id}/question` returns the question markdown, and `marked` renders it right away.
-- `POST /api/tasks/{id}/start` reaches `startTask` (`internal/server/api.go`). It takes the setup lock; if a
+- `POST /api/tasks/{id}/start` reaches `startTask` (`internal/server/api.go`). Without a ready lab it answers
+  409 "start a lab first". It takes the setup lock; if a
   setup is already running, it answers 409. It first calls `tasks.Heal` (`internal/tasks/run.go`), which runs
   the `reset.sh` of every task that ships one. These put back what a task left unsolved broke outside its
   namespace, such as `tr-kubelet`'s kubelet, and do nothing on a healthy cluster. It then calls `tasks.Start`,
   which reads `setup.sh` and hands it to the runner with a 3-minute limit.
 
-The runner (`internal/runner/runner.go`) runs `docker exec -i -e TASK_ID=<id> <task's host> bash -s` and
+The lab passes the script to its box's runner. The local one (`internal/runner/runner.go`) runs `docker exec -i -e TASK_ID=<id> <task's host> bash -s` and
 writes `lib.sh` followed by `setup.sh` to its stdin. The script runs as root on the node the task names,
 using root's kubeconfig. Helpers such as `fresh_ns` wipe and recreate the task's namespace before the
 script builds the broken state. **Back** or **Reset** aborts the request, and the runner then kills the
@@ -95,11 +115,13 @@ and the checks at fault, for example:
 **Starting.** Above the practice list, **Start exam** opens a small form (`apps/web/src/tasks.ts`): how many
 tasks (1 to the catalog size, default 16 or fewer) and the minutes (default 120). Submitting sends
 `POST /api/exam {count, minutes}`. `beginExam` (`internal/server/exam.go`) checks the numbers (400 if they are
-out of range) and takes the script lock, so a running practice setup gets 409. It then calls
+out of range) and takes the script lock, so a running practice setup gets 409. It starts the lab if there
+is none, which is how the hosted site will hand a user a VM, and then calls
 `exam.Session.Begin` (`internal/exam/session.go`). `tasks.Draw` (`internal/tasks/draw.go`) picks the tasks:
 each domain gets its share of the count by the CKA weights, with any shortfall moved to the heaviest domains,
 and the result is shuffled. The exam is saved with every task `preparing` to
-`~/.local/state/cka-sim/exam.json`, and the request answers 202 right away. In the background, `tasks.Heal`
+`~/.local/state/cka-sim/exam.json`, and the request answers 202 right away. In the background, setup first waits for the lab (`Config.Ready`,
+which is `Lab.Ensure`); if the lab fails, every task is marked `failed` with its error. Then `tasks.Heal`
 first runs every `reset.sh` (on a restart, not those of tasks this exam already set up). Then every
 `setup.sh` runs at once through `tasks.Start`. Tasks marked `order: last` then run one by one, because an
 etcd snapshot or a broken scheduler or kubelet would spoil the setups beside it. Each task turns `ready` or
@@ -120,7 +142,7 @@ solution answer 409 "not during an exam". Questions stay readable.
 
 **Restart.** `cmd/server/main.go` opens the session from `exam.json`. If the file names a task the catalog
 no longer has, the server refuses to start and says which file to delete. Any task still `preparing` is set
-up again, with the lock held (`resumeExam`). A reload finds the same exam, with the same deadline and flags.
+up again, with the lock held (`resumeExam`), and that setup starts the lab itself. A reload finds the same exam, with the same deadline and flags.
 
 **Ending.** **End exam** asks for confirmation, then sends `POST /api/exam/end`. With the lock held, every
 `check.sh` runs at once through `tasks.Check`. A check that crashes counts as 0 and keeps its error. Then

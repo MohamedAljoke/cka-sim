@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/sandbox"
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/tasks"
 )
 
@@ -154,6 +155,19 @@ func TestEndExamScoresAndUnlocksTheSolution(t *testing.T) {
 	}
 }
 
+func TestEndExamEndsTheLab(t *testing.T) {
+	srv := newAPI(t, &fakeRunner{out: "PASS 4 scaled\n"})
+	beginExam(t, srv)
+	waitPrepared(t, srv)
+
+	if status, body := call(t, srv, http.MethodPost, "/api/exam/end"); status != http.StatusAccepted {
+		t.Fatalf("status %d: %s", status, body)
+	}
+
+	waitScored(t, srv)
+	waitLab(t, srv, sandbox.None)
+}
+
 func TestDiscardExam(t *testing.T) {
 	srv := newAPI(t, &fakeRunner{})
 	beginExam(t, srv)
@@ -164,6 +178,9 @@ func TestDiscardExam(t *testing.T) {
 
 	if status, _ := call(t, srv, http.MethodGet, "/api/exam"); status != http.StatusNotFound {
 		t.Errorf("GET after discard got %d, want 404", status)
+	}
+	if got := getLab(t, srv).State; got != sandbox.None {
+		t.Errorf("lab is %s after discarding, want %s", got, sandbox.None)
 	}
 }
 

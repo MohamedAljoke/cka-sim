@@ -48,8 +48,8 @@ never the scripts. Home has, top to bottom:
 - **Practise a task.** The filtered catalog.
 - **Last exam.** "Last exam: 62% · FAIL" with **View results**, above the rest, when there is a finished exam.
 
-**The lab.** A lab is the box your cluster lives in. Locally that's the kind cluster `make up` made; a
-hosted site would give each user a VM instead, behind the same `sandbox.Provider` interface. There's no
+**The lab.** A lab is the box your cluster lives in. Locally that's the kind cluster `make up` made; on
+Fly each user gets a VM instead (flow 7), behind the same `sandbox.Provider` interface. There's no
 Start button. Practising a task or starting an exam starts it on the server. `Lab.Start`
 (`internal/sandbox/lab.go`) calls the provider's `Create` in the background. `Local.Create`
 (`internal/sandbox/local.go`) checks that the cluster and base are up (`cluster.RequireUp`), closes any
@@ -194,7 +194,8 @@ good image, `tr-service` when the Service has endpoints. So an untouched task sc
 instead of up to 150. Then `tasks.Tidy`
 runs the exam's `reset.sh` scripts, so a kubelet left broken doesn't outlive the exam, and deletes the
 exam's task namespaces, so the next exam's setups find nothing to delete. Last, it saves
-`scored` and frees the lock. The score is worked out on the server by `exam.Score`, sent as soon as every
+`scored`, ends the lab (`freeLab`) and frees the lock: locally that only closes the shells and the terminal,
+on Fly it destroys the exam's VM (flow 7). The score is worked out on the server by `exam.Score`, sent as soon as every
 task has its result (`Exam.Graded`), without waiting for the tidy: each task's earned/total times its weight,
 over the sum of the weights, passing at 66%.
 
@@ -204,3 +205,42 @@ points missing starts open and red: its ✓/✗ checks, the solution, and **Try 
 in practice once scoring is done. The percentage with PASS or FAIL appears when every row is in; until the
 tidy finishes, "Tidying up the cluster…" shows under it and **Try again** stays disabled. **Home**
 keeps the results; Home shows them as "Last exam" until the next exam replaces them.
+
+## 7. On Fly: Start exam gets you a VM of your own
+
+**Setting it up (once, from `apps/cka-sim/deploy/fly`).** `make apps` creates two Fly apps: the site
+(`cka-sim-maljoke`) and the pool (`cka-sim-labs-maljoke`, no public address). It stores the site's secrets:
+a Fly token for the pool app and a password. `make image` builds `lab.Dockerfile` (dind plus the `cka-sim`
+CLI) and pushes it. `make pool N=2` runs `pool.sh fill`: for each VM it does `fly machine run` with
+2 performance CPUs and 4 GB, labels it `pool=building`, and runs `lab-build` in it over `fly ssh`. That waits
+for dockerd and runs `cka-sim up`. Then `pool.sh` sets `pool=ready` and suspends the VM (~2.5 min each, in
+parallel). `lab-start.sh`, the VM's entrypoint, works around three Fly quirks before dockerd starts:
+- an ext4 loop disk at `/var/lib/docker`, because the root disk is an overlay and Docker would fall back to `vfs`;
+- a `name=systemd` cgroup, without which systemd in the kind nodes exits;
+- `--dns 8.8.8.8`, because Fly's resolver is IPv6 only and image builds can't reach it.
+
+It also has dockerd listen on `tcp://[::]:2375`, reachable only on Fly's private network. `make deploy`
+builds `server.Dockerfile` (the built page, the server, and the `docker` CLI) and deploys it with `fly.toml`.
+
+**Opening the site.** `https://cka-sim-maljoke.fly.dev` asks for the password: `server.RequirePassword`
+wraps everything, and the server refuses to listen beyond loopback without `CKA_SIM_PASSWORD`.
+`server.Site` serves the built page at `/` beside `/api` and `/ws`, so it is one origin. `cmd/server/main.go`
+reads `CKA_SIM_PROVIDER=fly` and builds `fly.New` (`internal/fly`), the only Fly-aware code. It first
+destroys any VM labelled `pool=claimed`, which a previous run took and never gave back. The topbar shows
+nothing until a lab starts.
+
+**Starting an exam (or practising a task).** The lab starts as in flow 2, but `fly.Provider.Create` runs these steps:
+1. List the pool app's Machines with `metadata.pool=ready`.
+2. Label the first one `claimed`.
+3. Resume it (`POST /machines/{id}/start`) and wait for `started`.
+4. Hand its private address to `sandbox.DockerBox` as `tcp://[fdaa:…]:2375`. The same `runner.Node`
+   (`docker exec`) and `DockerOpener` as locally now talk to that VM's dockerd.
+5. Health check: `kubectl get --raw=/readyz` on the control plane, retried for 30s. If Fly cold-booted
+   the VM instead of restoring its snapshot, the cluster is gone, so the VM is destroyed and the next one is tried.
+
+The topbar shows "Lab ready in 4.0s · Fly". From here, setup scripts, checks and the terminal all run on
+that VM.
+
+**Ending.** End exam grades and tidies, then ends the lab, and `Destroy` deletes the Machine (`?force=true`). End lab
+and `DELETE /api/exam` do the same. The pool is now one smaller. Nothing refills it yet: run `make pool N=1`. With an empty pool,
+the lab fails with "no warm VM in the pool", shown in the topbar.

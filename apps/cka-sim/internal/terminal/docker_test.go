@@ -117,7 +117,7 @@ func TestDockerShellOnCluster(t *testing.T) {
 		t.Skip(cluster.Base + " is not running; run cka-sim up to include this test")
 	}
 	ctx := context.Background()
-	o, err := NewDockerOpener(cluster.Base, cluster.Candidate)
+	o, err := NewDockerOpener("", cluster.Base, cluster.Candidate)
 	if err != nil {
 		t.Fatal(err)
 	}

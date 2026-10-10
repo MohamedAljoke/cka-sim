@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,16 @@ func TestNodeSourcesLibAndSetsTaskID(t *testing.T) {
 	}
 	if out != "hello wl-scale\n" {
 		t.Errorf("output = %q", out)
+	}
+}
+
+func TestNodeSendsDockerToItsHost(t *testing.T) {
+	if env := (Node{}).env(); env != nil {
+		t.Errorf("env without a host = %q, want docker's default", env)
+	}
+	env := Node{DockerHost: "tcp://[fdaa::2]:2375"}.env()
+	if !slices.Contains(env, "DOCKER_HOST=tcp://[fdaa::2]:2375") {
+		t.Errorf("env = %q, want DOCKER_HOST set", env)
 	}
 }
 

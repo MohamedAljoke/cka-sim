@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -77,12 +79,17 @@ func (a *api) flag(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// endExam answers at once; grading holds the script lock until every check is back.
+// endExam answers at once; grading holds the script lock until every check is back, then frees the lab.
 func (a *api) endExam(w http.ResponseWriter, r *http.Request) {
 	if !a.lock(w, r) {
 		return
 	}
-	e, err := a.Exam.End(a.busy.Unlock)
+	e, err := a.Exam.End(func() {
+		go func() {
+			a.freeLab()
+			a.busy.Unlock()
+		}()
+	})
 	if err != nil {
 		a.busy.Unlock()
 		examError(w, err)
@@ -102,7 +109,16 @@ func (a *api) discardExam(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.freeLab()
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// freeLab frees the exam's box, which may be a VM that costs money while it runs. The exam is
+// already over, so a failure is only logged.
+func (a *api) freeLab() {
+	if err := a.Lab.End(context.Background()); err != nil {
+		log.Printf("end the lab after the exam: %v", err)
+	}
 }
 
 // resumeExam holds the script lock while setups or checks a restart interrupted run again.

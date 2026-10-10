@@ -85,15 +85,35 @@ To avoid:
     cluster that stops while a user reads a task is bad. The Tasks API can keep a Sprite awake, but that goes against how Sprites are meant to be used.
   - Sprites are built for AI agents and dev environments, not nested container platforms.
 
-## Next step: test before designing
+## Tested on Fly Machines (2026-10)
 
-1. **Fly Machine.** Create one 4 GB Machine from an image with dockerd + kind, run `kind create cluster` with our
-   `kind.yaml`, then run `wl-scale`'s `setup.sh` and `check.sh`. Time each step.
-2. **Sprite.** Try the same. If kind works *and* checkpoint/restore brings the cluster back healthy, Sprites
-   become a serious option.
+A 2 performance CPU / 4 GB Machine in `gru` runs our cluster. `wl-scale` setup, check, solution and check
+all worked there, through the same `lib.sh` + `docker exec` path as locally.
 
-If Machines work, the code change is small: a `FlyProvider` behind the cluster-provider interface, plus an
-opener and script runner that reach the Machine over the private network instead of local `docker exec`.
+| Step | Time |
+|---|---|
+| `cka-sim up` on a new VM (pull kindest/node, build our images, create kind) | 1m42s |
+| `cka-sim up` with the images already there (kind create only) | 54s |
+| Suspend a VM with the cluster running | ~6s |
+| **Resume it** (Machines API `start`), cluster healthy straight away | **1.4s** |
+| Site's Start lab on a pooled VM: claim, resume, health check | 4.0s |
+
+Building at boot is too slow for a user to wait for, so labs come from a **pool of suspended VMs** with the
+cluster already up. A suspended VM is billed only for its disk ($0.15/GB-month, so 20 GB is ~$3/month).
+
+Three Fly quirks, all handled in `apps/cka-sim/deploy/fly/lab-start.sh`:
+- The root disk is an overlay, so Docker falls back to `vfs`. The fix is an ext4 loop file mounted at `/var/lib/docker`.
+- Fly's only resolver is IPv6 (`fdaa::3`), which image builds can't reach. The fix is `dockerd --dns 8.8.8.8 --dns 1.1.1.1`.
+- Fly boots a hybrid cgroup v1/v2 layout with no `name=systemd` hierarchy, so systemd 257 in the kind
+  nodes exits (exit 137). The fix is to mount that hierarchy before dockerd. A full switch to v2 isn't possible,
+  because Fly's init holds `cpu,cpuacct`. `cka-sim up` then adds its existing cgroup v1 patch.
+
+How it is wired is flow 7 in `docs/FLOWS.md`. Still to build:
+- automatic pool refill, as its own service;
+- an in-VM agent with a token instead of dockerd on the private network;
+- users, and one VM per user.
+
+Sprites were not tried.
 
 ## Sources
 

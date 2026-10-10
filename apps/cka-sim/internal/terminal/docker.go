@@ -37,14 +37,17 @@ type DockerOpener struct {
 	docker    docker
 }
 
-func NewDockerOpener(container, user string) (*DockerOpener, error) {
+// NewDockerOpener opens shells in container on the daemon at host; an empty host means docker's own default.
+func NewDockerOpener(host, container, user string) (*DockerOpener, error) {
 	opts := []client.Opt{client.FromEnv}
-	if os.Getenv("DOCKER_HOST") == "" {
-		host, err := currentContextHost()
+	if host != "" {
+		opts = append(opts, client.WithHost(host))
+	} else if os.Getenv("DOCKER_HOST") == "" {
+		contextHost, err := currentContextHost()
 		if err != nil {
 			return nil, err
 		}
-		opts = append(opts, client.WithHost(host))
+		opts = append(opts, client.WithHost(contextHost))
 	}
 	c, err := client.New(opts...)
 	if err != nil {

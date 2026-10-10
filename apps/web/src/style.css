@@ -1,56 +1,117 @@
+/* Tokens are the DSA Field Guide design system (dsa/assets/style.css): warm paper, cool ink,
+   blue p1 for focus/info, vermilion p2 as the accent, green ok. The --color-* names below are
+   aliases, so the component rules read the same as before. */
 :root {
-  --font-body: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Barlow Semi Condensed', 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, Menlo, Consolas, monospace;
+  --font-body: 'Instrument Sans Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Fraunces Variable', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --font-mono: 'JetBrains Mono Variable', 'Cascadia Mono', ui-monospace, Consolas, monospace;
 
-  --color-canvas: #f4f7f5;
-  --color-surface: #ffffff;
-  --color-surface-muted: #e9efec;
-  --color-foreground: #17201d;
-  --color-foreground-muted: #52605b;
-  --color-foreground-subtle: #718079;
-  --color-border: #d7dfdb;
-  --color-border-strong: #aab8b1;
-  --color-primary: #147d64;
-  --color-on-primary: #ffffff;
-  --color-success: #147d64;
-  --color-warning: #a86600;
-  --color-danger: #b83c43;
-  --color-info: #315c75;
-  --color-terminal: #101513;
-
-  --shadow-sm: 0 1px 2px rgb(23 32 29 / 0.08);
-  --shadow-md: 0 8px 24px rgb(23 32 29 / 0.12);
-  --radius-sm: 4px;
-  --radius-md: 6px;
-
+  --paper: oklch(97.4% 0.011 85);
+  --paper-2: oklch(94.8% 0.015 85);
+  --card: oklch(99.2% 0.005 85);
+  --ink: oklch(25% 0.035 265);
+  --ink-2: oklch(41% 0.03 265);
+  --ink-3: oklch(55% 0.025 265);
+  --rule: oklch(86.5% 0.018 85);
+  --rule-soft: oklch(91% 0.014 85);
+  --on-tone: oklch(99% 0.005 85);
+  --p1: oklch(50% 0.15 258);
+  --p1-wash: oklch(91.5% 0.045 258);
+  --p2: oklch(57% 0.18 33);
+  --p2-wash: oklch(92.5% 0.045 33);
+  --ok: oklch(52% 0.12 155);
+  --ok-wash: oklch(91.5% 0.06 155);
+  --ok-ink: oklch(37% 0.1 155);
+  --hl: oklch(91% 0.12 100);
+  --amber: oklch(55% 0.12 70);
+  --amber-wash: oklch(93% 0.06 85);
+  --bad: oklch(52% 0.18 28);
+  --code-bg: oklch(95.6% 0.013 85);
+  --shadow-md: 0 8px 24px oklch(25% 0.035 265 / 0.12);
   color-scheme: light;
-  font-family: var(--font-body);
-  line-height: 1.5;
+
+  --color-canvas: var(--paper);
+  --color-surface: var(--card);
+  --color-surface-muted: var(--paper-2);
+  --color-foreground: var(--ink);
+  --color-foreground-muted: var(--ink-2);
+  --color-foreground-subtle: var(--ink-3);
+  --color-border: var(--rule);
+  --color-border-strong: var(--ink-3);
+  --color-primary: var(--ink);
+  --color-on-primary: var(--paper);
+  --color-accent: var(--p2);
+  --color-success: var(--ok);
+  --color-warning: var(--amber);
+  --color-danger: var(--bad);
+  --color-info: var(--p1);
+  /* The shell stays dark in both themes, like a real exam terminal. */
+  --color-terminal: oklch(18% 0.016 260);
+
+  --shadow-sm: none;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  font: 400 16px/1.55 var(--font-body);
   color: var(--color-foreground);
   background: var(--color-canvas);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-:root[data-color-scheme='dark'] {
-  --color-canvas: #101513;
-  --color-surface: #18201e;
-  --color-surface-muted: #26312e;
-  --color-foreground: #f3f7f5;
-  --color-foreground-muted: #aebbb5;
-  --color-foreground-subtle: #82918a;
-  --color-border: #34413c;
-  --color-border-strong: #52625b;
-  --color-primary: #3bc3a0;
-  --color-on-primary: #0d211b;
-  --color-success: #3bc3a0;
-  --color-warning: #f0b23f;
-  --color-danger: #f26b70;
-  --color-info: #78b7d1;
-  --color-terminal: #0b0f0e;
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: oklch(20.5% 0.018 260);
+    --paper-2: oklch(23.5% 0.02 260);
+    --card: oklch(25.5% 0.02 260);
+    --ink: oklch(93% 0.012 85);
+    --ink-2: oklch(80% 0.014 85);
+    --ink-3: oklch(64% 0.016 85);
+    --rule: oklch(34% 0.02 260);
+    --rule-soft: oklch(29% 0.02 260);
+    --on-tone: oklch(19% 0.02 260);
+    --p1: oklch(75% 0.11 255);
+    --p1-wash: oklch(33% 0.06 255);
+    --p2: oklch(74% 0.14 40);
+    --p2-wash: oklch(34% 0.07 40);
+    --ok: oklch(76% 0.13 155);
+    --ok-wash: oklch(34% 0.07 155);
+    --ok-ink: oklch(88% 0.09 155);
+    --hl: oklch(43% 0.08 100);
+    --amber: oklch(80% 0.12 80);
+    --amber-wash: oklch(34% 0.06 80);
+    --bad: oklch(72% 0.15 28);
+    --code-bg: oklch(18% 0.016 260);
+    --shadow-md: 0 10px 28px oklch(0% 0 0 / 0.32);
+    color-scheme: dark;
+  }
+}
 
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.25);
-  --shadow-md: 0 10px 28px rgb(0 0 0 / 0.32);
-
+:root[data-theme='dark'] {
+  --paper: oklch(20.5% 0.018 260);
+  --paper-2: oklch(23.5% 0.02 260);
+  --card: oklch(25.5% 0.02 260);
+  --ink: oklch(93% 0.012 85);
+  --ink-2: oklch(80% 0.014 85);
+  --ink-3: oklch(64% 0.016 85);
+  --rule: oklch(34% 0.02 260);
+  --rule-soft: oklch(29% 0.02 260);
+  --on-tone: oklch(19% 0.02 260);
+  --p1: oklch(75% 0.11 255);
+  --p1-wash: oklch(33% 0.06 255);
+  --p2: oklch(74% 0.14 40);
+  --p2-wash: oklch(34% 0.07 40);
+  --ok: oklch(76% 0.13 155);
+  --ok-wash: oklch(34% 0.07 155);
+  --ok-ink: oklch(88% 0.09 155);
+  --hl: oklch(43% 0.08 100);
+  --amber: oklch(80% 0.12 80);
+  --amber-wash: oklch(34% 0.06 80);
+  --bad: oklch(72% 0.15 28);
+  --code-bg: oklch(18% 0.016 260);
+  --shadow-md: 0 10px 28px oklch(0% 0 0 / 0.32);
   color-scheme: dark;
 }
 
@@ -69,22 +130,42 @@ h1,
 h2,
 h3 {
   font-family: var(--font-display);
+  font-optical-sizing: auto;
   font-weight: 600;
-  line-height: 1.15;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+}
+
+h2 {
+  font-size: clamp(1.4rem, 2.2vw, 1.75rem);
 }
 
 code {
-  font-family: var(--font-mono);
-  font-size: 0.9em;
+  font: 500 0.88em var(--font-mono);
+}
+
+/* Code must show exactly what you type: no >= → ≥ ligatures. */
+code,
+pre,
+kbd,
+.timer {
+  font-variant-ligatures: none;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: color-mix(in oklab, currentColor 35%, transparent);
+  text-underline-offset: 3px;
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  background: var(--hl);
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--p1);
   outline-offset: 2px;
+  border-radius: 4px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -101,8 +182,8 @@ code {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.6rem 1rem;
-  background: var(--color-surface);
+  padding: 0.75rem clamp(16px, 3vw, 32px);
+  background: var(--color-canvas);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -120,9 +201,44 @@ code {
 }
 
 .brand {
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font: 600 1.15rem var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+.brand-mark {
+  color: var(--color-accent);
+  font-size: 0.8em;
+  transform: translateY(-1px);
+}
+
+.topbar-end {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.icon-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--color-foreground-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: border-color 150ms, color 150ms;
+}
+
+.icon-btn:hover {
+  color: var(--color-foreground);
+  border-color: var(--color-border-strong);
 }
 
 .exam {
@@ -133,8 +249,8 @@ code {
 }
 
 .question {
-  padding: 1rem 1.25rem;
-  background: var(--color-surface);
+  padding: 1.25rem clamp(16px, 2.4vw, 28px);
+  background: var(--color-canvas);
   border-right: 1px solid var(--color-border);
   overflow-y: auto;
 }
@@ -172,12 +288,11 @@ code {
 }
 
 .task:hover {
-  background: var(--color-surface-muted);
   border-color: var(--color-border-strong);
 }
 
 .task-title {
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .chips {
@@ -186,28 +301,30 @@ code {
   gap: 0.25rem;
 }
 
+/* DSA's .mark: a quiet pill per topic; the domain gets the blue wash. */
 .chip {
-  padding: 0.1rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
+  padding: 1px 9px;
+  font-size: 0.76rem;
   color: var(--color-foreground-muted);
-  background: var(--color-surface-muted);
+  white-space: nowrap;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
 }
 
 .chip.domain {
-  color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
-  border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  font-weight: 600;
+  color: var(--p1);
+  background: var(--p1-wash);
+  border-color: color-mix(in oklab, var(--p1) 40%, transparent);
 }
 
 .back {
   padding: 0;
   font: inherit;
+  font-size: 0.9rem;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-foreground-muted);
   background: none;
   border: none;
   cursor: pointer;
@@ -220,8 +337,8 @@ code {
 }
 
 .host-label {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font: 650 0.68rem/1.2 var(--font-body);
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--color-foreground-subtle);
 }
@@ -237,7 +354,7 @@ code {
   font: inherit;
   text-align: left;
   color: var(--color-foreground);
-  background: var(--color-surface-muted);
+  background: var(--code-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -258,7 +375,7 @@ code {
   flex-shrink: 0;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.25rem 0.5rem;
+  padding: 3px 10px;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--color-foreground-muted);
@@ -273,9 +390,26 @@ code {
 }
 
 .question-text code {
-  padding: 0.1rem 0.35rem;
+  padding: 0.08em 0.35em;
   background: var(--color-surface-muted);
+  border: 1px solid var(--rule-soft);
   border-radius: var(--radius-sm);
+}
+
+.question-text pre {
+  padding: 14px 16px;
+  overflow: auto;
+  font: 0.8rem/1.68 var(--font-mono);
+  background: var(--code-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.question-text pre code {
+  padding: 0;
+  font-size: inherit;
+  background: none;
+  border: 0;
 }
 
 .status {
@@ -302,20 +436,31 @@ code {
   margin-top: 0.75rem;
 }
 
+/* DSA's .btn: ghost by default, ink-filled for the primary action. */
 .action {
-  padding: 0.4rem 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 15px;
   font: inherit;
+  font-size: 0.9rem;
   font-weight: 600;
+  white-space: nowrap;
   color: var(--color-foreground);
-  background: var(--color-surface);
+  background: transparent;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 150ms, border-color 150ms;
+  transition: background-color 150ms, border-color 150ms, transform 150ms;
+}
+
+.action:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .action:hover:not(:disabled) {
-  background: var(--color-surface-muted);
+  background: var(--color-surface);
   border-color: var(--color-border-strong);
 }
 
@@ -326,11 +471,12 @@ code {
 }
 
 .action.primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-primary) 85%, black);
+  background: color-mix(in oklab, var(--ink) 86%, var(--p1));
+  border-color: transparent;
 }
 
 .action:disabled {
-  opacity: 0.5;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
@@ -340,8 +486,7 @@ code {
 
 .score {
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
+  font: 600 1.6rem/1.1 var(--font-display);
 }
 
 .checks {
@@ -350,10 +495,14 @@ code {
   list-style: none;
 }
 
+.checks li {
+  padding: 4px 0;
+}
+
 .checks .mark {
   display: inline-block;
   width: 1.25rem;
-  font-weight: 700;
+  font: 800 0.85rem var(--font-mono);
 }
 
 .checks .passed .mark {
@@ -395,17 +544,19 @@ code {
 
 .exam-form label {
   display: grid;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 600;
+  gap: 4px;
+  font: 650 0.68rem/1.2 var(--font-body);
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--color-foreground-subtle);
 }
 
 .exam-form input {
   width: 6rem;
-  padding: 0.4rem 0.5rem;
-  font: inherit;
+  padding: 7px 10px;
+  font: 500 0.92rem var(--font-mono);
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--color-foreground);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -427,7 +578,7 @@ code {
 .timer {
   font-family: var(--font-mono);
   font-size: 1.5rem;
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -444,23 +595,29 @@ code {
 
 .pill {
   min-width: 2.25rem;
-  padding: 0.25rem 0.5rem;
-  font: inherit;
-  font-weight: 600;
+  padding: 4px 10px;
+  font: 600 0.8rem var(--font-mono);
   color: var(--color-foreground);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   cursor: pointer;
+  transition: border-color 150ms, background-color 150ms;
+}
+
+.pill:hover {
+  border-color: var(--color-border-strong);
 }
 
 .pill.flagged {
   color: var(--color-warning);
+  background: var(--amber-wash);
   border-color: color-mix(in srgb, var(--color-warning) 50%, transparent);
 }
 
 .pill.failed {
   color: var(--color-danger);
+  background: var(--p2-wash);
   border-color: color-mix(in srgb, var(--color-danger) 50%, transparent);
 }
 
@@ -492,8 +649,8 @@ code {
 
 .verdict {
   margin: 0.5rem 0 0;
-  font-size: 1.75rem;
-  font-weight: 700;
+  font: 600 clamp(2rem, 4vw, 2.8rem)/1 var(--font-display);
+  letter-spacing: -0.02em;
 }
 
 .verdict.pass {
@@ -511,7 +668,7 @@ code {
 }
 
 .result-row {
-  padding: 0.5rem 0.75rem;
+  padding: 10px 14px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -551,11 +708,10 @@ code {
 }
 
 .card {
-  padding: 1rem 1.25rem;
+  padding: clamp(18px, 3vw, 28px);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-lg);
 }
 
 .card h2 {
@@ -605,7 +761,7 @@ code {
   color: var(--color-foreground);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: 999px;
   cursor: pointer;
   transition: border-color 150ms, box-shadow 150ms;
 }
@@ -629,13 +785,15 @@ code {
 .select-trigger[aria-expanded='true'],
 .select-trigger:focus-visible {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
+  border-color: var(--p1);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--p1) 20%, transparent);
 }
 
 .select-trigger.narrowed {
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--p1);
+  border-color: color-mix(in oklab, var(--p1) 40%, transparent);
+  background: var(--p1-wash);
 }
 
 .menu {
@@ -649,7 +807,7 @@ code {
   padding: 0.375rem;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
 }
 
@@ -684,8 +842,8 @@ code {
 }
 
 .menu-search:focus {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
+  border-color: var(--p1);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--p1) 20%, transparent);
 }
 
 .choice[hidden] {
@@ -694,8 +852,8 @@ code {
 
 .menu-label {
   flex: 1;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font: 650 0.68rem/1.2 var(--font-body);
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--color-foreground-subtle);
 }
@@ -705,7 +863,7 @@ code {
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--p1);
   background: none;
   border: none;
   cursor: pointer;
@@ -734,7 +892,7 @@ code {
 }
 
 .choice:has(input:checked) {
-  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  background: var(--p1-wash);
 }
 
 .choice input {
@@ -742,7 +900,7 @@ code {
   height: 1rem;
   flex-shrink: 0;
   margin: 0;
-  accent-color: var(--color-primary);
+  accent-color: var(--p1);
   cursor: pointer;
 }
 

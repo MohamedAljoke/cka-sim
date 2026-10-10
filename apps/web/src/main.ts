@@ -1,13 +1,16 @@
-import '@fontsource-variable/ibm-plex-sans'
-import '@fontsource/barlow-semi-condensed/600.css'
-import '@fontsource/barlow-semi-condensed/700.css'
+import '@fontsource-variable/instrument-sans'
+import '@fontsource-variable/fraunces/opsz.css'
+import '@fontsource-variable/jetbrains-mono'
 import './style.css'
 import type { App } from './app'
 import { showExam } from './exam'
 import { showHome } from './home'
 import { showLab } from './lab'
 import { showPractice } from './practice'
+import { themeToggle } from './theme'
 import { openTerminal } from './terminal'
+
+themeToggle(document.querySelector<HTMLButtonElement>('#theme')!)
 
 const layout = document.querySelector<HTMLElement>('main.exam')!
 const pane = document.querySelector<HTMLElement>('#question')!

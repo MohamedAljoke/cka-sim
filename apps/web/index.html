@@ -7,18 +7,19 @@
     <title>cka-sim</title>
     <script>
       try {
+        // No saved choice: style.css follows the OS, like the DSA guide.
         const stored = localStorage.getItem('cka-sim:color-scheme')
-        const dark = stored ? stored === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
-        document.documentElement.dataset.colorScheme = dark ? 'dark' : 'light'
-      } catch {
-        document.documentElement.dataset.colorScheme = 'light'
-      }
+        if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored
+      } catch {}
     </script>
   </head>
   <body>
     <header class="topbar">
-      <span class="brand">cka-sim</span>
-      <div class="lab" id="lab"></div>
+      <span class="brand"><span class="brand-mark" aria-hidden="true">◆</span>cka-sim</span>
+      <div class="topbar-end">
+        <div class="lab" id="lab"></div>
+        <button class="icon-btn" id="theme" type="button"></button>
+      </div>
     </header>
     <main class="exam single">
       <section class="question" id="question"></section>

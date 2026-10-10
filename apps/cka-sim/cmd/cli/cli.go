@@ -108,6 +108,10 @@ func runUp(ctx context.Context, stdout io.Writer) error {
 	case <-ctx.Done():
 		return errors.New("interrupted; run cka-sim down to remove the half-created cluster")
 	}
+	fmt.Fprintln(stdout, "loading the task images into the nodes")
+	if err := c.LoadImages(ctx); err != nil {
+		fmt.Fprintf(stdout, "warning: the first exam will pull the task images itself: %v\n", err)
+	}
 	fmt.Fprintf(stdout, "\ncluster %s is up\n", cluster.Name)
 	printHowToConnect(stdout, c)
 	return nil

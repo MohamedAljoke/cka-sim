@@ -231,6 +231,13 @@ Things the exam environment does that our tasks should copy:
 
 ## 4. Workloads & Scheduling (15%)
 
+### Basics: labels and namespaces
+
+| # | Question | Level | Needs | Covered |
+|---|---|---|---|---|
+| W27 | Select Pods with equality and set-based label selectors, write the matches to a file, add and remove labels, and annotate a Pod. | ★ | | main `wl-labels` (selftest not run yet) |
+| W28 | Create a labelled namespace and run workloads in it, and find which namespace a named Pod lives in. | ★ | | main `wl-namespace` (selftest not run yet) |
+
 ### Deployments, rollouts and rollbacks
 
 | # | Question | Level | Needs | Covered |
@@ -274,10 +281,10 @@ Things the exam environment does that our tasks should copy:
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
 | W19 | Set resource requests and limits on a Pod. Add a LimitRange and a ResourceQuota to a namespace, and show a Pod being rejected. | ★★ | | |
-| W20 | Schedule a Pod only on nodes with a label, first with `nodeSelector`, then with required and preferred node affinity. | ★★ | | |
-| W21 | Taint a node, then run a Pod that tolerates the taint and one that doesn't. | ★★ | | |
+| W20 | Schedule a Pod only on nodes with a label, first with `nodeSelector`, then with required and preferred node affinity. | ★★ | || main `wl-node-affinity` (selftest not run yet) |
+| W21 | Taint a node, then run a Pod that tolerates the taint and one that doesn't. | ★★ | || main `wl-taints` (selftest not run yet) |
 | W22 | Spread a Deployment's replicas across nodes with pod anti-affinity or `topologySpreadConstraints`. | ★★ | 2+ workers | |
-| W23 | A Pod stays `Pending`. Read the events (insufficient CPU, an unmatched affinity, an untolerated taint) and fix the Pod spec. | ★★ | | |
+| W23 | A Pod stays `Pending`. Read the events (insufficient CPU, an unmatched affinity, an untolerated taint) and fix the Pod spec. | ★★ | || main `wl-pending` (selftest not run yet) |
 | W24 | Run a Pod on a specific node by name without the scheduler (`nodeName`), or as a static Pod on a worker. | ★ | | |
 | W25 | Create a PriorityClass and use it so a critical Pod evicts lower-priority Pods. | ★★ | | |
 | W26 | Set a Pod `securityContext`: `runAsUser`, `readOnlyRootFilesystem` and dropped capabilities. | ★★ | | |
@@ -307,7 +314,7 @@ Things the exam environment does that our tasks should copy:
 | Troubleshooting | 30% | 24 | 3 (main) |
 | Cluster Architecture | 25% | 26 | 2 (main) |
 | Services & Networking | 20% | 21 | 0 (v1 `nw-netpol` waits for a policy-enforcing CNI) |
-| Workloads & Scheduling | 15% | 26 | 2 (main) |
+| Workloads & Scheduling | 15% | 28 | 7 (main) |
 | Storage | 10% | 9 | 1 (main) |
 
 ## Build progress
@@ -326,6 +333,9 @@ The work of turning these questions into catalog tasks, kept here so it survives
 - kindnet does **not** enforce NetworkPolicy, so N3–N7 wait.
 - The nodes have no `etcdctl`/`etcdutl`. `etcd_tools` in `catalog/lib.sh` copies them out of the etcd image.
 - `catalog/lib.sh` gives answer files `COURSE=/opt/course/<task id>`, and `fresh_course` resets that folder.
+- Node convention, so tasks don't fight in one exam: taints go only on `cka-sim-worker` (`tr-kubelet` already breaks it), node labels only on `cka-sim-worker2`. A task that taints a node needs a `reset.sh` that removes the taint (see `wl-taints`).
+
+**Pending (2026-10-10):** selftest the basics batch `wl-labels`, `wl-namespace`, `wl-node-affinity`, `wl-taints`, `wl-pending` (written offline, never run live), plus `tr-kubelet` and `ar-etcd` from wave 1. Then W19 and W22 to finish wave 12.
 
 **Waves (the build order):**
 
@@ -342,7 +352,7 @@ The work of turning these questions into catalog tasks, kept here so it survives
 | 9 | DNS and addressing | N2, N19, N20, N21 | |
 | 10 | Rollouts and config | W3, W4, W5, W6, W7, W8 | |
 | 11 | Self-healing | W13–W18 | |
-| 12 | Scheduling I | W19–W23 | |
+| 12 | Scheduling I | W19–W23 | W20, W21, W23 built (plus basics W27, W28); selftest not run yet. W19, W22 next. |
 | 13 | Scheduling II and logs | W24, W25, W26, T17 | |
 | 14 | Storage | S2, S3, S4, S6, S7, S8, S9 | |
 

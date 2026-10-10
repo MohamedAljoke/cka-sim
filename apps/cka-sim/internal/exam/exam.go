@@ -34,7 +34,7 @@ type Exam struct {
 	Started  time.Time `json:"started,omitzero"`
 	Deadline time.Time `json:"deadline,omitzero"`
 	Ended    time.Time `json:"ended,omitzero"`
-	// Scored is when the last check of an ended exam came back.
+	// Scored is when an ended exam's checks and tidy are all done.
 	Scored time.Time `json:"scored,omitzero"`
 }
 
@@ -48,6 +48,11 @@ func (e Exam) SettingUp() bool {
 func (e Exam) Over() bool { return !e.Ended.IsZero() }
 
 func (e Exam) Scoring() bool { return e.Over() && e.Scored.IsZero() }
+
+// Graded is true once every task of an ended exam has its result, even while tidy still runs.
+func (e Exam) Graded() bool {
+	return e.Over() && !slices.ContainsFunc(e.Tasks, func(t Task) bool { return t.Result == nil })
+}
 
 // Score weighs each task's share of its own points by the task's weight, as the CKA does.
 func Score(e Exam, weights map[string]int) (percent int, passed bool) {

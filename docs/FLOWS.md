@@ -16,6 +16,12 @@ base's `candidate` an ssh key and, on every node, installs that key in `authoriz
 admin kubeconfig for both `candidate` and `root`. If base already exists, `Prepare` does nothing, so open
 terminals survive a second `up`.
 
+A new cluster then gets the task images (`Cluster.LoadImages`, `internal/cluster/images.go`): `up` pulls
+any of `cluster.Images` this machine's Docker lacks, then pipes `docker save` into each node's `ctr images
+import`. That adds about 8 s, and the first exam doesn't wait on Docker Hub on every node. If it fails, `up`
+only warns, and the first exam pulls the images itself. `catalog_test.go` fails when a script uses an image
+the list lacks.
+
 Next, `make dev` builds `bin/server` and starts it in the background, then starts Vite on 5173.
 `vite.config.ts` forwards `/api` and `/ws` to the Go server on `127.0.0.1:7070`. The server
 (`cmd/server/main.go`) claims the port, loads the catalog (`tasks.Load(catalog.FS)`: every
@@ -148,9 +154,10 @@ and the result is shuffled. The exam is saved with every task `preparing` to
 which is `Lab.Ensure`); if the lab fails, every task is marked `failed` with its error. Then `tasks.Heal`
 first runs every `reset.sh` (on a restart, not those of tasks this exam already set up). Then every
 `setup.sh` runs at once through `tasks.Start`. When those are done, the clock starts (`started`, and
-`deadline` = started + minutes). Tasks marked `order: last` then run one by one in the background, because
-an etcd snapshot or a broken scheduler or kubelet would spoil the setups beside it; you read and work
-meanwhile. When the last one is done, the lock is released and `deadline` moves out by the time they took,
+`deadline` = started + minutes). Tasks marked `order: last` then run in the background, because an etcd
+snapshot or a broken scheduler or kubelet would spoil the setups beside it: one by one per host, and hosts
+side by side, so `tr-kubelet` on a worker doesn't wait for `ar-etcd` and `tr-scheduler` on the control
+plane. You read and work meanwhile. When the last one is done, the lock is released and `deadline` moves out by the time they took,
 so setup time is never exam time. Each task turns `ready` or `failed`, and the file is saved after each.
 The server log shows how long each setup, the heal, each check and the tidy took.
 
@@ -179,14 +186,21 @@ same deadline and flags.
 **Ending.** **End exam** asks for confirmation, then sends `POST /api/exam/end`. `endExam` takes the script
 lock and calls `Session.End`, which saves `ended` and answers 202 at once; you are never stuck on
 "Scoring…". In the background, `grade` runs every `check.sh` at once through `tasks.Check`, saving each
-task's `grader.Result` as it lands. A check that crashes counts as 0 and keeps its error. Then `tasks.Tidy`
+task's `grader.Result` as it lands. A check that crashes counts as 0 and keeps its error. Checks that wait for
+the cluster to settle only wait when the wait can succeed: `tr-kubelet` when the kubelet is running,
+`ar-etcd` when etcd or the API server is missing or started in the last 2 minutes, `tr-scheduler` when a
+scheduler container runs, `st-pvc` when Pod `writer` exists, `wl-rollout` when the Deployment is back on the
+good image, `tr-service` when the Service has endpoints. So an untouched task scores in under 3 seconds
+instead of up to 150. Then `tasks.Tidy`
 runs the exam's `reset.sh` scripts, so a kubelet left broken doesn't outlive the exam, and deletes the
 exam's task namespaces, so the next exam's setups find nothing to delete. Last, it saves
-`scored` and frees the lock. The score is worked out on the server by `exam.Score`, sent only once the exam
-is scored: each task's earned/total times its weight, over the sum of the weights, passing at 66%.
+`scored` and frees the lock. The score is worked out on the server by `exam.Score`, sent as soon as every
+task has its result (`Exam.Graded`), without waiting for the tidy: each task's earned/total times its weight,
+over the sum of the weights, passing at 66%.
 
 **Results.** The page switches to full width and asks `GET /api/exam` every 2 seconds until `scored`. Each
 row reads "01 Scale a Deployment" with "checking…" until its check is back, then `2 / 4`. A row with
 points missing starts open and red: its ✓/✗ checks, the solution, and **Try again**, which opens that task
-in practice once scoring is done. The percentage with PASS or FAIL appears when every row is in. **Home**
+in practice once scoring is done. The percentage with PASS or FAIL appears when every row is in; until the
+tidy finishes, "Tidying up the cluster…" shows under it and **Try again** stays disabled. **Home**
 keeps the results; Home shows them as "Last exam" until the next exam replaces them.

@@ -355,8 +355,10 @@ type fakeRunner struct {
 	started, release chan struct{}
 	mu               sync.Mutex
 	gate             chan struct{}
-	scripts          []string
-	cancelled        bool
+	// only, when set, makes pause hold just this script.
+	only      string
+	scripts   []string
+	cancelled bool
 }
 
 func (r *fakeRunner) Run(ctx context.Context, _, _ string, script []byte) (string, error) {
@@ -365,7 +367,7 @@ func (r *fakeRunner) Run(ctx context.Context, _, _ string, script []byte) (strin
 	first := len(r.scripts) == 1
 	gate := r.gate
 	r.mu.Unlock()
-	if gate != nil {
+	if gate != nil && (r.only == "" || r.only == string(script)) {
 		<-gate
 	}
 	if r.started != nil && first {

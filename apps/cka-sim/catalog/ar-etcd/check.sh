@@ -1,13 +1,20 @@
 # After a restore the kubelet restarts etcd and the API server flaps for a while, so every
-# check waits for its condition instead of trusting the first answer.
+# check waits for its condition instead of trusting the first answer. With both running for a
+# while, nothing is settling and waiting would only delay an unsolved task's score.
 api_up() { kubectl get --raw /readyz; }
 snapshot_ok() { etcdutl snapshot status "$COURSE/etcd-snapshot.db"; }
 marker_back() { kubectl -n etcd-check get configmap marker; }
 # NotFound, not just any error: a down API server must not count as "restored".
 after_backup_gone() { [[ "$(kubectl -n etcd-check get configmap created-after-backup 2>&1)" == *NotFound* ]]; }
 restored_and_up() { marker_back && api_up; }
-wait_for 90 marker_back && wait_for 60 after_backup_gone
-wait_for 60 api_up
+settling() {
+  crictl ps --name '^(etcd|kube-apiserver)$' -o json |
+    jq -e --argjson now "$(date +%s)" '.containers | length < 2 or any((.createdAt | tonumber) / 1e9 > $now - 120)' >/dev/null
+}
+if settling; then
+  wait_for 90 marker_back && wait_for 60 after_backup_gone
+  wait_for 60 api_up
+fi
 
 check 3 "etcd-snapshot.db is a valid etcd snapshot" snapshot_ok
 check 3 "ConfigMap etcd-check/marker is back" marker_back

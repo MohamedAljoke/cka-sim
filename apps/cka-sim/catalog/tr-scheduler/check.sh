@@ -8,8 +8,11 @@ created_before_fix() {
   started=$(crictl inspect "$(crictl ps -q --name '^kube-scheduler$' | head -1)" | grep -m1 '"startedAt"' | cut -d'"' -f4)
   [ "$(date -d "$(pod '{.metadata.creationTimestamp}')" +%s)" -lt "$(date -d "$started" +%s)" ]
 }
-wait_for 60 scheduler_ready
-wait_for 90 running
+# A scheduler that isn't running yet (still the broken command) will never place the probe.
+if crictl ps -q --name '^kube-scheduler$' | grep -q .; then
+  wait_for 60 scheduler_ready
+  wait_for 90 running
+fi
 
 check 2 "kube-scheduler static Pod is Ready" scheduler_ready
 check 3 "Pod probe was scheduled to a node" scheduled

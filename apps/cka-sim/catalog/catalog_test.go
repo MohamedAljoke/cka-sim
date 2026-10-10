@@ -3,6 +3,7 @@ package catalog
 import (
 	"io/fs"
 	"path"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -31,6 +32,24 @@ func TestEveryShippedTaskLoads(t *testing.T) {
 			body, _ := fs.ReadFile(FS, path.Join(task.Dir, script))
 			if strings.TrimSpace(string(body)) == "" {
 				t.Errorf("%s/%s is empty", task.ID, script)
+			}
+		}
+	}
+}
+
+// The node image already has registry.k8s.io's images; the rest must be preloaded.
+var imageRef = regexp.MustCompile(`(?:--image=|image: )([\w./:-]+)`)
+
+func TestEveryImageIsPreloaded(t *testing.T) {
+	scripts, err := fs.Glob(FS, "*/*.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, script := range scripts {
+		body, _ := fs.ReadFile(FS, script)
+		for _, m := range imageRef.FindAllStringSubmatch(string(body), -1) {
+			if image := m[1]; !strings.HasPrefix(image, "registry.k8s.io/") && !slices.Contains(cluster.Images, image) {
+				t.Errorf("%s runs %s, which cluster.Images doesn't preload", script, image)
 			}
 		}
 	}

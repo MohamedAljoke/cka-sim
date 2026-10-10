@@ -115,7 +115,7 @@ func (a *api) resumeExam() {
 
 func (a *api) state(e exam.Exam) examState {
 	s := examState{Exam: e, Now: time.Now()}
-	if e.Over() && !e.Scoring() {
+	if e.Graded() {
 		percent, passed := exam.Score(e, a.Exam.Weights())
 		s.Score = &score{Percent: percent, Passed: passed}
 	}

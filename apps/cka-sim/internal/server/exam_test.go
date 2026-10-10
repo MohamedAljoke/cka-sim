@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/tasks"
 )
 
 func TestNoExamIs404(t *testing.T) {
@@ -202,6 +204,20 @@ func TestScoreWaitsForEveryCheck(t *testing.T) {
 	r.resume()
 	if state := waitScored(t, srv); state.Score == nil || state.Score.Percent != 100 {
 		t.Errorf("score %+v, want 100%%", state.Score)
+	}
+}
+
+func TestScoreDoesNotWaitForTidy(t *testing.T) {
+	r := &fakeRunner{out: "PASS 4 scaled\n", only: tasks.TidyScript}
+	srv := newAPI(t, r)
+	beginExam(t, srv)
+	r.pause()
+	defer r.resume()
+
+	call(t, srv, http.MethodPost, "/api/exam/end")
+
+	if state := waitScored(t, srv); state.Score.Percent != 100 || !state.Exam.Scoring() {
+		t.Errorf("got %+v, want 100%% while the tidy still runs", state)
 	}
 }
 

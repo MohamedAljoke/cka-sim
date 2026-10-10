@@ -1,7 +1,8 @@
 dep() { kubectl -n release get deploy shop -o jsonpath="$1"; }
 healthy() { eq 3 "$(dep '{.status.updatedReplicas}')" && eq 3 "$(dep '{.status.availableReplicas}')"; }
 on_good_image() { eq nginx:1.27-alpine "$(dep '{.spec.template.spec.containers[0].image}')"; }
-wait_for 60 healthy
+# Only a rollback to the good image can become healthy, so only then is the rollout worth waiting for.
+on_good_image && wait_for 60 healthy
 
 check 2 "shop runs nginx:1.27-alpine again" on_good_image
 rolled_back_and_healthy() { on_good_image && healthy; }

@@ -107,6 +107,29 @@ func TestTheClockStartsBeforeTheLastTasks(t *testing.T) {
 	}
 }
 
+func TestLastTasksOnOtherHostsRunSideBySide(t *testing.T) {
+	fsys := withLast()
+	fsys["tr-kubelet/task.md"] = &fstest.MapFile{Data: []byte("---\nid: tr-kubelet\ntitle: Kubelet\nhost: node-2\ndomain: troubleshooting\nweight: 7\norder: last\n---\nFix it.\n")}
+	for _, name := range []string{"setup.sh", "check.sh", "solution.sh", "explain.md"} {
+		fsys["tr-kubelet/"+name] = files["wl-scale/"+name]
+	}
+	s, _, r := openSession(t, fsys, nil)
+	r.holdLast()
+	defer r.releaseLast()
+
+	if err := s.Begin(s.cfg.Catalog, 4, 30, func() {}); err != nil {
+		t.Fatal(err)
+	}
+
+	for range 500 {
+		if got := r.ran("setup.sh"); slices.Contains(got, "ar-etcd") && slices.Contains(got, "tr-kubelet") {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("set up %v, want ar-etcd on node-1 and tr-kubelet on node-2 at the same time", r.ran("setup.sh"))
+}
+
 func TestTheLastTasksTimeIsGivenBack(t *testing.T) {
 	s, _, r := openSession(t, withLast(), nil)
 	clock := struct {
@@ -593,8 +616,8 @@ func (m *memStore) Clear() error {
 type call struct{ taskID, script string }
 
 // fakeRunner answers by script name: each fake script's body is its own name, and tasks.TidyScript
-// is "tidy". Setups other than ar-etcd's wait until hold is closed, ar-etcd's until lastHold is,
-// and checks until checkHold is.
+// is "tidy". Setups of the last tasks (ar-etcd, tr-kubelet) wait until lastHold is closed, the
+// others until hold is, and checks until checkHold is.
 type fakeRunner struct {
 	mu        sync.Mutex
 	hold      chan struct{}
@@ -615,10 +638,11 @@ func (r *fakeRunner) Run(_ context.Context, _, taskID string, script []byte) (st
 	r.calls = append(r.calls, call{taskID, name})
 	hold, lastHold, checkHold := r.hold, r.lastHold, r.checkHold
 	r.mu.Unlock()
-	if hold != nil && name == "setup.sh" && taskID != "ar-etcd" {
+	last := taskID == "ar-etcd" || taskID == "tr-kubelet"
+	if hold != nil && name == "setup.sh" && !last {
 		<-hold
 	}
-	if lastHold != nil && name == "setup.sh" && taskID == "ar-etcd" {
+	if lastHold != nil && name == "setup.sh" && last {
 		<-lastHold
 	}
 	if checkHold != nil && name == "check.sh" {

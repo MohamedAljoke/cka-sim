@@ -190,6 +190,7 @@ function showResults(app: App, state: ExamState, catalog: Map<string, Task>) {
     if (state.score) {
       const { percent, passed } = state.score
       head.append(el('p', `verdict ${passed ? 'pass' : 'fail'}`, `${percent}% · ${passed ? 'PASS' : 'FAIL'}`))
+      if (scoring) head.append(el('p', 'status', 'Tidying up the cluster… Try again unlocks when it is done.'))
     } else {
       head.append(el('p', 'status', 'Scoring… each task fills in as its check comes back.'))
     }

@@ -4,7 +4,8 @@ serves() { [[ "$(kubectl -n shop exec deploy/web -- wget -qO- -T 3 http://web.sh
 generation() { kubectl -n shop get deployment web -o jsonpath='{.metadata.generation}'; }
 untouched() { serves && eq 1 "$(generation)"; }
 
-wait_for 20 serves
+# With no endpoints, nothing can serve; with them, kube-proxy may still need a moment.
+endpoints && wait_for 20 serves
 check 2 "Service web has endpoints" endpoints
 check 4 "http://web.shop returns the nginx page" serves
 check 1 "Deployment web was not modified" untouched

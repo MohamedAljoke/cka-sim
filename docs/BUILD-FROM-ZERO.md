@@ -376,8 +376,10 @@ Pull each deliverable in when a task needs it, not before.
 - **Watch out:**
   - `--network kind` is what makes `ssh cka-sim-worker` resolve. Docker's embedded DNS only
     resolves names on user-defined networks.
-  - Decide **one cluster or two**. v1 had two, so tasks that break a cluster (kubelet, scheduler,
-    etcd) couldn't break the workload tasks.
+  - **One cluster or two:** v1 had two, so tasks that break a cluster (kubelet, scheduler, etcd)
+    couldn't break the workload tasks. v2 keeps **one**. A task that breaks a node ships a `reset.sh`,
+    which the engine runs (`tasks.Heal`) before each practice setup, before an exam's setups, after an
+    exam's checks, and around each selftest. `order: last` keeps exam setups from colliding.
   - Base is a container we create ourselves, so it can carry labels (e.g. `com.docker.compose.project`)
     if we want it grouped in Docker Desktop. The kind nodes can't, because kind hardcodes their labels.
 - **Done when:** `shell` → `kubectl` is not found → `ssh cka-sim-worker` with no password → `k get nodes` works.

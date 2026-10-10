@@ -16,8 +16,8 @@ export async function taskQuestion(id: string): Promise<string> {
   return reply.question
 }
 
-export async function startTask(id: string): Promise<void> {
-  await call('POST', `/api/tasks/${encodeURIComponent(id)}/start`)
+export async function startTask(id: string, signal?: AbortSignal): Promise<void> {
+  await call('POST', `/api/tasks/${encodeURIComponent(id)}/start`, undefined, signal)
 }
 
 export type Check = {
@@ -32,8 +32,8 @@ export type Result = {
   total: number
 }
 
-export async function checkTask(id: string): Promise<Result> {
-  return (await call('POST', `/api/tasks/${encodeURIComponent(id)}/check`)).json()
+export async function checkTask(id: string, signal?: AbortSignal): Promise<Result> {
+  return (await call('POST', `/api/tasks/${encodeURIComponent(id)}/check`, undefined, signal)).json()
 }
 
 export async function taskSolution(id: string): Promise<string> {
@@ -87,8 +87,8 @@ export async function discardExam(): Promise<void> {
   await call('DELETE', '/api/exam')
 }
 
-async function call(method: string, path: string, body?: unknown): Promise<Response> {
-  const init: RequestInit = { method }
+async function call(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<Response> {
+  const init: RequestInit = { method, signal }
   if (body !== undefined) {
     init.headers = { 'Content-Type': 'application/json' }
     init.body = JSON.stringify(body)

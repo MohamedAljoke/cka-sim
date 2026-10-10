@@ -64,8 +64,18 @@ function number(text: string, min: number, max: number, value: number) {
 }
 
 function openTask(pane: HTMLElement, task: Task, number: number) {
+  // Aborting the request stops its script on the server, so leaving never blocks the next task.
+  let running = new AbortController()
+  const restart = () => {
+    running.abort()
+    running = new AbortController()
+    return running.signal
+  }
   const back = el('button', 'back', '← Back to tasks')
-  back.onclick = () => showTasks(pane)
+  back.onclick = () => {
+    running.abort()
+    showTasks(pane)
+  }
   const host = hostLine(task)
   const status = el('p', 'status')
   const check = el('button', 'action primary', 'Check')
@@ -83,22 +93,24 @@ function openTask(pane: HTMLElement, task: Task, number: number) {
     check.disabled = reset.disabled = true
     result.replaceChildren()
     setStatus(status, '', 'Preparing the cluster…')
-    startTask(task.id).then(
+    const signal = restart()
+    startTask(task.id, signal).then(
       () => {
         setStatus(status, 'ready', 'Ready: the cluster is set up.')
         check.disabled = false
       },
-      (err) => setStatus(status, 'error', `Setup failed: ${message(err)}`),
+      (err) => signal.aborted || setStatus(status, 'error', `Setup failed: ${message(err)}`),
     ).finally(() => (reset.disabled = false))
   }
 
   check.onclick = () => {
     check.disabled = reset.disabled = true
     result.replaceChildren(el('p', 'muted', 'Checking…'))
-    checkTask(task.id)
+    const signal = restart()
+    checkTask(task.id, signal)
       .then(
         (r) => result.replaceChildren(checkList(r)),
-        (err) => result.replaceChildren(el('p', 'error', `Check failed: ${message(err)}`)),
+        (err) => signal.aborted || result.replaceChildren(el('p', 'error', `Check failed: ${message(err)}`)),
       )
       .finally(() => (check.disabled = reset.disabled = false))
   }

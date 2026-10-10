@@ -86,6 +86,16 @@ func TestBeginSetsUpLastTasksAfterTheRest(t *testing.T) {
 	}
 }
 
+func TestBeginHealsBeforeAnySetup(t *testing.T) {
+	s, _, r := openSession(t, withReset("tr-svc", "wl-scale"), nil)
+
+	begin(t, s, 1)
+
+	if got := r.order(); len(got) != 3 || got[0] != "tr-svc/reset.sh" || got[1] != "wl-scale/reset.sh" {
+		t.Errorf("ran %v, want every reset.sh in the catalog before the setup", got)
+	}
+}
+
 func TestBeginRefusesASecondExam(t *testing.T) {
 	s, _, _ := newSession(t, nil)
 	begin(t, s, 1)
@@ -117,6 +127,20 @@ func TestEndGradesEveryTask(t *testing.T) {
 	}
 	if percent, _ := Score(e, s.Weights()); percent != 40 {
 		t.Errorf("score %d%%, want 40%% (wl-scale weighs 4 of 10)", percent)
+	}
+}
+
+func TestEndHealsAfterChecks(t *testing.T) {
+	s, _, r := openSession(t, withReset("tr-svc"), nil)
+	begin(t, s, 2)
+	r.forget()
+
+	if _, err := s.End(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := r.order(); len(got) != 3 || got[2] != "tr-svc/reset.sh" {
+		t.Errorf("ran %v, want both checks then tr-svc's reset.sh", got)
 	}
 }
 
@@ -191,6 +215,18 @@ func TestResumeSetsUpOnlyWhatWasInterrupted(t *testing.T) {
 	}
 }
 
+func TestResumeKeepsWhatIsAlreadySetUp(t *testing.T) {
+	saved := &Exam{Minutes: 30, Tasks: []Task{{ID: "tr-svc", Setup: Ready}, {ID: "wl-scale", Setup: Preparing}}}
+	s, _, r := openSession(t, withReset("tr-svc", "wl-scale"), saved)
+
+	s.Resume(func() {})
+	waitStarted(t, s)
+
+	if got := r.ran("reset.sh"); !slices.Equal(got, []string{"wl-scale"}) {
+		t.Errorf("reset ran for %v, want only wl-scale: tr-svc is set up and must stay broken", got)
+	}
+}
+
 func TestResumeLeavesAStartedExamAlone(t *testing.T) {
 	saved := &Exam{Minutes: 30, Started: now, Deadline: now.Add(30 * time.Minute), Tasks: []Task{{ID: "wl-scale", Setup: Ready}}}
 	s, _, r := newSession(t, saved)
@@ -239,6 +275,14 @@ var files = fstest.MapFS{
 	"tr-svc/check.sh":      {Data: []byte("check.sh\n")},
 	"tr-svc/solution.sh":   {Data: []byte("solution.sh\n")},
 	"tr-svc/explain.md":    {Data: []byte("Why.\n")},
+}
+
+func withReset(ids ...string) fstest.MapFS {
+	fsys := maps.Clone(files)
+	for _, id := range ids {
+		fsys[id+"/reset.sh"] = &fstest.MapFile{Data: []byte("reset.sh\n")}
+	}
+	return fsys
 }
 
 func catalog(t *testing.T, fsys fstest.MapFS) []tasks.Task {
@@ -345,6 +389,22 @@ func (r *fakeRunner) Run(_ context.Context, _, taskID string, script []byte) (st
 		return r.checkOut[taskID], r.checkErr
 	}
 	return "", nil
+}
+
+func (r *fakeRunner) order() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var got []string
+	for _, c := range r.calls {
+		got = append(got, c.taskID+"/"+c.script)
+	}
+	return got
+}
+
+func (r *fakeRunner) forget() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls = nil
 }
 
 func (r *fakeRunner) ran(script string) []string {

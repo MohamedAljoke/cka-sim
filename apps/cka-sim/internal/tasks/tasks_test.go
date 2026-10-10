@@ -80,6 +80,22 @@ func TestLoadSortsByID(t *testing.T) {
 	}
 }
 
+func TestLoadNotesAResetScript(t *testing.T) {
+	fsys := fstest.MapFS{}
+	addTask(fsys, "tr-kubelet")
+	addTask(fsys, "wl-scale")
+	fsys["tr-kubelet/reset.sh"] = &fstest.MapFile{Data: []byte("reset.sh\n")}
+
+	all, err := Load(fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !all[0].Reset || all[1].Reset {
+		t.Errorf("reset = %v/%v, want only tr-kubelet", all[0].Reset, all[1].Reset)
+	}
+}
+
 func TestLoadRejects(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -191,6 +207,32 @@ func TestSolveRunsSolution(t *testing.T) {
 	}
 }
 
+func TestHealRunsOnlyResetScripts(t *testing.T) {
+	r := &fakeRunner{}
+
+	err := Heal(context.Background(), healFS(), r, healTasks)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []call{{"node-1", "tr-kubelet", "reset.sh"}, {"node-1", "tr-scheduler", "reset.sh"}}; !slices.Equal(r.calls, want) {
+		t.Errorf("ran %+v, want %+v", r.calls, want)
+	}
+}
+
+func TestHealKeepsGoingAfterAFailure(t *testing.T) {
+	r := &fakeRunner{err: errors.New("node gone")}
+
+	err := Heal(context.Background(), healFS(), r, healTasks)
+
+	if len(r.calls) != 2 {
+		t.Errorf("ran %d resets, want 2", len(r.calls))
+	}
+	if err == nil || !strings.Contains(err.Error(), "reset tr-kubelet: node gone") || !strings.Contains(err.Error(), "reset tr-scheduler: node gone") {
+		t.Errorf("got error %v, want both resets named", err)
+	}
+}
+
 func TestSelftestPassesAFairTask(t *testing.T) {
 	fsys := fstest.MapFS{}
 	addTask(fsys, "wl-scale")
@@ -239,6 +281,23 @@ func TestSelftestRejects(t *testing.T) {
 }
 
 var wlScale = Task{ID: "wl-scale", Dir: "wl-scale", Host: "node-1"}
+
+var healTasks = []Task{
+	{ID: "tr-kubelet", Dir: "tr-kubelet", Host: "node-1", Reset: true},
+	wlScale,
+	{ID: "tr-scheduler", Dir: "tr-scheduler", Host: "node-1", Reset: true},
+}
+
+func healFS() fstest.MapFS {
+	fsys := fstest.MapFS{}
+	for _, t := range healTasks {
+		addTask(fsys, t.ID)
+		if t.Reset {
+			fsys[t.ID+"/reset.sh"] = &fstest.MapFile{Data: []byte("reset.sh\n")}
+		}
+	}
+	return fsys
+}
 
 func taskMD(id, fields string) string {
 	return "---\nid: " + id + "\ntitle: A task\nhost: node-1\n" + fields + "\n---\n"

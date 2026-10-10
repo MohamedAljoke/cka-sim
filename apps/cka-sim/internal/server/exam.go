@@ -45,7 +45,7 @@ func (a *api) beginExam(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "count must be at least 1, and minutes between 1 and 240", http.StatusBadRequest)
 		return
 	}
-	if !a.lock(w) {
+	if !a.lock(w, r) {
 		return
 	}
 	if err := a.Exam.Begin(req.Count, req.Minutes, a.busy.Unlock); err != nil {
@@ -68,7 +68,7 @@ func (a *api) flag(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) endExam(w http.ResponseWriter, r *http.Request) {
-	if !a.lock(w) {
+	if !a.lock(w, r) {
 		return
 	}
 	defer a.busy.Unlock()
@@ -81,7 +81,7 @@ func (a *api) endExam(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) discardExam(w http.ResponseWriter, r *http.Request) {
-	if !a.lock(w) {
+	if !a.lock(w, r) {
 		return
 	}
 	defer a.busy.Unlock()

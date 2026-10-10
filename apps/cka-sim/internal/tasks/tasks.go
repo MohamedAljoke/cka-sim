@@ -41,6 +41,9 @@ var Titles = map[Domain]string{
 
 var Scripts = []string{"setup.sh", "check.sh", "solution.sh"}
 
+// ResetScript is optional: it undoes what a task's setup breaks outside its own namespace.
+const ResetScript = "reset.sh"
+
 type Order string
 
 // Last marks a task whose setup snapshots or breaks the cluster, so an exam sets it up after the rest.
@@ -57,6 +60,7 @@ type Task struct {
 	Question string   `json:"-"`
 	Explain  string   `json:"-"`
 	Dir      string   `json:"-"`
+	Reset    bool     `json:"-"`
 }
 
 type frontmatter struct {
@@ -163,6 +167,8 @@ func load(fsys fs.FS, file string) (Task, error) {
 		return Task{}, errors.New("missing explain.md")
 	}
 	t.Explain = strings.TrimSpace(string(explain))
+	_, err = fs.Stat(fsys, path.Join(t.Dir, ResetScript))
+	t.Reset = err == nil
 	return t, nil
 }
 

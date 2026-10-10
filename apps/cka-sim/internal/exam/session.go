@@ -160,6 +160,7 @@ func (s *Session) End(ctx context.Context) (Exam, error) {
 		})
 	}
 	wg.Wait()
+	s.heal(ctx, func(t tasks.Task) bool { return slices.Contains(ids, t.ID) })
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -188,11 +189,15 @@ func (s *Session) Discard() error {
 }
 
 // setUp runs with s.mu held; its goroutines take the lock again to record each result.
+// It first heals what earlier tasks left broken, except tasks this exam has already set up.
 // Tasks marked last run one by one after the rest: an etcd snapshot taken in setup would lose
 // objects other setups create later, and a broken scheduler or kubelet can stall setups beside it.
 func (s *Session) setUp(e *Exam, release func()) {
-	var together, last []string
+	var done, together, last []string
 	for _, t := range e.Tasks {
+		if t.Setup != Preparing {
+			done = append(done, t.ID)
+		}
 		switch {
 		case t.Setup != Preparing:
 		case s.task(t.ID).Order == tasks.Last:
@@ -202,6 +207,7 @@ func (s *Session) setUp(e *Exam, release func()) {
 		}
 	}
 	go func() {
+		s.heal(context.Background(), func(t tasks.Task) bool { return !slices.Contains(done, t.ID) })
 		var wg sync.WaitGroup
 		for _, id := range together {
 			wg.Go(func() { s.start(e, id) })
@@ -247,6 +253,19 @@ func (s *Session) update(e *Exam, change func()) {
 func (s *Session) saveInBackground(e *Exam) {
 	if err := s.cfg.Store.Save(*e); err != nil {
 		log.Printf("save the exam: %v", err)
+	}
+}
+
+// heal logs a failure instead of returning it: each task's own setup or check shows the damage.
+func (s *Session) heal(ctx context.Context, keep func(tasks.Task) bool) {
+	var some []tasks.Task
+	for _, t := range s.cfg.Catalog {
+		if keep(t) {
+			some = append(some, t)
+		}
+	}
+	if err := tasks.Heal(ctx, s.cfg.Files, s.cfg.Runner, some); err != nil {
+		log.Printf("heal the cluster: %v", err)
 	}
 }
 

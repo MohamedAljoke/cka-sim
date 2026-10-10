@@ -33,6 +33,12 @@ func TestSelftest(t *testing.T) {
 			if exec.Command("docker", "inspect", task.Host).Run() != nil {
 				t.Skipf("%s is not running; run make up", task.Host)
 			}
+			// A failed selftest would otherwise leave a broken node behind for the next task.
+			t.Cleanup(func() {
+				if err := tasks.Heal(context.Background(), FS, node, []tasks.Task{task}); err != nil {
+					t.Error(err)
+				}
+			})
 			if err := tasks.Selftest(context.Background(), FS, node, task); err != nil {
 				t.Error(err)
 			}

@@ -1,4 +1,4 @@
-# Sourced before every setup.sh, check.sh and solution.sh. They run as root on the task's host,
+# Sourced before every setup.sh, check.sh, solution.sh and reset.sh. They run as root on the task's host,
 # where kubectl is already admin. TASK_ID is set.
 
 # check <points> <description> <command...>

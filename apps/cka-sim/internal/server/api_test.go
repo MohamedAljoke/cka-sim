@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -51,8 +53,8 @@ func TestQuestionIsTheTaskText(t *testing.T) {
 	if reply.Question != "Scale it to 4." {
 		t.Errorf("question = %q", reply.Question)
 	}
-	if r.script != "" {
-		t.Errorf("reading the question ran %q", r.script)
+	if ran := r.ran(); len(ran) != 0 {
+		t.Errorf("reading the question ran %q", ran)
 	}
 }
 
@@ -75,8 +77,34 @@ func TestStartRunsSetup(t *testing.T) {
 	if status != http.StatusNoContent {
 		t.Fatalf("status %d: %s", status, body)
 	}
-	if r.script != "fresh_ns wl-scale\n" {
-		t.Errorf("ran %q, want setup.sh", r.script)
+	if ran, want := r.ran(), []string{"heal node-1\n", "fresh_ns wl-scale\n"}; !slices.Equal(ran, want) {
+		t.Errorf("ran %q, want reset.sh then setup.sh", ran)
+	}
+}
+
+func TestCancellingStartStopsTheScript(t *testing.T) {
+	r := &fakeRunner{started: make(chan struct{}), release: make(chan struct{})}
+	srv := newAPI(t, r)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, srv.URL+"/api/tasks/wl-scale/start", nil)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	}()
+	<-r.started
+
+	cancel()
+	<-done
+
+	status, body := call(t, srv, http.MethodPost, "/api/tasks/wl-scale/start")
+	if status != http.StatusNoContent {
+		t.Errorf("the next start got %d %q, want the lock freed by the cancelled one", status, body)
+	}
+	if !r.wasCancelled() {
+		t.Error("the runner's context was not cancelled")
 	}
 }
 
@@ -137,8 +165,8 @@ func TestCheckReturnsTheScore(t *testing.T) {
 	if result.Earned != 2 || result.Total != 4 || len(result.Checks) != 2 {
 		t.Errorf("got %+v, want 2/4 from two checks", result)
 	}
-	if r.script != "true\n" {
-		t.Errorf("ran %q, want check.sh", r.script)
+	if ran, want := r.ran(), []string{"true\n"}; !slices.Equal(ran, want) {
+		t.Errorf("ran %q, want check.sh", ran)
 	}
 }
 
@@ -197,8 +225,8 @@ func TestSolutionIsTheExplanation(t *testing.T) {
 	if reply.Explain != "Use kubectl scale." {
 		t.Errorf("explain = %q", reply.Explain)
 	}
-	if r.script != "" {
-		t.Errorf("reading the solution ran %q", r.script)
+	if ran := r.ran(); len(ran) != 0 {
+		t.Errorf("reading the solution ran %q", ran)
 	}
 }
 
@@ -214,18 +242,20 @@ func TestRefusesCrossSitePost(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	if resp.StatusCode != http.StatusForbidden || r.script != "" {
-		t.Errorf("got %d and ran %q, want 403 and nothing run", resp.StatusCode, r.script)
+	if ran := r.ran(); resp.StatusCode != http.StatusForbidden || len(ran) != 0 {
+		t.Errorf("got %d and ran %q, want 403 and nothing run", resp.StatusCode, ran)
 	}
 }
 
 func newAPI(t *testing.T, r *fakeRunner) *httptest.Server {
+	lockWait = 50 * time.Millisecond
 	files := fstest.MapFS{
 		"wl-scale/task.md":     {Data: []byte("---\nid: wl-scale\ntitle: Scale a Deployment\nhost: node-1\ndomain: workloads\nweight: 4\n---\nScale it to 4.\n")},
 		"wl-scale/setup.sh":    {Data: []byte("fresh_ns wl-scale\n")},
 		"wl-scale/check.sh":    {Data: []byte("true\n")},
 		"wl-scale/solution.sh": {Data: []byte("kubectl scale\n")},
 		"wl-scale/explain.md":  {Data: []byte("Use kubectl scale.\n")},
+		"wl-scale/reset.sh":    {Data: []byte("heal node-1\n")},
 	}
 	all, err := tasks.Load(files)
 	if err != nil {
@@ -267,17 +297,44 @@ func request(t *testing.T, srv *httptest.Server, method, path, payload string) (
 	return resp.StatusCode, string(body)
 }
 
+// fakeRunner records every script body it runs. With started set, the first run signals started
+// and waits for release or a cancel.
 type fakeRunner struct {
-	script, out      string
+	out              string
 	err              error
 	started, release chan struct{}
+	mu               sync.Mutex
+	scripts          []string
+	cancelled        bool
 }
 
-func (r *fakeRunner) Run(_ context.Context, _, _ string, script []byte) (string, error) {
-	r.script = string(script)
-	if r.started != nil {
+func (r *fakeRunner) Run(ctx context.Context, _, _ string, script []byte) (string, error) {
+	r.mu.Lock()
+	r.scripts = append(r.scripts, string(script))
+	first := len(r.scripts) == 1
+	r.mu.Unlock()
+	if r.started != nil && first {
 		close(r.started)
-		<-r.release
+		select {
+		case <-r.release:
+		case <-ctx.Done():
+			r.mu.Lock()
+			r.cancelled = true
+			r.mu.Unlock()
+			return "", ctx.Err()
+		}
 	}
 	return r.out, r.err
+}
+
+func (r *fakeRunner) wasCancelled() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cancelled
+}
+
+func (r *fakeRunner) ran() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.scripts)
 }

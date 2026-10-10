@@ -42,14 +42,18 @@ server sends only metadata (title, domain, topics, weight, host), never the scri
 
 - `GET /api/tasks/{id}/question` returns the question markdown, and `marked` renders it right away.
 - `POST /api/tasks/{id}/start` reaches `startTask` (`internal/server/api.go`). It takes the setup lock; if a
-  setup is already running, it answers 409. It then calls `tasks.Start` (`internal/tasks/run.go`), which
-  reads `setup.sh` and hands it to the runner with a 3-minute limit.
+  setup is already running, it answers 409. It first calls `tasks.Heal` (`internal/tasks/run.go`), which runs
+  the `reset.sh` of every task that ships one. These put back what a task left unsolved broke outside its
+  namespace, such as `tr-kubelet`'s kubelet, and do nothing on a healthy cluster. It then calls `tasks.Start`,
+  which reads `setup.sh` and hands it to the runner with a 3-minute limit.
 
 The runner (`internal/runner/runner.go`) runs `docker exec -i -e TASK_ID=<id> <task's host> bash -s` and
 writes `lib.sh` followed by `setup.sh` to its stdin. The script runs as root on the node the task names,
 using root's kubeconfig. Helpers such as `fresh_ns` wipe and recreate the task's namespace before the
-script builds the broken state. The request keeps going even if the page goes away (`WithoutCancel`), so a
-setup is never left half done.
+script builds the broken state. **Back** or **Reset** aborts the request, and the runner then kills the
+script's whole process group inside the node (it runs under `setsid`, so its `kubectl` and `sleep` go too).
+That frees the lock, and the next start waits up to 10 seconds for it. A half-built task is harmless,
+because every setup starts from `fresh_ns` and the resets.
 
 The page shows "Preparing the cluster…", then "Ready" on 204, or the script's output if setup failed. You
 then follow the "Connect first" line: `ssh <host>` logs you in with base's key and no password, and you
@@ -81,8 +85,9 @@ the broken state. While it runs, Check is disabled.
 `go test ./...` from touching the cluster. `catalog/selftest_test.go` loads every task and `lib.sh` and
 builds the same `runner.Node` the server uses. For each task, `tasks.Selftest` runs setup, then check,
 which must earn 0 of more than 0 points (nothing to earn for doing nothing). It then runs `solution.sh`
-(`tasks.Solve`) and checks again, which must earn every point. A failure names the task and the checks
-at fault, for example:
+(`tasks.Solve`) and checks again, which must earn every point. The task's `reset.sh` runs before setup and
+again when the subtest ends, so one failing task can't break the node for the next. A failure names the task
+and the checks at fault, for example:
 `wl-scale: earns 0/4 after the solution: "Deployment web wants 4 replicas", …`.
 
 ## 6. Exam mode
@@ -94,7 +99,8 @@ out of range) and takes the script lock, so a running practice setup gets 409. I
 `exam.Session.Begin` (`internal/exam/session.go`). `tasks.Draw` (`internal/tasks/draw.go`) picks the tasks:
 each domain gets its share of the count by the CKA weights, with any shortfall moved to the heaviest domains,
 and the result is shuffled. The exam is saved with every task `preparing` to
-`~/.local/state/cka-sim/exam.json`, and the request answers 202 right away. In the background, every
+`~/.local/state/cka-sim/exam.json`, and the request answers 202 right away. In the background, `tasks.Heal`
+first runs every `reset.sh` (on a restart, not those of tasks this exam already set up). Then every
 `setup.sh` runs at once through `tasks.Start`. Tasks marked `order: last` then run one by one, because an
 etcd snapshot or a broken scheduler or kubelet would spoil the setups beside it. Each task turns `ready` or
 `failed`, and the file is saved after each. When all are done, the lock is released and the clock starts
@@ -117,7 +123,8 @@ no longer has, the server refuses to start and says which file to delete. Any ta
 up again, with the lock held (`resumeExam`). A reload finds the same exam, with the same deadline and flags.
 
 **Ending.** **End exam** asks for confirmation, then sends `POST /api/exam/end`. With the lock held, every
-`check.sh` runs at once through `tasks.Check`. A check that crashes counts as 0 and keeps its error. Each
+`check.sh` runs at once through `tasks.Check`. A check that crashes counts as 0 and keeps its error. Then
+the exam's `reset.sh` scripts put the cluster back, so a kubelet left broken doesn't outlive the exam. Each
 `grader.Result` and the end time are saved. The reply includes the score, worked out on the server by
 `exam.Score`: each task's earned/total times its weight, over the sum of the weights, passing at 66%. The
 results page shows the percentage with PASS or FAIL and one row per task with its points. Opening a row

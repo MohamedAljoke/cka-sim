@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/cluster"
 )
@@ -29,6 +30,25 @@ func TestNodeFailsWithTheScriptOutput(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "broken") {
 		t.Errorf("got error %v, want one with the script's output", err)
+	}
+}
+
+func TestNodeCancelStopsTheScriptInsideTheNode(t *testing.T) {
+	host := requireNode(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	began := time.Now()
+
+	_, err := Node{}.Run(ctx, host, "wl-scale", []byte("sleep 4242 &\nsleep 4243\n"))
+
+	if err == nil || !strings.Contains(err.Error(), "stopped") {
+		t.Errorf("got error %v, want the script stopped", err)
+	}
+	if took := time.Since(began); took > 10*time.Second {
+		t.Errorf("took %v to stop", took)
+	}
+	if out, _ := exec.Command("docker", "exec", host, "pgrep", "-f", "sleep 424[23]").Output(); len(out) > 0 {
+		t.Errorf("still running in the node: pids %s", out)
 	}
 }
 

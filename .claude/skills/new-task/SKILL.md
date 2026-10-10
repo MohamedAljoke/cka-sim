@@ -1,6 +1,6 @@
 ---
 name: new-task
-description: Turn a Kubernetes/CKA concept into a cka-sim practice task in apps/cka-sim/catalog/<id>/ (task.md, setup.sh, check.sh, solution.sh, explain.md), then prove it on the running cluster. Use when the user says "make this a task", "turn X into a task", "add a task for <concept>", or picks a question from docs/CKA-QUESTION-BANK.md.
+description: Turn a Kubernetes/CKA concept into a cka-sim practice task in apps/cka-sim/catalog/<id>/ (task.md, setup.sh, check.sh, solution.sh, explain.md, and reset.sh when setup breaks the cluster), then prove it on the running cluster. Use when the user says "make this a task", "turn X into a task", "add a task for <concept>", or picks a question from docs/CKA-QUESTION-BANK.md.
 ---
 
 # New cka-sim task
@@ -50,7 +50,8 @@ order: last                        # optional, see below
 - **Id prefixes:** `tr-` troubleshooting, `ar-` architecture, `nw-` networking, `wl-` workloads,
   `st-` storage.
 - **`order: last`** only when setup snapshots etcd or breaks the cluster (a control-plane manifest,
-  a kubelet). An exam sets these up one by one after every other task.
+  a kubelet). An exam sets these up one by one after every other task. A task that breaks the cluster
+  also needs a `reset.sh` (below).
 - **No other frontmatter fields.** The parser is strict and the server won't start with unknown
   fields such as v1's `cluster:`.
 - **Exam voice:** state the goal, never the fix. Add constraints like "Do not modify Deployment X"
@@ -75,6 +76,15 @@ order: last                        # optional, see below
   `wl-scale` does with its `if ... else echo "FAIL ..."`.
 - Give eventual-consistency things time: `wait_for 20 <fn>` before checking.
 - Put helper functions at the top, then the `check` lines.
+
+### `reset.sh` (only when setup breaks something outside the namespace)
+
+- Needed when setup breaks a node or control-plane part another task relies on: a kubelet, a
+  static Pod manifest. `tr-kubelet` and `tr-scheduler` have one.
+- It undoes exactly what setup broke, and **does nothing on a healthy cluster** (check first, `exit 0`).
+- After a fix it **waits until healthy** (`wait_for` the node Ready or the container running).
+- The engine runs it before every practice setup, before an exam's setups, after an exam's checks and
+  around each selftest, so an unsolved task never breaks the next one.
 
 ### `solution.sh`
 

@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path"
@@ -39,8 +40,26 @@ func Solve(ctx context.Context, fsys fs.FS, r Runner, t Task) error {
 	return nil
 }
 
+// Heal runs every reset.sh among all, one at a time, so a task left unsolved can't break the
+// next one. A failed reset doesn't stop the others.
+func Heal(ctx context.Context, fsys fs.FS, r Runner, all []Task) error {
+	var errs []error
+	for _, t := range all {
+		if !t.Reset {
+			continue
+		}
+		if _, err := run(ctx, fsys, r, t, ResetScript); err != nil {
+			errs = append(errs, fmt.Errorf("reset %s: %w", t.ID, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // Selftest proves a task is fair: setup leaves nothing to earn, and the solution earns everything.
 func Selftest(ctx context.Context, fsys fs.FS, r Runner, t Task) error {
+	if err := Heal(ctx, fsys, r, []Task{t}); err != nil {
+		return err
+	}
 	if err := Start(ctx, fsys, r, t); err != nil {
 		return err
 	}

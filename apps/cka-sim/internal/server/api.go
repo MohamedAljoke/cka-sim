@@ -1,11 +1,11 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/tasks"
 )
@@ -29,12 +29,17 @@ func (a *api) question(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) startTask(w http.ResponseWriter, r *http.Request) {
 	t, ok := a.findTask(w, r)
-	if !ok || a.duringExam(w) || !a.lock(w) {
+	if !ok || a.duringExam(w) || !a.lock(w, r) {
 		return
 	}
 	defer a.busy.Unlock()
-	// Closing the tab mid-setup would otherwise leave the namespace half built.
-	if err := tasks.Start(context.WithoutCancel(r.Context()), a.Files, a.Runner, t); err != nil {
+	// A cancelled request stops the script; setup is idempotent, so the next start rebuilds it.
+	ctx := r.Context()
+	if err := tasks.Heal(ctx, a.Files, a.Runner, a.Tasks); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := tasks.Start(ctx, a.Files, a.Runner, t); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -43,11 +48,11 @@ func (a *api) startTask(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) checkTask(w http.ResponseWriter, r *http.Request) {
 	t, ok := a.findTask(w, r)
-	if !ok || a.duringExam(w) || !a.lock(w) {
+	if !ok || a.duringExam(w) || !a.lock(w, r) {
 		return
 	}
 	defer a.busy.Unlock()
-	result, err := tasks.Check(context.WithoutCancel(r.Context()), a.Files, a.Runner, t)
+	result, err := tasks.Check(r.Context(), a.Files, a.Runner, t)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -63,11 +68,18 @@ func (a *api) solution(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"explain": t.Explain})
 }
 
+// lockWait covers a script the page just cancelled: it takes a moment to stop and free the lock.
+var lockWait = 10 * time.Second
+
 // lock lets one script run at a time: setup and check would otherwise race on the same namespace.
-func (a *api) lock(w http.ResponseWriter) bool {
-	if !a.busy.TryLock() {
-		http.Error(w, "a script is already running", http.StatusConflict)
-		return false
+func (a *api) lock(w http.ResponseWriter, r *http.Request) bool {
+	deadline := time.Now().Add(lockWait)
+	for !a.busy.TryLock() {
+		if time.Now().After(deadline) || r.Context().Err() != nil {
+			http.Error(w, "a script is already running", http.StatusConflict)
+			return false
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	return true
 }

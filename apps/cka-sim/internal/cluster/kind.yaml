@@ -4,3 +4,13 @@ nodes:
   - role: control-plane
   - role: worker
   - role: worker
+# Last in the file: kindConfig appends the cgroup v1 patch to this list.
+kubeadmConfigPatches:
+  # A node goes NotReady 20s after its kubelet stops reporting (default 50s), so tr-kubelet's setup
+  # waits less. The kubelet reports every 10s, so one missed report is still tolerated.
+  - |
+    kind: ClusterConfiguration
+    controllerManager:
+      extraArgs:
+        - name: node-monitor-grace-period
+          value: "20s"

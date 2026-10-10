@@ -99,6 +99,7 @@ func TestPracticeIsRefusedDuringAnExam(t *testing.T) {
 		{http.MethodPost, "/api/tasks/wl-scale/start"},
 		{http.MethodPost, "/api/tasks/wl-scale/check"},
 		{http.MethodGet, "/api/tasks/wl-scale/solution"},
+		{http.MethodPost, "/api/tasks/wl-scale/tidy"},
 	} {
 		status, body := call(t, srv, route.method, route.path)
 
@@ -136,13 +137,10 @@ func TestEndExamScoresAndUnlocksTheSolution(t *testing.T) {
 
 	status, body := call(t, srv, http.MethodPost, "/api/exam/end")
 
-	if status != http.StatusOK {
+	if status != http.StatusAccepted {
 		t.Fatalf("status %d: %s", status, body)
 	}
-	var state examState
-	if err := json.Unmarshal([]byte(body), &state); err != nil {
-		t.Fatal(err)
-	}
+	state := waitScored(t, srv)
 	if r := state.Exam.Tasks[0].Result; r == nil || r.Earned != 2 || r.Total != 4 {
 		t.Errorf("result %+v, want 2/4", r)
 	}
@@ -167,6 +165,46 @@ func TestDiscardExam(t *testing.T) {
 	}
 }
 
+func TestBeginAFocusedExam(t *testing.T) {
+	srv := newAPI(t, &fakeRunner{})
+
+	for _, payload := range []string{
+		`{"count": 1, "minutes": 30, "domains": ["storage"]}`,
+		`{"count": 1, "minutes": 30, "topics": ["rbac"]}`,
+	} {
+		if status, body := request(t, srv, http.MethodPost, "/api/exam", payload); status != http.StatusBadRequest {
+			t.Errorf("%s got %d %q, want 400", payload, status, body)
+		}
+	}
+	payload := `{"count": 1, "minutes": 30, "domains": ["workloads"], "topics": ["deployments"]}`
+	if status, body := request(t, srv, http.MethodPost, "/api/exam", payload); status != http.StatusAccepted {
+		t.Fatalf("got %d %q", status, body)
+	}
+	if state := waitPrepared(t, srv); state.Exam.Tasks[0].ID != "wl-scale" {
+		t.Errorf("tasks = %+v, want wl-scale", state.Exam.Tasks)
+	}
+}
+
+func TestScoreWaitsForEveryCheck(t *testing.T) {
+	r := &fakeRunner{out: "PASS 4 scaled\n"}
+	srv := newAPI(t, r)
+	beginExam(t, srv)
+	r.pause()
+
+	status, body := call(t, srv, http.MethodPost, "/api/exam/end")
+
+	if status != http.StatusAccepted {
+		t.Fatalf("status %d: %s", status, body)
+	}
+	if state := getState(t, srv); state.Score != nil || !state.Exam.Scoring() {
+		t.Errorf("got %+v, want scoring and no score yet", state)
+	}
+	r.resume()
+	if state := waitScored(t, srv); state.Score == nil || state.Score.Percent != 100 {
+		t.Errorf("score %+v, want 100%%", state.Score)
+	}
+}
+
 func beginExam(t *testing.T, srv *httptest.Server) {
 	if status, body := request(t, srv, http.MethodPost, "/api/exam", `{"count": 1, "minutes": 30}`); status != http.StatusAccepted {
 		t.Fatalf("begin got %d %q", status, body)
@@ -183,6 +221,18 @@ func waitPrepared(t *testing.T, srv *httptest.Server) examState {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("the exam never finished setting up")
+	return examState{}
+}
+
+func waitScored(t *testing.T, srv *httptest.Server) examState {
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if state := getState(t, srv); state.Score != nil {
+			return state
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the exam was never scored")
 	return examState{}
 }
 

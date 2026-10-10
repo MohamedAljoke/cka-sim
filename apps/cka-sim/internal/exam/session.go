@@ -16,8 +16,9 @@ import (
 )
 
 var (
-	ErrNoExam = errors.New("no exam")
-	ErrExists = errors.New("an exam is already in progress")
+	ErrNoExam  = errors.New("no exam")
+	ErrExists  = errors.New("an exam is already in progress")
+	ErrScoring = errors.New("the last exam is still being scored")
 )
 
 type Config struct {
@@ -75,18 +76,21 @@ func (s *Session) Weights() map[string]int {
 	return w
 }
 
-// Begin draws and saves a new exam, then sets its tasks up (see setUp). Once all setups are
-// done it calls release and starts the clock in one step, so whoever sees the clock running
-// also sees what release freed.
-func (s *Session) Begin(n, minutes int, release func()) error {
+// Begin draws n of pool and saves a new exam in place of a scored one, then sets its tasks up
+// (see setUp) and calls release once every setup is done.
+func (s *Session) Begin(pool []tasks.Task, n, minutes int, release func()) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.exam != nil {
+	switch {
+	case s.exam == nil:
+	case !s.exam.Over():
 		return ErrExists
+	case s.exam.Scoring():
+		return ErrScoring
 	}
-	drawn := tasks.Draw(s.cfg.Catalog, n, s.cfg.Rand)
+	drawn := tasks.Draw(pool, n, s.cfg.Rand)
 	if len(drawn) == 0 {
-		return errors.New("the catalog has no tasks")
+		return errors.New("no task matches")
 	}
 	e := &Exam{Minutes: minutes}
 	for _, t := range drawn {
@@ -100,15 +104,22 @@ func (s *Session) Begin(n, minutes int, release func()) error {
 	return nil
 }
 
-// Resume finishes what a restart interrupted: setups that never ended, or a clock never started.
-// It reports whether it had work to do; only then is release called, as in Begin.
+// Resume finishes what a restart interrupted: setups that never ended, a clock never started, or
+// checks that never came back. It reports whether it had work to do; only then is release called,
+// as in Begin and End.
 func (s *Session) Resume(release func()) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.exam == nil || s.exam.Prepared() {
+	switch {
+	case s.exam == nil:
+		return false
+	case !s.exam.Prepared() || s.exam.SettingUp():
+		s.setUp(s.exam, release)
+	case s.exam.Scoring():
+		s.grade(s.exam, release)
+	default:
 		return false
 	}
-	s.setUp(s.exam, release)
 	return true
 }
 
@@ -129,57 +140,26 @@ func (s *Session) Flag(id string, on bool) error {
 	return s.cfg.Store.Save(*s.exam)
 }
 
-// End runs every check.sh in parallel and records the results; the exam is then over.
-func (s *Session) End(ctx context.Context) (Exam, error) {
-	s.mu.Lock()
-	e := s.exam
-	var err error
-	switch {
-	case e == nil:
-		err = ErrNoExam
-	case e.Over():
-		err = errors.New("the exam has already ended")
-	case !e.Prepared():
-		err = errors.New("the exam is still being set up")
-	}
-	var ids []string
-	if err == nil {
-		for _, t := range e.Tasks {
-			ids = append(ids, t.ID)
-		}
-	}
-	s.mu.Unlock()
-	if err != nil {
-		return Exam{}, err
-	}
-
-	results := make([]grader.Result, len(ids))
-	checkErrs := make([]error, len(ids))
-	var wg sync.WaitGroup
-	for i, id := range ids {
-		wg.Go(func() {
-			results[i], checkErrs[i] = tasks.Check(ctx, s.cfg.Files, s.cfg.Runner, s.task(id))
-		})
-	}
-	wg.Wait()
-	s.heal(ctx, func(t tasks.Task) bool { return slices.Contains(ids, t.ID) })
-
+// End stops the exam and returns at once; grading runs in the background (see grade), and
+// release is called when it's done.
+func (s *Session) End(release func()) (Exam, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.exam != e {
+	e := s.exam
+	switch {
+	case e == nil:
 		return Exam{}, ErrNoExam
-	}
-	for i := range e.Tasks {
-		if checkErrs[i] != nil {
-			results[i] = grader.Result{Checks: []grader.Check{}}
-			e.Tasks[i].CheckError = checkErrs[i].Error()
-		}
-		e.Tasks[i].Result = &results[i]
+	case e.Over():
+		return Exam{}, errors.New("the exam has already ended")
+	case !e.Prepared() || e.SettingUp():
+		return Exam{}, errors.New("the exam is still being set up")
 	}
 	e.Ended = s.cfg.Now()
 	if err := s.cfg.Store.Save(*e); err != nil {
+		e.Ended = time.Time{}
 		return Exam{}, err
 	}
+	s.grade(e, release)
 	return clone(*e), nil
 }
 
@@ -194,6 +174,7 @@ func (s *Session) Discard() error {
 // It first heals what earlier tasks left broken, except tasks this exam has already set up.
 // Tasks marked last run one by one after the rest: an etcd snapshot taken in setup would lose
 // objects other setups create later, and a broken scheduler or kubelet can stall setups beside it.
+// The clock starts before them, so the user reads while they run, and their time is given back.
 func (s *Session) setUp(e *Exam, release func()) {
 	var done, together, last []string
 	for _, t := range e.Tasks {
@@ -209,7 +190,8 @@ func (s *Session) setUp(e *Exam, release func()) {
 		}
 	}
 	go func() {
-		if err := s.ready(); err != nil {
+		err := s.ready()
+		if err != nil {
 			s.fail(e, append(together, last...), err)
 		} else {
 			s.heal(context.Background(), func(t tasks.Task) bool { return !slices.Contains(done, t.ID) })
@@ -218,6 +200,15 @@ func (s *Session) setUp(e *Exam, release func()) {
 				wg.Go(func() { s.start(e, id) })
 			}
 			wg.Wait()
+		}
+		s.update(e, func() {
+			if !e.Prepared() {
+				e.Started = s.cfg.Now()
+				e.Deadline = e.Started.Add(time.Duration(e.Minutes) * time.Minute)
+			}
+		})
+		began := s.cfg.Now()
+		if err == nil {
 			for _, id := range last {
 				s.start(e, id)
 			}
@@ -225,16 +216,59 @@ func (s *Session) setUp(e *Exam, release func()) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		release()
-		if s.exam == e {
-			e.Started = s.cfg.Now()
-			e.Deadline = e.Started.Add(time.Duration(e.Minutes) * time.Minute)
+		if s.exam == e && len(last) > 0 && err == nil {
+			e.Deadline = e.Deadline.Add(s.cfg.Now().Sub(began))
 			s.saveInBackground(e)
 		}
 	}()
 }
 
+// grade runs with s.mu held, like setUp. Every ungraded task's check.sh runs at once and each
+// result is saved as it lands; a check that crashes scores 0 and keeps its error. Then the exam's
+// tasks are tidied, so a kubelet left broken doesn't outlive the exam and the next setups find
+// no namespace to delete.
+func (s *Session) grade(e *Exam, release func()) {
+	var ids []string
+	for _, t := range e.Tasks {
+		if t.Result == nil {
+			ids = append(ids, t.ID)
+		}
+	}
+	go func() {
+		var wg sync.WaitGroup
+		for _, id := range ids {
+			wg.Go(func() { s.check(e, id) })
+		}
+		wg.Wait()
+		s.tidy(e)
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		release()
+		if s.exam == e {
+			e.Scored = s.cfg.Now()
+			s.saveInBackground(e)
+		}
+	}()
+}
+
+func (s *Session) check(e *Exam, id string) {
+	began := time.Now()
+	result, err := tasks.Check(context.Background(), s.cfg.Files, s.cfg.Runner, s.task(id))
+	log.Printf("exam check %s: %s", id, since(began))
+	s.update(e, func() {
+		i := slices.IndexFunc(e.Tasks, func(t Task) bool { return t.ID == id })
+		if err != nil {
+			result = grader.Result{Checks: []grader.Check{}}
+			e.Tasks[i].CheckError = err.Error()
+		}
+		e.Tasks[i].Result = &result
+	})
+}
+
 func (s *Session) start(e *Exam, id string) {
+	began := time.Now()
 	err := tasks.Start(context.Background(), s.cfg.Files, s.cfg.Runner, s.task(id))
+	log.Printf("exam setup %s: %s", id, since(began))
 	s.update(e, func() {
 		i := slices.IndexFunc(e.Tasks, func(t Task) bool { return t.ID == id })
 		e.Tasks[i].Setup = Ready
@@ -287,15 +321,32 @@ func (s *Session) heal(ctx context.Context, keep func(tasks.Task) bool) {
 			some = append(some, t)
 		}
 	}
+	began := time.Now()
 	if err := tasks.Heal(ctx, s.cfg.Files, s.cfg.Runner, some); err != nil {
 		log.Printf("heal the cluster: %v", err)
 	}
+	log.Printf("exam heal: %s", since(began))
+}
+
+// tidy logs a failure, like heal: the next setup's heal and fresh_ns are the safety net.
+func (s *Session) tidy(e *Exam) {
+	var some []tasks.Task
+	for _, t := range e.Tasks {
+		some = append(some, s.task(t.ID))
+	}
+	began := time.Now()
+	if err := tasks.Tidy(context.Background(), s.cfg.Files, s.cfg.Runner, some); err != nil {
+		log.Printf("tidy the cluster: %v", err)
+	}
+	log.Printf("exam tidy: %s", since(began))
 }
 
 func (s *Session) task(id string) tasks.Task {
 	t, _ := tasks.Find(s.cfg.Catalog, id)
 	return t
 }
+
+func since(t time.Time) time.Duration { return time.Since(t).Round(100 * time.Millisecond) }
 
 func clone(e Exam) Exam {
 	e.Tasks = slices.Clone(e.Tasks)

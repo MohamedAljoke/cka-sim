@@ -38,6 +38,7 @@ func New(lab *sandbox.Lab, practice Practice) http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/start", a.startTask)
 	mux.HandleFunc("POST /api/tasks/{id}/check", a.checkTask)
 	mux.HandleFunc("GET /api/tasks/{id}/solution", a.solution)
+	mux.HandleFunc("POST /api/tasks/{id}/tidy", a.tidyTask)
 	if practice.Exam != nil {
 		a.resumeExam()
 		mux.HandleFunc("GET /api/exam", a.getExam)

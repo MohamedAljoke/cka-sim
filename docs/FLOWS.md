@@ -26,43 +26,57 @@ starts (flow 2). Then it serves.
 Ctrl-C reaches the server directly, because it runs as a binary and not through `go run`. The Makefile's
 trap waits for it, and on the way out the server ends the lab, which closes every page shell.
 
-## 2. Opening the page: the lab and the terminal
+## 2. Opening the page: home, the lab and the terminal
 
-**The lab.** A lab is the box your cluster lives in. Locally that's the kind cluster `make up` made; the
-hosted site will give each user a VM instead, behind the same `sandbox.Provider` interface. `main.ts` calls
-`showLab` (`src/lab.ts`), which asks `GET /api/lab`. With no lab, the topbar shows "No lab · Local Docker"
-and **Start lab**, and the left pane says to start one. **Start lab** sends `POST /api/lab`, which answers
-202 with state `starting`. In the background, `Lab.Start` (`internal/sandbox/lab.go`) calls the provider's
-`Create`. `Local.Create` (`internal/sandbox/local.go`) checks that the cluster and base are up
-(`cluster.RequireUp`), closes any shells left over from a crashed server (`EndAll`), and returns a box: the
-runner and the `DockerOpener` for this cluster. The page asks again every second and shows "Starting lab…
-0:03". When the state turns `ready`, the topbar shows "Lab ready in 0.4s · Local Docker" and **End lab**,
-and the server logs the same time. If `Create` fails (say the cluster is down), the topbar shows the error
-and **Try again**.
+**Home.** `main.ts` first asks `GET /api/exam` (`showExam`, `src/exam.ts`). A running or preparing exam
+opens straight away (flow 6). With no exam, or a finished one, it shows **Home** (`src/home.ts`), full width
+with no terminal. Home needs no lab, because the catalog and the exam settings come from the server alone.
+`GET /api/tasks` returns every task's metadata (title, domain and its `domainTitle`, topics, weight, host),
+never the scripts. Home has, top to bottom:
+- **Filters.** Two multi-selects, **Domains** and **Topics** (`src/multiselect.ts`), with everything
+  chosen at first; a long list gets a search box. They narrow both the exam and the practice list, and
+  "3 of 8 tasks" says how much is left.
+- **Mock exam.** The number of tasks and the minutes; the minutes default to 7.5 per task, so 16 tasks get
+  the CKA's 120. With nothing narrowed it draws from the whole catalog in the CKA domain mix; otherwise
+  from the filtered tasks, so choosing only the `rbac` topic gives an RBAC exam.
+- **Practise a task.** The filtered catalog.
+- **Last exam.** "Last exam: 62% · FAIL" with **View results**, above the rest, when there is a finished exam.
 
-The `Lab` is itself the runner and the opener the rest of the server uses: every script and shell goes
-through it to the current box, and without a ready lab they fail with "no lab is running". **End lab**
-sends `DELETE /api/lab` (409 while an exam runs), which takes the script lock and calls the provider's
-`Destroy`. Locally that closes the shells and keeps the cluster. The terminal closes and the page is back to
-**Start lab**.
+**The lab.** A lab is the box your cluster lives in. Locally that's the kind cluster `make up` made; a
+hosted site would give each user a VM instead, behind the same `sandbox.Provider` interface. There's no
+Start button. Practising a task or starting an exam starts it on the server. `Lab.Start`
+(`internal/sandbox/lab.go`) calls the provider's `Create` in the background. `Local.Create`
+(`internal/sandbox/local.go`) checks that the cluster and base are up (`cluster.RequireUp`), closes any
+shells left over from a crashed server (`EndAll`), and returns a box: the runner and the `DockerOpener` for
+this cluster.
 
-**The terminal.** Once the lab is ready, `main.ts` opens a websocket to `/ws/terminal`. The server's `DockerOpener` (`internal/terminal/docker.go`)
-answers with the equivalent of `docker exec -it -u candidate -w /home/candidate cka-sim-base bash` and pipes
-bytes both ways between xterm and that shell. So you land on `candidate@base` with no kubectl, as in the
-exam. When the tab closes, the shell is hung up as the same user. Root can't do it, because reading another
-user's process environment needs ptrace, which Docker withholds.
+The topbar (`src/lab.ts`) shows nothing while there is no lab. When a view tells it the server may have
+started one (`app.labChanged`), it asks `GET /api/lab` every second while the state is `starting` ("Starting
+lab on Local Docker… 0.2s"). Then it shows "Lab ready in 0.3s · Local Docker" with **End lab**, or the error.
+The `Lab` is itself the runner and the opener the rest of the server uses, so every script and shell goes
+through it to the current box. **End lab** sends `DELETE /api/lab` (409 while an exam runs), which takes the
+script lock and calls `Destroy`. Locally that closes the shells and keeps the cluster.
 
-At the same time, `showExam` shows a running exam or, with none, `showTasks` (`src/tasks.ts`) calls `GET /api/tasks` and draws the numbered list. The
-server sends only metadata (title, domain, topics, weight, host), never the scripts.
+**The terminal.** Practice and exam views are split: the question on the left and the terminal on the right
+(`app.split`, `src/main.ts`). Home and results are full width (`.exam.single` hides the terminal pane). The
+first time a split view finds the lab ready, `main.ts` opens a websocket to `/ws/terminal`. The server's
+`DockerOpener` (`internal/terminal/docker.go`) answers with the equivalent of
+`docker exec -it -u candidate -w /home/candidate cka-sim-base bash` and pipes bytes both ways between xterm
+and that shell. So you land on `candidate@base` with no kubectl, as in the exam. The terminal stays open
+while you move between views, and closes when the lab ends. When the tab closes, the shell is hung up as the
+same user; root can't do it, because reading another user's process environment needs ptrace, which
+Docker withholds.
 
 ## 3. Clicking a task: question and setup
 
-`openTask` sends two requests in parallel:
+Clicking a task on Home opens **practice** (`showPractice`, `src/practice.ts`), split screen, and sends two
+requests in parallel:
 
 - `GET /api/tasks/{id}/question` returns the question markdown, and `marked` renders it right away.
-- `POST /api/tasks/{id}/start` reaches `startTask` (`internal/server/api.go`). Without a ready lab it answers
-  409 "start a lab first". It takes the setup lock; if a
-  setup is already running, it answers 409. It first calls `tasks.Heal` (`internal/tasks/run.go`), which runs
+- `POST /api/tasks/{id}/start` reaches `startTask` (`internal/server/api.go`). It first waits for the lab
+  (`ensureLab` → `Lab.Ensure`), starting one if there is none; the page meanwhile tells the topbar to show
+  it, and the terminal opens once it's ready. A lab that fails answers 503. It then takes the setup lock; if
+  a setup is already running, it answers 409. It first calls `tasks.Heal` (`internal/tasks/run.go`), which runs
   the `reset.sh` of every task that ships one. These put back what a task left unsolved broke outside its
   namespace, such as `tr-kubelet`'s kubelet, and do nothing on a healthy cluster. It then calls `tasks.Start`,
   which reads `setup.sh` and hands it to the runner with a 3-minute limit.
@@ -70,14 +84,22 @@ server sends only metadata (title, domain, topics, weight, host), never the scri
 The lab passes the script to its box's runner. The local one (`internal/runner/runner.go`) runs `docker exec -i -e TASK_ID=<id> <task's host> bash -s` and
 writes `lib.sh` followed by `setup.sh` to its stdin. The script runs as root on the node the task names,
 using root's kubeconfig. Helpers such as `fresh_ns` wipe and recreate the task's namespace before the
-script builds the broken state. **Back** or **Reset** aborts the request, and the runner then kills the
+script builds the broken state. **Home** or **Reset** aborts the request, and the runner then kills the
 script's whole process group inside the node (it runs under `setsid`, so its `kubectl` and `sleep` go too).
-That frees the lock, and the next start waits up to 10 seconds for it. A half-built task is harmless,
-because every setup starts from `fresh_ns` and the resets.
+That frees the lock, and the next start waits up to 60 seconds for it. A half-built task is harmless,
+because every setup starts from `fresh_ns` and the resets. `fresh_ns` also labels the namespace
+`cka-sim/task=<id>`, so the task can be tidied later.
 
-The page shows "Preparing the cluster…", then "Ready" on 204, or the script's output if setup failed. You
+The page shows "Preparing the cluster (the lab starts first if there is none)…", then "Ready" on 204, or the script's output if setup failed. You
 then follow the "Connect first" line: `ssh <host>` logs you in with base's key and no password, and you
 solve the task with `k`.
+
+**Leaving.** **Home**, another task, or closing the tab sends `POST /api/tasks/{id}/tidy` (`keepalive`, so
+it survives the tab closing). `tidyTask` answers 204 when there is no lab, 409 during an exam, and
+otherwise 202 at once. In the background, under the script lock, `tasks.Tidy` runs the task's `reset.sh`
+and `tasks.TidyScript`, which deletes the namespaces labelled for that task without waiting for them to go.
+The next setup's `fresh_ns` then finds nothing to delete. If the tidy never ran (a crash), the heal and
+`fresh_ns` before the next setup still clean up, only slower.
 
 ## 4. Check, Solution, Reset
 
@@ -112,45 +134,59 @@ and the checks at fault, for example:
 
 ## 6. Exam mode
 
-**Starting.** Above the practice list, **Start exam** opens a small form (`apps/web/src/tasks.ts`): how many
-tasks (1 to the catalog size, default 16 or fewer) and the minutes (default 120). Submitting sends
-`POST /api/exam {count, minutes}`. `beginExam` (`internal/server/exam.go`) checks the numbers (400 if they are
-out of range) and takes the script lock, so a running practice setup gets 409. It starts the lab if there
-is none, which is how the hosted site will hand a user a VM, and then calls
-`exam.Session.Begin` (`internal/exam/session.go`). `tasks.Draw` (`internal/tasks/draw.go`) picks the tasks:
+**Starting.** On Home, the **Mock exam** card (`apps/web/src/home.ts`) sends
+`POST /api/exam {count, minutes, domains, topics}`. A multi-select with everything chosen sends an empty
+list, which means any; otherwise it sends what you chose. `beginExam` (`internal/server/exam.go`) checks the numbers (400 if they are out of range) and
+narrows the catalog with `tasks.Filter` (`internal/tasks/draw.go`): a task must be in one of the domains
+and have one of the topics, where an empty list means any. No match gives 400. It takes the script lock,
+so a running practice setup gets 409, and starts the lab if there is none. Then it calls
+`exam.Session.Begin` (`internal/exam/session.go`) with that pool. A finished, scored exam is replaced; one
+still being scored gives 409 "the last exam is still being scored". `tasks.Draw` picks the tasks:
 each domain gets its share of the count by the CKA weights, with any shortfall moved to the heaviest domains,
 and the result is shuffled. The exam is saved with every task `preparing` to
 `~/.local/state/cka-sim/exam.json`, and the request answers 202 right away. In the background, setup first waits for the lab (`Config.Ready`,
 which is `Lab.Ensure`); if the lab fails, every task is marked `failed` with its error. Then `tasks.Heal`
 first runs every `reset.sh` (on a restart, not those of tasks this exam already set up). Then every
-`setup.sh` runs at once through `tasks.Start`. Tasks marked `order: last` then run one by one, because an
-etcd snapshot or a broken scheduler or kubelet would spoil the setups beside it. Each task turns `ready` or
-`failed`, and the file is saved after each. When all are done, the lock is released and the clock starts
-(`started`, and `deadline` = started + minutes), so setup time is not exam time.
+`setup.sh` runs at once through `tasks.Start`. When those are done, the clock starts (`started`, and
+`deadline` = started + minutes). Tasks marked `order: last` then run one by one in the background, because
+an etcd snapshot or a broken scheduler or kubelet would spoil the setups beside it; you read and work
+meanwhile. When the last one is done, the lock is released and `deadline` moves out by the time they took,
+so setup time is never exam time. Each task turns `ready` or `failed`, and the file is saved after each.
+The server log shows how long each setup, the heal, each check and the tidy took.
 
 **Taking it.** The page loads through `showExam` (`apps/web/src/exam.ts`), which asks `GET /api/exam`
-first. A 404 means no exam, so it shows the practice list. While the exam is preparing, the page shows
-"N of M tasks set up" and asks again every 2 seconds. Then you see:
+first. A 404 means no exam, so it shows Home. The exam is split screen, with the terminal on the right. While the exam is preparing, the page lists
+each task as "setting up…", "ready" or "failed" and asks `GET /api/exam` again every 2 seconds (the catalog
+is loaded once). Then you see:
 - A countdown. It is timed against the `now` the server sends, so a wrong browser clock doesn't matter. It
   turns red under 10 minutes, and after 0:00 it shows "Time's up +…", but nothing ends on its own.
-- Question pills. A flagged question shows ⚑, and a failed setup shows in red with its error on the question.
+- Question pills numbered 01, 02, 03. A flagged question shows ⚑, and a failed setup shows in red with its error on the question.
+  A task still setting up has a dashed "05 …" pill and shows "still being set up" instead of its question.
+  While any is, the page keeps polling and picks up each task as it turns ready, and the moved deadline.
 - **Flag for later**, which sends `PUT` or `DELETE /api/exam/flags/{id}`.
-- **End exam**.
+- **End exam**, disabled until every task is set up (`Session.End` refuses too).
 
 You work in the same terminal (`ssh <host>`, then `k …`). While the exam runs, practice start, check and
 solution answer 409 "not during an exam". Questions stay readable.
 
 **Restart.** `cmd/server/main.go` opens the session from `exam.json`. If the file names a task the catalog
 no longer has, the server refuses to start and says which file to delete. Any task still `preparing` is set
-up again, with the lock held (`resumeExam`), and that setup starts the lab itself. A reload finds the same exam, with the same deadline and flags.
+up again, with the lock held (`resumeExam`), and that setup starts the lab itself; a clock that already
+started keeps its start. An exam that ended but
+wasn't fully scored has its missing checks run again the same way. A reload finds the same exam, with the
+same deadline and flags.
 
-**Ending.** **End exam** asks for confirmation, then sends `POST /api/exam/end`. With the lock held, every
-`check.sh` runs at once through `tasks.Check`. A check that crashes counts as 0 and keeps its error. Then
-the exam's `reset.sh` scripts put the cluster back, so a kubelet left broken doesn't outlive the exam. Each
-`grader.Result` and the end time are saved. The reply includes the score, worked out on the server by
-`exam.Score`: each task's earned/total times its weight, over the sum of the weights, passing at 66%. The
-results page shows the percentage with PASS or FAIL and one row per task with its points. Opening a row
-shows the ✓/✗ checks and the solution, which is allowed now that the exam is over.
+**Ending.** **End exam** asks for confirmation, then sends `POST /api/exam/end`. `endExam` takes the script
+lock and calls `Session.End`, which saves `ended` and answers 202 at once; you are never stuck on
+"Scoring…". In the background, `grade` runs every `check.sh` at once through `tasks.Check`, saving each
+task's `grader.Result` as it lands. A check that crashes counts as 0 and keeps its error. Then `tasks.Tidy`
+runs the exam's `reset.sh` scripts, so a kubelet left broken doesn't outlive the exam, and deletes the
+exam's task namespaces, so the next exam's setups find nothing to delete. Last, it saves
+`scored` and frees the lock. The score is worked out on the server by `exam.Score`, sent only once the exam
+is scored: each task's earned/total times its weight, over the sum of the weights, passing at 66%.
 
-**Back to practice.** This sends `DELETE /api/exam`, which removes `exam.json`, and the practice list
-comes back.
+**Results.** The page switches to full width and asks `GET /api/exam` every 2 seconds until `scored`. Each
+row reads "01 Scale a Deployment" with "checking…" until its check is back, then `2 / 4`. A row with
+points missing starts open and red: its ✓/✗ checks, the solution, and **Try again**, which opens that task
+in practice once scoring is done. The percentage with PASS or FAIL appears when every row is in. **Home**
+keeps the results; Home shows them as "Last exam" until the next exam replaces them.

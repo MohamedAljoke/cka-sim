@@ -2,6 +2,7 @@ package exam
 
 import (
 	"math"
+	"slices"
 	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/grader"
@@ -33,11 +34,20 @@ type Exam struct {
 	Started  time.Time `json:"started,omitzero"`
 	Deadline time.Time `json:"deadline,omitzero"`
 	Ended    time.Time `json:"ended,omitzero"`
+	// Scored is when the last check of an ended exam came back.
+	Scored time.Time `json:"scored,omitzero"`
 }
 
 func (e Exam) Prepared() bool { return !e.Started.IsZero() }
 
+// SettingUp is true until every task's setup is done; the clock can start before that.
+func (e Exam) SettingUp() bool {
+	return slices.ContainsFunc(e.Tasks, func(t Task) bool { return t.Setup == Preparing })
+}
+
 func (e Exam) Over() bool { return !e.Ended.IsZero() }
+
+func (e Exam) Scoring() bool { return e.Over() && e.Scored.IsZero() }
 
 // Score weighs each task's share of its own points by the task's weight, as the CKA does.
 func Score(e Exam, weights map[string]int) (percent int, passed bool) {

@@ -233,6 +233,24 @@ func TestHealKeepsGoingAfterAFailure(t *testing.T) {
 	}
 }
 
+func TestTidyResetsThenDeletesTheNamespaces(t *testing.T) {
+	r := &fakeRunner{}
+
+	err := Tidy(context.Background(), healFS(), r, healTasks)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	tidy := strings.TrimSpace(TidyScript)
+	want := []call{
+		{"node-1", "tr-kubelet", "reset.sh"}, {"node-1", "tr-scheduler", "reset.sh"},
+		{"node-1", "tr-kubelet", tidy}, {"node-1", "wl-scale", tidy}, {"node-1", "tr-scheduler", tidy},
+	}
+	if !slices.Equal(r.calls, want) {
+		t.Errorf("ran %+v, want %+v", r.calls, want)
+	}
+}
+
 func TestSelftestPassesAFairTask(t *testing.T) {
 	fsys := fstest.MapFS{}
 	addTask(fsys, "wl-scale")

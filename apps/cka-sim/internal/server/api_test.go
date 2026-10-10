@@ -30,7 +30,8 @@ func TestListsTasksWithoutAnswers(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("status %d: %s", status, body)
 	}
-	if !strings.Contains(body, `"id":"wl-scale"`) || !strings.Contains(body, `"title":"Scale a Deployment"`) {
+	if !strings.Contains(body, `"id":"wl-scale"`) || !strings.Contains(body, `"title":"Scale a Deployment"`) ||
+		!strings.Contains(body, `"domainTitle":"Workloads and Scheduling"`) {
 		t.Errorf("body misses the task: %s", body)
 	}
 	if strings.Contains(body, "Scale it to 4") || strings.Contains(body, "kubectl scale") {
@@ -80,6 +81,36 @@ func TestStartRunsSetup(t *testing.T) {
 	}
 	if ran, want := r.ran(), []string{"heal node-1\n", "fresh_ns wl-scale\n"}; !slices.Equal(ran, want) {
 		t.Errorf("ran %q, want reset.sh then setup.sh", ran)
+	}
+}
+
+func TestLeavingPracticeTidiesTheTask(t *testing.T) {
+	r := &fakeRunner{}
+	srv := newAPI(t, r)
+	r.pause()
+
+	status, body := call(t, srv, http.MethodPost, "/api/tasks/wl-scale/tidy")
+
+	if status != http.StatusAccepted {
+		t.Fatalf("status %d: %s", status, body)
+	}
+	r.resume()
+	if status, body := call(t, srv, http.MethodPost, "/api/tasks/wl-scale/start"); status != http.StatusNoContent {
+		t.Fatalf("the next start got %d %q, want it to wait for the tidy", status, body)
+	}
+	if ran := r.ran(); len(ran) < 2 || ran[0] != "heal node-1\n" || ran[1] != tasks.TidyScript {
+		t.Errorf("ran %q, want reset.sh then the tidy first", ran)
+	}
+}
+
+func TestTidyWithoutALabDoesNothing(t *testing.T) {
+	r := &fakeRunner{}
+	srv, _ := newAPIWithoutLab(t, r)
+
+	status, _ := call(t, srv, http.MethodPost, "/api/tasks/wl-scale/tidy")
+
+	if status != http.StatusNoContent || len(r.ran()) != 0 {
+		t.Errorf("got %d and ran %q, want 204 and nothing run", status, r.ran())
 	}
 }
 
@@ -260,7 +291,7 @@ func newAPIWithoutLab(t *testing.T, r *fakeRunner) (*httptest.Server, *sandbox.L
 	lab := sandbox.NewLab(fakeProvider{runner: r, shells: newFakeOpener()}, time.Now)
 	lockWait = 50 * time.Millisecond
 	files := fstest.MapFS{
-		"wl-scale/task.md":     {Data: []byte("---\nid: wl-scale\ntitle: Scale a Deployment\nhost: node-1\ndomain: workloads\nweight: 4\n---\nScale it to 4.\n")},
+		"wl-scale/task.md":     {Data: []byte("---\nid: wl-scale\ntitle: Scale a Deployment\nhost: node-1\ndomain: workloads\ntopics: [deployments]\nweight: 4\n---\nScale it to 4.\n")},
 		"wl-scale/setup.sh":    {Data: []byte("fresh_ns wl-scale\n")},
 		"wl-scale/check.sh":    {Data: []byte("true\n")},
 		"wl-scale/solution.sh": {Data: []byte("kubectl scale\n")},
@@ -317,12 +348,13 @@ func request(t *testing.T, srv *httptest.Server, method, path, payload string) (
 }
 
 // fakeRunner records every script body it runs. With started set, the first run signals started
-// and waits for release or a cancel.
+// and waits for release or a cancel. While paused, every run waits for resume.
 type fakeRunner struct {
 	out              string
 	err              error
 	started, release chan struct{}
 	mu               sync.Mutex
+	gate             chan struct{}
 	scripts          []string
 	cancelled        bool
 }
@@ -331,7 +363,11 @@ func (r *fakeRunner) Run(ctx context.Context, _, _ string, script []byte) (strin
 	r.mu.Lock()
 	r.scripts = append(r.scripts, string(script))
 	first := len(r.scripts) == 1
+	gate := r.gate
 	r.mu.Unlock()
+	if gate != nil {
+		<-gate
+	}
 	if r.started != nil && first {
 		close(r.started)
 		select {
@@ -345,6 +381,14 @@ func (r *fakeRunner) Run(ctx context.Context, _, _ string, script []byte) (strin
 	}
 	return r.out, r.err
 }
+
+func (r *fakeRunner) pause() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.gate = make(chan struct{})
+}
+
+func (r *fakeRunner) resume() { close(r.gate) }
 
 func (r *fakeRunner) wasCancelled() bool {
 	r.mu.Lock()

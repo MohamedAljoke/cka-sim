@@ -55,6 +55,23 @@ func Heal(ctx context.Context, fsys fs.FS, r Runner, all []Task) error {
 	return errors.Join(errs...)
 }
 
+// TidyScript deletes the namespaces a task's setup made (fresh_ns labels them) without waiting,
+// so the next setup's fresh_ns finds nothing left to delete.
+const TidyScript = `kubectl delete namespace -l cka-sim/task="$TASK_ID" --wait=false >/dev/null` + "\n"
+
+// Tidy cleans up after tasks are done with: it heals what they broke, then deletes their namespaces.
+func Tidy(ctx context.Context, fsys fs.FS, r Runner, ts []Task) error {
+	errs := []error{Heal(ctx, fsys, r, ts)}
+	for _, t := range ts {
+		ctx, cancel := context.WithTimeout(ctx, scriptTimeout)
+		if _, err := r.Run(ctx, t.Host, t.ID, []byte(TidyScript)); err != nil {
+			errs = append(errs, fmt.Errorf("tidy %s: %w", t.ID, err))
+		}
+		cancel()
+	}
+	return errors.Join(errs...)
+}
+
 // Selftest proves a task is fair: setup leaves nothing to earn, and the solution earns everything.
 func Selftest(ctx context.Context, fsys fs.FS, r Runner, t Task) error {
 	if err := Heal(ctx, fsys, r, []Task{t}); err != nil {

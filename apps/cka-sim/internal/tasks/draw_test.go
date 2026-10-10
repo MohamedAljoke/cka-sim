@@ -71,6 +71,32 @@ func TestDrawIsRepeatableAndHasNoDuplicates(t *testing.T) {
 	}
 }
 
+func TestFilterByDomainAndTopic(t *testing.T) {
+	all := []Task{
+		{ID: "rbac", Domain: Architecture, Topics: []string{"rbac", "serviceaccounts"}},
+		{ID: "etcd", Domain: Architecture, Topics: []string{"etcd"}},
+		{ID: "kubelet", Domain: Troubleshooting, Topics: []string{"kubelet"}},
+	}
+	for _, c := range []struct {
+		name    string
+		domains []Domain
+		topics  []string
+		want    []string
+	}{
+		{"no filter", nil, nil, []string{"rbac", "etcd", "kubelet"}},
+		{"domain", []Domain{Architecture}, nil, []string{"rbac", "etcd"}},
+		{"topic", nil, []string{"rbac", "kubelet"}, []string{"rbac", "kubelet"}},
+		{"both", []Domain{Architecture}, []string{"kubelet", "etcd"}, []string{"etcd"}},
+		{"nothing matches", []Domain{Storage}, nil, nil},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := ids(Filter(all, c.domains, c.topics)); !slices.Equal(got, c.want) {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
 func seeded() *rand.Rand { return rand.New(rand.NewPCG(1, 2)) }
 
 func catalogOf(sizes map[Domain]int) []Task {

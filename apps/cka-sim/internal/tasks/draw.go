@@ -58,3 +58,18 @@ func Draw(all []Task, n int, rng *rand.Rand) []Task {
 	rng.Shuffle(len(drawn), func(i, j int) { drawn[i], drawn[j] = drawn[j], drawn[i] })
 	return drawn
 }
+
+// Filter keeps the tasks in one of domains and with one of topics; an empty list keeps everything.
+func Filter(all []Task, domains []Domain, topics []string) []Task {
+	var kept []Task
+	for _, t := range all {
+		if len(domains) > 0 && !slices.Contains(domains, t.Domain) {
+			continue
+		}
+		if len(topics) > 0 && !slices.ContainsFunc(t.Topics, func(topic string) bool { return slices.Contains(topics, topic) }) {
+			continue
+		}
+		kept = append(kept, t)
+	}
+	return kept
+}

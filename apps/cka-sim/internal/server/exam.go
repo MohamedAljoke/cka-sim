@@ -1,13 +1,13 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/exam"
+	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/tasks"
 )
 
 type examState struct {
@@ -24,6 +24,9 @@ type score struct {
 type examRequest struct {
 	Count   int `json:"count"`
 	Minutes int `json:"minutes"`
+	// Domains and Topics narrow the tasks drawn from; empty means the whole catalog.
+	Domains []tasks.Domain `json:"domains"`
+	Topics  []string       `json:"topics"`
 }
 
 func (a *api) getExam(w http.ResponseWriter, r *http.Request) {
@@ -45,12 +48,17 @@ func (a *api) beginExam(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "count must be at least 1, and minutes between 1 and 240", http.StatusBadRequest)
 		return
 	}
+	pool := tasks.Filter(a.Tasks, req.Domains, req.Topics)
+	if len(pool) == 0 {
+		http.Error(w, "no task matches those domains and topics", http.StatusBadRequest)
+		return
+	}
 	if !a.lock(w, r) {
 		return
 	}
 	// The exam's setup waits for the lab, so starting an exam is enough to get one.
 	a.Lab.Start()
-	if err := a.Exam.Begin(req.Count, req.Minutes, a.busy.Unlock); err != nil {
+	if err := a.Exam.Begin(pool, req.Count, req.Minutes, a.busy.Unlock); err != nil {
 		a.busy.Unlock()
 		examError(w, err)
 		return
@@ -69,17 +77,20 @@ func (a *api) flag(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// endExam answers at once; grading holds the script lock until every check is back.
 func (a *api) endExam(w http.ResponseWriter, r *http.Request) {
 	if !a.lock(w, r) {
 		return
 	}
-	defer a.busy.Unlock()
-	e, err := a.Exam.End(context.WithoutCancel(r.Context()))
+	e, err := a.Exam.End(a.busy.Unlock)
 	if err != nil {
+		a.busy.Unlock()
 		examError(w, err)
 		return
 	}
-	writeJSON(w, a.state(e))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(a.state(e))
 }
 
 func (a *api) discardExam(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +105,7 @@ func (a *api) discardExam(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// resumeExam holds the script lock while setups a restart interrupted run again.
+// resumeExam holds the script lock while setups or checks a restart interrupted run again.
 func (a *api) resumeExam() {
 	a.busy.Lock()
 	if !a.Exam.Resume(a.busy.Unlock) {
@@ -104,7 +115,7 @@ func (a *api) resumeExam() {
 
 func (a *api) state(e exam.Exam) examState {
 	s := examState{Exam: e, Now: time.Now()}
-	if e.Over() {
+	if e.Over() && !e.Scoring() {
 		percent, passed := exam.Score(e, a.Exam.Weights())
 		s.Score = &score{Percent: percent, Passed: passed}
 	}

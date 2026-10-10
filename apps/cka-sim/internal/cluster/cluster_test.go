@@ -30,17 +30,19 @@ func TestNodesMatchKindConfig(t *testing.T) {
 func TestKubeletIsAllowedToRunOnCgroupV1(t *testing.T) {
 	config := parse(t, kindConfig("1"))
 
-	if len(config.KubeadmConfigPatches) != 1 || !strings.Contains(config.KubeadmConfigPatches[0], "failCgroupV1: false") {
-		t.Errorf("got patches %q, want one that sets failCgroupV1: false", config.KubeadmConfigPatches)
+	if len(config.KubeadmConfigPatches) != 2 || !strings.Contains(config.KubeadmConfigPatches[1], "failCgroupV1: false") {
+		t.Errorf("got patches %q, want the grace period's, then one that sets failCgroupV1: false", config.KubeadmConfigPatches)
 	}
 	if len(config.Nodes) != 3 {
 		t.Errorf("got %d nodes, want 3", len(config.Nodes))
 	}
 }
 
-func TestNoPatchesOnCgroupV2(t *testing.T) {
-	if patches := parse(t, kindConfig("2")).KubeadmConfigPatches; len(patches) != 0 {
-		t.Errorf("got patches %q, want none", patches)
+func TestOnlyTheGracePeriodPatchOnCgroupV2(t *testing.T) {
+	patches := parse(t, kindConfig("2")).KubeadmConfigPatches
+
+	if len(patches) != 1 || !strings.Contains(patches[0], "node-monitor-grace-period") {
+		t.Errorf("got patches %q, want only the node grace period", patches)
 	}
 }
 

@@ -28,17 +28,20 @@ func TestStartAndEndALab(t *testing.T) {
 	}
 }
 
-func TestPracticeNeedsALab(t *testing.T) {
+func TestPracticeStartsTheLab(t *testing.T) {
 	r := &fakeRunner{}
 	srv, _ := newAPIWithoutLab(t, r)
 
 	status, body := call(t, srv, http.MethodPost, "/api/tasks/wl-scale/start")
 
-	if status != http.StatusConflict {
-		t.Errorf("got %d %q, want 409", status, body)
+	if status != http.StatusNoContent {
+		t.Errorf("got %d %q, want 204", status, body)
 	}
-	if ran := r.ran(); len(ran) != 0 {
-		t.Errorf("ran %q without a lab", ran)
+	if got := getLab(t, srv); got.State != sandbox.Ready {
+		t.Errorf("lab %+v, want ready", got)
+	}
+	if ran := r.ran(); len(ran) == 0 {
+		t.Error("the task was not set up")
 	}
 }
 

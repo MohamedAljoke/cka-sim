@@ -1,4 +1,4 @@
-import { endLab, getLab, startLab, type LabState } from './api'
+import { endLab, getLab, type LabState } from './api'
 import { el, message, setStatus } from './ui'
 
 type Hooks = {
@@ -6,22 +6,15 @@ type Hooks = {
   ended: () => void
 }
 
-let poll: number | undefined
-
-// showLab keeps the topbar in step with the lab. The panes only work once it's ready.
-export async function showLab(bar: HTMLElement, hooks: Hooks) {
+// showLab keeps the topbar in step with the lab. There's no Start button: practising a task or
+// starting an exam starts the lab on the server, and refresh picks that up.
+export function showLab(bar: HTMLElement, hooks: Hooks) {
+  let poll: number | undefined
   let wasReady = false
   const render = (state: LabState) => {
     clearTimeout(poll)
     const { lab } = state
     const status = el('span', 'status')
-    if (lab.state === 'starting') {
-      const since = Date.parse(state.now) - Date.parse(lab.started!)
-      setStatus(status, '', `Starting lab on ${lab.provider}… ${duration(since)}`)
-      bar.replaceChildren(status)
-      poll = window.setTimeout(refresh, 1000)
-      return
-    }
     if (lab.state === 'ready') {
       const took = Date.parse(lab.ready!) - Date.parse(lab.started!)
       setStatus(status, 'ready', `Lab ready in ${duration(took)} · ${lab.provider}`)
@@ -30,9 +23,19 @@ export async function showLab(bar: HTMLElement, hooks: Hooks) {
       wasReady = true
       return
     }
-    if (lab.state === 'failed') setStatus(status, 'error', `Lab failed: ${lab.error}`)
-    else setStatus(status, '', `No lab · ${lab.provider}`)
-    bar.replaceChildren(status, button(lab.state === 'failed' ? 'Try again' : 'Start lab', start, true))
+    if (wasReady) hooks.ended()
+    wasReady = false
+    if (lab.state === 'starting') {
+      const since = Date.parse(state.now) - Date.parse(lab.started!)
+      setStatus(status, '', `Starting lab on ${lab.provider}… ${duration(since)}`)
+      bar.replaceChildren(status)
+      poll = window.setTimeout(refresh, 1000)
+    } else if (lab.state === 'failed') {
+      setStatus(status, 'error', `Lab failed: ${lab.error}`)
+      bar.replaceChildren(status)
+    } else {
+      bar.replaceChildren()
+    }
   }
   const failed = (err: unknown) => {
     const status = el('span', 'status')
@@ -46,13 +49,6 @@ export async function showLab(bar: HTMLElement, hooks: Hooks) {
       failed(err)
     }
   }
-  async function start() {
-    try {
-      render(await startLab())
-    } catch (err) {
-      failed(err)
-    }
-  }
   async function end() {
     try {
       await endLab()
@@ -60,15 +56,14 @@ export async function showLab(bar: HTMLElement, hooks: Hooks) {
       failed(err)
       return
     }
-    wasReady = false
-    hooks.ended()
     refresh()
   }
-  await refresh()
+  refresh()
+  return { refresh }
 }
 
-function button(label: string, onclick: () => void, primary = false): HTMLButtonElement {
-  const b = el('button', primary ? 'action primary' : 'action', label)
+function button(label: string, onclick: () => void): HTMLButtonElement {
+  const b = el('button', 'action', label)
   b.type = 'button'
   b.onclick = () => {
     b.disabled = true

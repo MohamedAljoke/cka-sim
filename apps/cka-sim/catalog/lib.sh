@@ -29,11 +29,13 @@ wait_for() {
 # A pod on a node whose kubelet another task broke never confirms termination and would hold
 # the namespace in Terminating forever, so pods are force-deleted first. Their controllers go
 # before them, or they would recreate pods while the namespace empties (halves the wait).
+# The label lets the server delete the namespace once the task is done (tasks.TidyScript).
 fresh_ns() {
   kubectl -n "$1" delete deployments,replicasets,statefulsets,daemonsets,jobs,cronjobs --all --wait=false >/dev/null 2>&1
   kubectl -n "$1" delete pods --all --force --grace-period=0 >/dev/null 2>&1
   kubectl delete namespace "$1" --ignore-not-found --wait=true --timeout=120s >/dev/null
   kubectl create namespace "$1" >/dev/null
+  kubectl label namespace "$1" cka-sim/task="$TASK_ID" >/dev/null
 }
 
 # Exam-style answer files live in /opt/course/<task id>/ on the host.

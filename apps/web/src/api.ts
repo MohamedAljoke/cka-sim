@@ -2,6 +2,7 @@ export type Task = {
   id: string
   title: string
   domain: string
+  domainTitle: string
   topics: string[]
   weight: number
   host: string
@@ -18,6 +19,11 @@ export async function taskQuestion(id: string): Promise<string> {
 
 export async function startTask(id: string, signal?: AbortSignal): Promise<void> {
   await call('POST', `/api/tasks/${encodeURIComponent(id)}/start`, undefined, signal)
+}
+
+// tidyTask outlives the page (keepalive), so closing the tab still cleans up.
+export function tidyTask(id: string): void {
+  fetch(`/api/tasks/${encodeURIComponent(id)}/tidy`, { method: 'POST', keepalive: true }).catch(() => {})
 }
 
 export type Check = {
@@ -56,6 +62,7 @@ export type Exam = {
   started?: string
   deadline?: string
   ended?: string
+  scored?: string
 }
 
 export type ExamState = {
@@ -71,8 +78,15 @@ export async function getExam(): Promise<ExamState | null> {
   return res.json()
 }
 
-export async function beginExam(count: number, minutes: number): Promise<ExamState> {
-  return (await call('POST', '/api/exam', { count, minutes })).json()
+export type ExamPlan = {
+  count: number
+  minutes: number
+  domains: string[]
+  topics: string[]
+}
+
+export async function beginExam(plan: ExamPlan): Promise<ExamState> {
+  return (await call('POST', '/api/exam', plan)).json()
 }
 
 export async function flagTask(id: string, flagged: boolean): Promise<void> {
@@ -81,10 +95,6 @@ export async function flagTask(id: string, flagged: boolean): Promise<void> {
 
 export async function endExam(): Promise<ExamState> {
   return (await call('POST', '/api/exam/end')).json()
-}
-
-export async function discardExam(): Promise<void> {
-  await call('DELETE', '/api/exam')
 }
 
 export type Lab = {
@@ -102,10 +112,6 @@ export type LabState = {
 
 export async function getLab(): Promise<LabState> {
   return (await call('GET', '/api/lab')).json()
-}
-
-export async function startLab(): Promise<LabState> {
-  return (await call('POST', '/api/lab')).json()
 }
 
 export async function endLab(): Promise<void> {

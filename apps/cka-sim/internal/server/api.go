@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -17,8 +19,17 @@ type api struct {
 	busy sync.Mutex
 }
 
+type listedTask struct {
+	tasks.Task
+	DomainTitle string `json:"domainTitle"`
+}
+
 func (a *api) listTasks(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, a.Tasks)
+	listed := make([]listedTask, len(a.Tasks))
+	for i, t := range a.Tasks {
+		listed[i] = listedTask{Task: t, DomainTitle: tasks.Titles[t.Domain]}
+	}
+	writeJSON(w, listed)
 }
 
 func (a *api) question(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +42,7 @@ func (a *api) question(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) startTask(w http.ResponseWriter, r *http.Request) {
 	t, ok := a.findTask(w, r)
-	if !ok || a.duringExam(w) || !a.labReady(w) || !a.lock(w, r) {
+	if !ok || a.duringExam(w) || !a.ensureLab(w, r) || !a.lock(w, r) {
 		return
 	}
 	defer a.busy.Unlock()
@@ -50,7 +61,7 @@ func (a *api) startTask(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) checkTask(w http.ResponseWriter, r *http.Request) {
 	t, ok := a.findTask(w, r)
-	if !ok || a.duringExam(w) || !a.labReady(w) || !a.lock(w, r) {
+	if !ok || a.duringExam(w) || !a.ensureLab(w, r) || !a.lock(w, r) {
 		return
 	}
 	defer a.busy.Unlock()
@@ -62,6 +73,28 @@ func (a *api) checkTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, result)
 }
 
+// tidyTask cleans up after practice in the background, so the next setup finds nothing to delete.
+func (a *api) tidyTask(w http.ResponseWriter, r *http.Request) {
+	t, ok := a.findTask(w, r)
+	if !ok || a.duringExam(w) {
+		return
+	}
+	if a.Lab.Status().State != sandbox.Ready {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if !a.lock(w, r) {
+		return
+	}
+	go func() {
+		defer a.busy.Unlock()
+		if err := tasks.Tidy(context.Background(), a.Files, a.Lab, []tasks.Task{t}); err != nil {
+			log.Printf("tidy %s: %v", t.ID, err)
+		}
+	}()
+	w.WriteHeader(http.StatusAccepted)
+}
+
 func (a *api) solution(w http.ResponseWriter, r *http.Request) {
 	t, ok := a.findTask(w, r)
 	if !ok || a.duringExam(w) {
@@ -70,8 +103,9 @@ func (a *api) solution(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"explain": t.Explain})
 }
 
-// lockWait covers a script the page just cancelled: it takes a moment to stop and free the lock.
-var lockWait = 10 * time.Second
+// lockWait covers a script the page just cancelled, which takes a moment to stop, and the tidy
+// after leaving a task, which may restart a kubelet that task broke.
+var lockWait = 60 * time.Second
 
 // lock lets one script run at a time: setup and check would otherwise race on the same namespace.
 func (a *api) lock(w http.ResponseWriter, r *http.Request) bool {
@@ -86,9 +120,10 @@ func (a *api) lock(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-func (a *api) labReady(w http.ResponseWriter) bool {
-	if a.Lab.Status().State != sandbox.Ready {
-		http.Error(w, "start a lab first", http.StatusConflict)
+// ensureLab starts the lab if there is none, so practising a task is enough to get one.
+func (a *api) ensureLab(w http.ResponseWriter, r *http.Request) bool {
+	if err := a.Lab.Ensure(r.Context()); err != nil {
+		http.Error(w, "the lab failed to start: "+err.Error(), http.StatusServiceUnavailable)
 		return false
 	}
 	return true

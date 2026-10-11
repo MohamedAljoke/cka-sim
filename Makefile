@@ -3,10 +3,13 @@
 PLATFORM := apps/platform
 LAB := apps/lab
 WEB := apps/web
+AUTH := apps/auth
 # make up creates it; the lab and the server both get it.
 TOKEN := CKA_SIM_AGENT_TOKEN="$$(cat $(HOME)/.config/cka-sim/agent-token)"
+# Signs login sessions; the platform will read the same file to check them.
+AUTH_SECRET := $(HOME)/.config/cka-sim/auth-secret
 
-.PHONY: help doctor up down shell serve web dev test selftest
+.PHONY: help doctor up down shell serve web dev db auth test selftest
 
 help:
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
@@ -34,12 +37,24 @@ dev: up $(WEB)/node_modules ## lab up, then the backend and the page together
 	@cd $(PLATFORM) && go build -o bin/server ./cmd/server
 	@$(TOKEN) $(PLATFORM)/bin/server & server=$$!; trap 'kill $$server 2>/dev/null; wait $$server' INT TERM EXIT; cd $(WEB) && npm run dev
 
+db: ## start Postgres, then apply migrations and seeds
+	docker compose up -d --wait postgres
+	@$(MAKE) --no-print-directory -C $(AUTH) migrate seed
+
+auth: $(AUTH_SECRET) ## run the auth server on 127.0.0.1:7272 (make db first)
+	cd $(AUTH) && CKA_SIM_AUTH_SECRET="$$(cat $(AUTH_SECRET))" go run ./cmd/server
+
 test: ## vet and test the Go code
 	cd $(LAB) && go vet ./... && go test ./...
 	cd $(PLATFORM) && go vet ./... && go test ./...
+	cd $(AUTH) && go vet ./... && go test ./...
 
 selftest: ## prove tasks are graded fairly (needs the lab); one task: make selftest TASK=<id>
 	cd $(PLATFORM) && $(TOKEN) go test ./catalog -run 'TestSelftest$(if $(TASK),/^$(TASK)$$)' -selftest -count=1 -v -timeout 30m
+
+$(AUTH_SECRET):
+	@mkdir -p $(dir $@)
+	@umask 077 && openssl rand -hex 32 > $@
 
 $(WEB)/node_modules: $(WEB)/package-lock.json
 	cd $(WEB) && npm ci

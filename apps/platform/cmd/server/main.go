@@ -68,8 +68,6 @@ func run(ctx context.Context) error {
 	return lab.End(endCtx)
 }
 
-// CKA_SIM_PROVIDER=gke claims each lab from the GKE pool; otherwise the lab is the container make up runs
-// on this machine, at CKA_SIM_LAB_URL. Either way the server reaches it through its agent.
 func newProvider(ctx context.Context) (sandbox.Provider, error) {
 	token := os.Getenv("CKA_SIM_AGENT_TOKEN")
 	if token == "" {
@@ -84,7 +82,6 @@ func newProvider(ctx context.Context) (sandbox.Provider, error) {
 		if err != nil {
 			return nil, err
 		}
-		// This server is the only one claiming, so any claim of ours is from a run before it.
 		if err := p.ReapClaims(ctx); err != nil {
 			return nil, fmt.Errorf("delete leftover lab claims: %w", err)
 		}

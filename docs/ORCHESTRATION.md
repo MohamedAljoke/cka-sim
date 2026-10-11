@@ -31,7 +31,7 @@ out without a rewrite. The terminal is the most likely candidate.
 
 | Domain | Owns | Exists today |
 |---|---|---|
-| identity | users, login, sessions | — |
+| identity | users, login, sessions | `apps/auth` (its own server for now) |
 | catalog | tasks (`task.md`, scripts), read-only from the embedded FS | `catalog/` |
 | attempt | quiz/exam sessions: chosen tasks, timers, scores, Check/Submit | — |
 | grading | runs `check.sh`, parses `PASS/FAIL <pts>` into a result | format in `catalog/lib.sh` |
@@ -108,7 +108,10 @@ apps/platform/      what to run; imports only apps/lab/api from the lab
   internal/
     tasks/ exam/ grader/ server/
     sandbox/        Lab + the Local provider; gke/ is the GKE one
-    (later) auth/   users, login, session tokens; a session owns a Lab
+apps/auth/          users, login, session tokens (a JWT cookie the platform will check); its own Postgres
+  cmd/server        127.0.0.1:7272
+  internal/         accounts/ password/ session/ server/
+  scripts/db/       sql-migrate migrations and seeds
 apps/lab/           how it runs; could become its own repo
   api/              agent client, shell protocol, node names
   cmd/agent  cmd/lab

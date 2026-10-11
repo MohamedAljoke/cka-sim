@@ -1,0 +1,18 @@
+development:
+  dialect: postgres
+  datasource: postgres://cka_sim:cka_sim@127.0.0.1:5434/cka_sim?sslmode=disable
+  dir: migrations
+  table: schema_migrations
+
+# Seeds have their own table, so the schema can be migrated without loading dev users.
+development_seeds:
+  dialect: postgres
+  datasource: postgres://cka_sim:cka_sim@127.0.0.1:5434/cka_sim?sslmode=disable
+  dir: seeds
+  table: seed_migrations
+
+production:
+  dialect: postgres
+  datasource: ${DATABASE_URL}
+  dir: migrations
+  table: schema_migrations

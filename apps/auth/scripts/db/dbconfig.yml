@@ -16,3 +16,9 @@ production:
   datasource: ${DATABASE_URL}
   dir: migrations
   table: schema_migrations
+
+production_seeds:
+  dialect: postgres
+  datasource: ${DATABASE_URL}
+  dir: seeds
+  table: seed_migrations

@@ -1,5 +1,5 @@
-# The platform: the page, its server with the GKE provider, and Caddy in front with HTTPS and a
-# password. No Docker: every lab is claimed from the pool and reached through its agent. Built from apps/.
+# The platform: the page, its server with the GKE provider, and Caddy in front with HTTPS.
+# No Docker: every lab is claimed from the pool and reached through its agent. Built from apps/.
 FROM node:22-alpine AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./

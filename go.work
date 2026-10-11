@@ -1,0 +1,8 @@
+go 1.26.9
+
+use (
+	./apps/auth
+	./apps/go-shared
+	./apps/lab
+	./apps/platform
+)

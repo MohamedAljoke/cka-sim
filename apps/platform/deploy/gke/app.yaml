@@ -62,11 +62,11 @@ spec:
                   key: token
             - name: SITE_HOST
               value: ${SITE_HOST}
-            - name: SITE_HASH
+            - name: CKA_SIM_AUTH_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: cka-sim-site
-                  key: hash
+                  name: cka-sim-auth
+                  key: secret
           ports:
             - containerPort: 80
             - containerPort: 443

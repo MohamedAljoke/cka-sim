@@ -11,17 +11,22 @@ IMAGE   := $(REGION)-docker.pkg.dev/$(PROJECT)/$(REPO)/lab:latest
 APPS     := $(abspath ../../apps)
 LAB_DIR  := $(APPS)/lab
 PLATFORM := $(APPS)/platform
+AUTH     := $(APPS)/auth
 # The platform's catalog decides which images a lab preloads.
 IMAGES   := $(shell paste -sd, $(PLATFORM)/catalog/images.txt)
 # Lab pods get their own range, so the firewall can tell them from GKE's system pods.
 LAB_PODS := 10.80.0.0/16
 APP_IMAGE := $(REGION)-docker.pkg.dev/$(PROJECT)/$(REPO)/app:latest
-SITE_PASSWORD := $(HOME)/.config/cka-sim/gke-password
+AUTH_IMAGE := $(REGION)-docker.pkg.dev/$(PROJECT)/$(REPO)/auth:latest
+SQL      := cka-sim-db
+INSTANCE := $(PROJECT):$(REGION):$(SQL)
+AUTH_GSA := cka-sim-auth@$(PROJECT).iam.gserviceaccount.com
+DB_PASSWORD := $(HOME)/.config/cka-sim/gke-db-password
 POOL    ?= 1
 SANDBOX := v1.0.4
 GC      := gcloud --project $(PROJECT)
 
-.PHONY: help project cluster image sandbox pool wall site url site-down down
+.PHONY: help project cluster image sandbox pool wall db site url site-down db-down down
 
 help:
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
@@ -29,7 +34,7 @@ help:
 project: ## create the project, link billing, enable the APIs (once)
 	gcloud projects create $(PROJECT) --name "cka-sim GKE spike"
 	gcloud billing projects link $(PROJECT) --billing-account $(BILLING)
-	$(GC) services enable container.googleapis.com artifactregistry.googleapis.com
+	$(GC) services enable container.googleapis.com artifactregistry.googleapis.com sqladmin.googleapis.com
 	$(GC) artifacts repositories create $(REPO) --repository-format docker --location $(REGION)
 
 cluster: ## create the cluster: a small system pool and an empty, tainted "labs" pool
@@ -63,32 +68,58 @@ wall: ## firewall: no lab node or lab pod reaches another lab node (agent-sandbo
 	$(GC) compute firewall-rules create cka-sim-labs-apart --network default --direction INGRESS --priority 900 \
 	  --action DENY --rules all --target-tags cka-sim-lab --source-tags cka-sim-lab --source-ranges $(LAB_PODS)
 
-site: image ## the app on the platform pool, a warm lab in the pool, HTTPS + password; `make url` prints the link
+db: ## Cloud SQL Postgres for auth (smallest tier) and the identity its pod uses to reach it (once)
+	$(GC) services enable sqladmin.googleapis.com
+	$(GC) sql instances describe $(SQL) >/dev/null 2>&1 || \
+	  $(GC) sql instances create $(SQL) --database-version POSTGRES_16 --edition enterprise --tier db-f1-micro \
+	    --region $(REGION) --storage-type HDD --storage-size 10 --no-backup --availability-type zonal
+	$(GC) sql databases describe cka_sim --instance $(SQL) >/dev/null 2>&1 || \
+	  $(GC) sql databases create cka_sim --instance $(SQL)
+	@test -s $(DB_PASSWORD) || (mkdir -p $(dir $(DB_PASSWORD)) && umask 077 && openssl rand -hex 24 > $(DB_PASSWORD))
+	@$(GC) sql users list --instance $(SQL) --format='value(name)' | grep -qx cka_sim || \
+	  $(GC) sql users create cka_sim --instance $(SQL) --password "$$(cat $(DB_PASSWORD))"
+	$(GC) iam service-accounts describe $(AUTH_GSA) >/dev/null 2>&1 || \
+	  $(GC) iam service-accounts create cka-sim-auth --display-name "cka-sim auth"
+	$(GC) projects add-iam-policy-binding $(PROJECT) --member serviceAccount:$(AUTH_GSA) \
+	  --role roles/cloudsql.client --condition None >/dev/null
+	$(GC) iam service-accounts add-iam-policy-binding $(AUTH_GSA) --role roles/iam.workloadIdentityUser \
+	  --member "serviceAccount:$(PROJECT).svc.id.goog[default/cka-sim-auth]" >/dev/null
+
+site: image ## the app and auth on the platform pool, a warm lab in the pool, HTTPS + login; `make url` prints the link
 	$(GC) compute addresses describe cka-sim-site --region $(REGION) >/dev/null 2>&1 || \
 	  $(GC) compute addresses create cka-sim-site --region $(REGION)
 	docker build -f $(PLATFORM)/deploy/gke/app.Dockerfile -t $(APP_IMAGE) $(APPS)
 	docker push $(APP_IMAGE)
-	@test -s $(SITE_PASSWORD) || (mkdir -p $(dir $(SITE_PASSWORD)) && umask 077 && openssl rand -base64 15 > $(SITE_PASSWORD))
-	@kubectl create secret generic cka-sim-site --dry-run=client -o yaml \
-	  --from-literal=hash="$$(docker run --rm --entrypoint caddy $(APP_IMAGE) hash-password --plaintext "$$(cat $(SITE_PASSWORD))")" | kubectl apply -f -
+	docker build -f $(AUTH)/deploy/auth.Dockerfile -t $(AUTH_IMAGE) $(APPS)
+	docker push $(AUTH_IMAGE)
+	@kubectl get secret cka-sim-auth >/dev/null 2>&1 || \
+	  kubectl create secret generic cka-sim-auth --from-literal=secret="$$(openssl rand -hex 32)"
+	@kubectl create secret generic cka-sim-db --dry-run=client -o yaml \
+	  --from-literal=url="postgres://cka_sim:$$(cat $(DB_PASSWORD))@127.0.0.1:5432/cka_sim?sslmode=disable" | kubectl apply -f -
 	@# The token only ever lives in the cluster: the app and the labs read the same Secret.
 	@kubectl get secret cka-sim-agent >/dev/null 2>&1 || \
 	  kubectl create secret generic cka-sim-agent --from-literal=token="$$(openssl rand -hex 32)"
 	$(MAKE) --no-print-directory pool POOL=$(POOL)
+	AUTH_IMAGE=$(AUTH_IMAGE) INSTANCE=$(INSTANCE) AUTH_GSA=$(AUTH_GSA) envsubst < $(AUTH)/deploy/gke/auth.yaml | kubectl apply -f -
 	@ip=$$($(GC) compute addresses describe cka-sim-site --region $(REGION) --format='value(address)'); \
 	APP_IMAGE=$(APP_IMAGE) SITE_IP=$$ip SITE_HOST=$$(echo $$ip | tr . -).sslip.io envsubst < $(PLATFORM)/deploy/gke/app.yaml | kubectl apply -f -
-	kubectl rollout restart deployment/app
+	kubectl rollout restart deployment/auth deployment/app
 
-url: ## print the site's link and password
+url: ## print the site's link and login
 	@echo "https://$$($(GC) compute addresses describe cka-sim-site --region $(REGION) --format='value(address)' | tr . -).sslip.io"
-	@echo "user cka, password $$(cat $(SITE_PASSWORD))"
+	@echo "log in as dev@cka-sim.local / cka-sim-dev"
 
-site-down: ## remove the app, its load balancer, its IP, and every lab
-	kubectl delete deployment app --ignore-not-found
+site-down: ## remove the app, auth, the load balancer, its IP, and every lab
+	kubectl delete deployment app auth --ignore-not-found
 	kubectl delete sandboxclaims -l app.kubernetes.io/managed-by=cka-sim --ignore-not-found
 	$(MAKE) --no-print-directory pool POOL=0
-	kubectl delete service site secret cka-sim-site --ignore-not-found
+	kubectl delete service/site service/auth serviceaccount/cka-sim-auth \
+	  secret/cka-sim-auth secret/cka-sim-db secret/cka-sim-site --ignore-not-found
 	$(GC) compute addresses delete cka-sim-site --region $(REGION) --quiet
+
+db-down: ## delete the Cloud SQL instance (its data too) and auth's identity
+	$(GC) sql instances delete $(SQL) --quiet
+	$(GC) iam service-accounts delete $(AUTH_GSA) --quiet
 
 down: ## delete the whole project, cluster and images included
 	gcloud projects delete $(PROJECT) --quiet

@@ -19,12 +19,10 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/config"
 )
 
-const (
-	addr       = "127.0.0.1:7272"
-	sessionTTL = 12 * time.Hour
-)
+const sessionTTL = 12 * time.Hour
 
 type settings struct {
+	Addr        string `key:"CKA_SIM_AUTH_ADDR" default:"127.0.0.1:7272"`
 	Secret      string `key:"CKA_SIM_AUTH_SECRET" minLength:"32"`
 	DatabaseURL string `key:"CKA_SIM_AUTH_DATABASE_URL" default:"postgres://cka_sim:cka_sim@127.0.0.1:5434/cka_sim?sslmode=disable"`
 }
@@ -48,9 +46,9 @@ func run(ctx context.Context) error {
 		return err
 	}
 	defer pool.Close()
-	ln, err := net.Listen("tcp", addr)
+	ln, err := net.Listen("tcp", cfg.Addr)
 	if err != nil {
-		return fmt.Errorf("claim %s: %w", addr, err)
+		return fmt.Errorf("claim %s: %w", cfg.Addr, err)
 	}
 	defer ln.Close()
 
@@ -64,7 +62,7 @@ func run(ctx context.Context) error {
 		defer cancel()
 		srv.Shutdown(shutdownCtx)
 	}()
-	fmt.Printf("auth on http://%s; Ctrl-C stops it\n", addr)
+	fmt.Printf("auth on http://%s; Ctrl-C stops it\n", cfg.Addr)
 	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

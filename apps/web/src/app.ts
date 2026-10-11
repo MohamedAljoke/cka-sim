@@ -8,6 +8,7 @@ export type App = {
   exam(): void
   // split shows the terminal beside the pane; views without a cluster task use the full width.
   split(on: boolean): void
+  assist(on: boolean): void
   // labChanged tells the topbar the server may have started the lab.
   labChanged(): void
   // onLeave runs once when the next view replaces this one.

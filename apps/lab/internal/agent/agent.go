@@ -35,7 +35,10 @@ func Handler(token string, runner Runner, shells protocol.Opener) http.Handler {
 		return run(w, r, runner)
 	})
 	authed("GET /shell", func(w http.ResponseWriter, r *http.Request) error {
-		protocol.Serve(w, r, shells)
+		command := r.URL.Query().Get("command")
+		protocol.Serve(w, r, func(ctx context.Context, size protocol.Size) (protocol.Shell, error) {
+			return shells.Open(ctx, command, size)
+		})
 		return nil
 	})
 	authed("POST /shells/end", func(w http.ResponseWriter, r *http.Request) error {

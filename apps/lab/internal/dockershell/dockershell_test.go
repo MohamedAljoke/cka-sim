@@ -22,7 +22,7 @@ func TestOpenStartsTaggedLoginShellAtBrowserSize(t *testing.T) {
 	d := &fakeDocker{}
 	o := &Opener{container: "node", user: "candidate", docker: d}
 
-	if _, err := o.Open(context.Background(), protocol.Size{Cols: 120, Rows: 40}); err != nil {
+	if _, err := o.Open(context.Background(), "", protocol.Size{Cols: 120, Rows: 40}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -47,9 +47,22 @@ func TestOpenStartsTaggedLoginShellAtBrowserSize(t *testing.T) {
 	}
 }
 
+func TestOpenWithACommandRunsItInALoginShell(t *testing.T) {
+	d := &fakeDocker{}
+	o := &Opener{container: "node", user: "candidate", docker: d}
+
+	if _, err := o.Open(context.Background(), "exec claude", protocol.Size{Cols: 80, Rows: 24}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := d.created[0].Cmd; !slices.Equal(got, []string{"bash", "-lc", "exec claude"}) {
+		t.Errorf("cmd = %q, want the command in a login shell", got)
+	}
+}
+
 func TestShellCarriesKeystrokesAndOutput(t *testing.T) {
 	d := &fakeDocker{}
-	shell, err := (&Opener{docker: d}).Open(context.Background(), protocol.Size{Cols: 80, Rows: 24})
+	shell, err := (&Opener{docker: d}).Open(context.Background(), "", protocol.Size{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +80,7 @@ func TestShellCarriesKeystrokesAndOutput(t *testing.T) {
 
 func TestResizeSetsRowsAndCols(t *testing.T) {
 	d := &fakeDocker{}
-	shell, err := (&Opener{docker: d}).Open(context.Background(), protocol.Size{Cols: 80, Rows: 24})
+	shell, err := (&Opener{docker: d}).Open(context.Background(), "", protocol.Size{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +96,7 @@ func TestResizeSetsRowsAndCols(t *testing.T) {
 
 func TestCloseHangsUpOnlyThisShell(t *testing.T) {
 	d := &fakeDocker{}
-	shell, err := (&Opener{docker: d}).Open(context.Background(), protocol.Size{Cols: 80, Rows: 24})
+	shell, err := (&Opener{docker: d}).Open(context.Background(), "", protocol.Size{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +135,7 @@ func TestDockerShellOnCluster(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shell, err := o.Open(ctx, protocol.Size{Cols: 80, Rows: 24})
+	shell, err := o.Open(ctx, "", protocol.Size{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}

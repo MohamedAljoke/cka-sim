@@ -119,6 +119,17 @@ export async function endLab(): Promise<void> {
   await call('DELETE', '/api/lab')
 }
 
+export async function startAssistant(provider: string): Promise<void> {
+  const path = '/api/assistant'
+  const res = await withSession(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider }),
+  })
+  if (res.status === 404) throw new Error('The assistant is not available on this server yet.')
+  if (!res.ok) throw await failure(res, 'POST', path)
+}
+
 export type User = {
   id: string
   email: string

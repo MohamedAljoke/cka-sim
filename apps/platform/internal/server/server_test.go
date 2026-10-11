@@ -133,16 +133,18 @@ func TestRefusesOtherOrigins(t *testing.T) {
 }
 
 type fakeOpener struct {
-	opened chan labagent.Size
-	shell  *fakeShell
-	err    error
+	opened  chan labagent.Size
+	command string
+	shell   *fakeShell
+	err     error
 }
 
 func newFakeOpener() *fakeOpener {
 	return &fakeOpener{opened: make(chan labagent.Size, 1), shell: newFakeShell()}
 }
 
-func (o *fakeOpener) Open(_ context.Context, size labagent.Size) (labagent.Shell, error) {
+func (o *fakeOpener) Open(_ context.Context, command string, size labagent.Size) (labagent.Shell, error) {
+	o.command = command
 	o.opened <- size
 	if o.err != nil {
 		return nil, o.err
@@ -229,5 +231,9 @@ func receive[T any](t *testing.T, ch chan T) T {
 }
 
 func wsURL(srv *httptest.Server) string {
-	return "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/terminal"
+	return wsURLOf(srv, "/ws/terminal")
+}
+
+func wsURLOf(srv *httptest.Server, path string) string {
+	return "ws" + strings.TrimPrefix(srv.URL, "http") + path
 }

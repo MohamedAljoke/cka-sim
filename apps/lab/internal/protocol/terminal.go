@@ -10,7 +10,7 @@ type Size struct {
 }
 
 type Opener interface {
-	Open(ctx context.Context, size Size) (Shell, error)
+	Open(ctx context.Context, command string, size Size) (Shell, error)
 	EndAll(ctx context.Context) error
 }
 

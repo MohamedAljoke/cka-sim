@@ -25,7 +25,7 @@ const ControlPlaneNode = protocol.ControlPlaneNode
 var Nodes = protocol.Nodes
 
 const (
-	Base      = Name + "-base"
+	Base      = protocol.BaseHost
 	BaseImage = "cka-sim/base:latest"
 	Candidate = "candidate"
 )

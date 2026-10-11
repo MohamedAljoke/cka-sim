@@ -541,8 +541,115 @@ a {
 }
 
 /* xterm.css paints the viewport black, around the themed text area. */
-#terminal .xterm-viewport {
+.terminal .xterm-viewport {
   background-color: var(--color-terminal);
+}
+
+.workspace {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.exam.assist .workspace {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.exam.assist .workspace:has(.assistant.open) {
+  grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+}
+
+.assistant {
+  display: none;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--color-canvas);
+  border-top: 1px solid var(--color-border);
+}
+
+.exam.assist .assistant {
+  display: flex;
+}
+
+.assistant-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem clamp(12px, 1.6vw, 20px);
+}
+
+.assistant-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 2px;
+  font: 650 0.7rem/1.2 var(--font-body);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--color-foreground-subtle);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.assistant-toggle:hover {
+  color: var(--color-foreground);
+}
+
+.assistant-picker {
+  min-width: 0;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--color-foreground);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.assistant-head .status {
+  margin: 0 0 0 auto;
+  overflow: hidden;
+  font-size: 0.85rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-head .action {
+  padding: 5px 12px;
+}
+
+.assistant-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 clamp(12px, 1.6vw, 20px) 1rem;
+}
+
+.assistant-body p {
+  max-width: 42rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.assistant-body .error {
+  margin-top: 0.75rem;
+}
+
+.assistant-body.terminal {
+  display: flex;
+  padding: 0.5rem;
+  overflow: hidden;
+}
+
+.assistant-screen {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.assistant:not(.open) .assistant-body {
+  display: none;
 }
 
 .exam-start {
@@ -731,7 +838,7 @@ a {
   grid-template-columns: 1fr;
 }
 
-.exam.single .terminal {
+.exam.single .workspace {
   display: none;
 }
 

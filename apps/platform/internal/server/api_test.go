@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/assistant"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/auth"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/desk"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/exam"
@@ -295,6 +296,10 @@ func newAPI(t *testing.T, r *fakeRunner) *httptest.Server {
 }
 
 func newAPIWithoutLab(t *testing.T, r *fakeRunner) (*httptest.Server, *desk.Desks) {
+	return newAPIWithShells(t, r, newFakeOpener)
+}
+
+func newAPIWithShells(t *testing.T, r *fakeRunner, shells func() *fakeOpener) (*httptest.Server, *desk.Desks) {
 	lockWait = 50 * time.Millisecond
 	files := fstest.MapFS{
 		"wl-scale/task.md":     {Data: []byte("---\nid: wl-scale\ntitle: Scale a Deployment\nhost: node-1\ndomain: workloads\ntopics: [deployments]\nweight: 4\n---\nScale it to 4.\n")},
@@ -310,7 +315,7 @@ func newAPIWithoutLab(t *testing.T, r *fakeRunner) (*httptest.Server, *desk.Desk
 	}
 	dir := t.TempDir()
 	desks := desk.New(func(id string) (*desk.Desk, error) {
-		lab := sandbox.NewLab(fakeProvider{runner: r, shells: newFakeOpener()}, id, time.Now)
+		lab := sandbox.NewLab(fakeProvider{runner: r, shells: shells()}, id, time.Now)
 		session, err := exam.Open(exam.Config{
 			Store:   exam.FileStore{Path: filepath.Join(dir, id+".json")},
 			Files:   files,
@@ -325,7 +330,7 @@ func newAPIWithoutLab(t *testing.T, r *fakeRunner) (*httptest.Server, *desk.Desk
 		}
 		return &desk.Desk{Lab: lab, Exam: session}, nil
 	}, time.Now)
-	return serve(t, desks, Practice{Tasks: all, Files: files, Exams: true}), desks
+	return serve(t, desks, Practice{Tasks: all, Files: files, Exams: true, Assistants: []assistant.Provider{fakeAssistant{}}}), desks
 }
 
 func readyDesks(t *testing.T, r *fakeRunner, shells *fakeOpener) *desk.Desks {

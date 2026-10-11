@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -13,13 +15,16 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox"
 )
 
+var errAssistantDuringExam = errors.New("the assistant is off during an exam")
+
 type Desk struct {
-	Lab     *sandbox.Lab
-	Exam    *exam.Session
-	busy    sync.Mutex
-	now     func() time.Time
-	mu      sync.Mutex
-	touched time.Time
+	Lab        *sandbox.Lab
+	Exam       *exam.Session
+	busy       sync.Mutex
+	now        func() time.Time
+	mu         sync.Mutex
+	touched    time.Time
+	assistants map[*assistantShell]struct{}
 }
 
 func (d *Desk) Lock()         { d.busy.Lock() }
@@ -104,16 +109,53 @@ func (ds *Desks) snapshot() map[string]*Desk {
 	return desks
 }
 
-func (d *Desk) Open(ctx context.Context, size labagent.Size) (labagent.Shell, error) {
-	shell, err := d.Lab.Open(ctx, size)
+func (d *Desk) Open(ctx context.Context, command string, size labagent.Size) (labagent.Shell, error) {
+	shell, err := d.Lab.Open(ctx, command, size)
 	if err != nil {
 		return nil, err
 	}
 	return typing{Shell: shell, desk: d}, nil
 }
 
-func (d *Desk) EndAll(ctx context.Context) error {
-	return d.Lab.EndAll(ctx)
+func (d *Desk) OpenAssistant(ctx context.Context, command string, size labagent.Size) (labagent.Shell, error) {
+	shell, err := d.Open(ctx, command, size)
+	if err != nil {
+		return nil, err
+	}
+	a := &assistantShell{Shell: shell, desk: d}
+	d.mu.Lock()
+	if d.assistants == nil {
+		d.assistants = map[*assistantShell]struct{}{}
+	}
+	d.assistants[a] = struct{}{}
+	d.mu.Unlock()
+	// Checked after registering, so an exam beginning now either ends this shell or is seen here.
+	if d.examRunning() {
+		a.Close()
+		return nil, errAssistantDuringExam
+	}
+	return a, nil
+}
+
+func (d *Desk) EndAssistants() {
+	d.mu.Lock()
+	open := slices.Collect(maps.Keys(d.assistants))
+	d.mu.Unlock()
+	for _, a := range open {
+		a.Close()
+	}
+}
+
+type assistantShell struct {
+	labagent.Shell
+	desk *Desk
+}
+
+func (a *assistantShell) Close() error {
+	a.desk.mu.Lock()
+	delete(a.desk.assistants, a)
+	a.desk.mu.Unlock()
+	return a.Shell.Close()
 }
 
 type typing struct {
@@ -136,12 +178,16 @@ func (d *Desk) touch(now time.Time) {
 
 // A running exam keeps its lab however long the candidate thinks.
 func (d *Desk) idle(now time.Time, after time.Duration) bool {
-	if d.Lab.Status().State != sandbox.Ready || (d.Exam != nil && d.Exam.Running()) {
+	if d.Lab.Status().State != sandbox.Ready || d.examRunning() {
 		return false
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return now.Sub(d.touched) >= after
+}
+
+func (d *Desk) examRunning() bool {
+	return d.Exam != nil && d.Exam.Running()
 }
 
 func (d *Desk) resumeExam() {

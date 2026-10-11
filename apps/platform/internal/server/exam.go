@@ -70,6 +70,7 @@ func (a *api) beginExam(w http.ResponseWriter, r *http.Request) error {
 		d.Unlock()
 		return err
 	}
+	d.EndAssistants()
 	e, _ := d.Exam.Current()
 	return httpx.WriteJSON(w, http.StatusAccepted, state(d, e))
 }

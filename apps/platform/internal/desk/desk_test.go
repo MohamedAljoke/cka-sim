@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -105,7 +106,7 @@ func TestTypingInTheTerminalKeepsTheLab(t *testing.T) {
 	clock := &fakeClock{now: time.Now()}
 	desks, _ := newDesksAt(clock.Now)
 	d := readyDesk(t, desks, "a")
-	shell, err := d.Open(context.Background(), labagent.Size{Cols: 80, Rows: 24})
+	shell, err := d.Open(context.Background(), "", labagent.Size{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,6 +133,45 @@ func TestEndIdleSkipsADeskRunningAScript(t *testing.T) {
 
 	if d.Lab.Status().State != sandbox.Ready {
 		t.Errorf("lab is %s while a script runs, want ready", d.Lab.Status().State)
+	}
+}
+
+func TestEndAssistantsClosesOnlyAssistantShells(t *testing.T) {
+	desks, p := newDesks()
+	d := readyDesk(t, desks, "a")
+	size := labagent.Size{Cols: 80, Rows: 24}
+	if _, err := d.Open(context.Background(), "", size); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.OpenAssistant(context.Background(), "exec claude", size); err != nil {
+		t.Fatal(err)
+	}
+
+	d.EndAssistants()
+
+	shells := p.opened()
+	if len(shells) != 2 || shells[1].command != "exec claude" {
+		t.Fatalf("opened %+v, want a terminal then the assistant", shells)
+	}
+	if shells[0].closed.Load() || !shells[1].closed.Load() {
+		t.Errorf("closed terminal=%v assistant=%v, want only the assistant", shells[0].closed.Load(), shells[1].closed.Load())
+	}
+}
+
+func TestAClosedAssistantIsNotEndedAgain(t *testing.T) {
+	desks, p := newDesks()
+	d := readyDesk(t, desks, "a")
+	shell, err := d.OpenAssistant(context.Background(), "exec claude", labagent.Size{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shell.Close()
+	p.opened()[0].closed.Store(false)
+
+	d.EndAssistants()
+
+	if p.opened()[0].closed.Load() {
+		t.Error("EndAssistants closed a shell that had already closed")
 	}
 }
 
@@ -163,24 +203,37 @@ type fakeClock struct{ now time.Time }
 func (c *fakeClock) Now() time.Time          { return c.now }
 func (c *fakeClock) advance(d time.Duration) { c.now = c.now.Add(d) }
 
-type fakeShell struct{}
-
-func (fakeShell) Read([]byte) (int, error)                    { return 0, nil }
-func (fakeShell) Write(b []byte) (int, error)                 { return len(b), nil }
-func (fakeShell) Resize(context.Context, labagent.Size) error { return nil }
-func (fakeShell) Close() error                                { return nil }
-
-type fakeShells struct{}
-
-func (fakeShells) Open(context.Context, labagent.Size) (labagent.Shell, error) {
-	return fakeShell{}, nil
+type fakeShell struct {
+	command string
+	closed  atomic.Bool
 }
+
+func (*fakeShell) Read([]byte) (int, error)                    { return 0, nil }
+func (*fakeShell) Write(b []byte) (int, error)                 { return len(b), nil }
+func (*fakeShell) Resize(context.Context, labagent.Size) error { return nil }
+
+func (s *fakeShell) Close() error {
+	s.closed.Store(true)
+	return nil
+}
+
+type fakeShells struct{ provider *fakeProvider }
+
+func (s fakeShells) Open(_ context.Context, command string, _ labagent.Size) (labagent.Shell, error) {
+	shell := &fakeShell{command: command}
+	s.provider.mu.Lock()
+	defer s.provider.mu.Unlock()
+	s.provider.shells = append(s.provider.shells, shell)
+	return shell, nil
+}
+
 func (fakeShells) EndAll(context.Context) error { return nil }
 
 type fakeProvider struct {
 	mu        sync.Mutex
 	created   []string
 	destroyed int
+	shells    []*fakeShell
 }
 
 func (*fakeProvider) Name() string { return "Fake" }
@@ -189,7 +242,7 @@ func (p *fakeProvider) Create(_ context.Context, owner string) (sandbox.Box, err
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.created = append(p.created, owner)
-	return sandbox.Box{ID: owner, Shells: fakeShells{}}, nil
+	return sandbox.Box{ID: owner, Shells: fakeShells{provider: p}}, nil
 }
 
 func (p *fakeProvider) Destroy(context.Context, sandbox.Box) error {
@@ -197,6 +250,12 @@ func (p *fakeProvider) Destroy(context.Context, sandbox.Box) error {
 	defer p.mu.Unlock()
 	p.destroyed++
 	return nil
+}
+
+func (p *fakeProvider) opened() []*fakeShell {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]*fakeShell(nil), p.shells...)
 }
 
 func (p *fakeProvider) owners() []string {

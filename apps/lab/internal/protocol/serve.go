@@ -17,7 +17,9 @@ type control struct {
 	Rows uint   `json:"rows"`
 }
 
-func Serve(w http.ResponseWriter, r *http.Request, opener Opener) {
+type OpenFunc func(ctx context.Context, size Size) (Shell, error)
+
+func Serve(w http.ResponseWriter, r *http.Request, open OpenFunc) {
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		return
@@ -29,7 +31,7 @@ func Serve(w http.ResponseWriter, r *http.Request, opener Opener) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	shell, err := openAtFirstResize(ctx, conn, opener)
+	shell, err := openAtFirstResize(ctx, conn, open)
 	if err != nil {
 		conn.Write(ctx, websocket.MessageBinary, fmt.Appendf(nil, "cannot open a shell: %v\r\n", err))
 		conn.Close(websocket.StatusInternalError, "cannot open a shell")
@@ -54,7 +56,7 @@ func Serve(w http.ResponseWriter, r *http.Request, opener Opener) {
 }
 
 // A resize sent while the shell is still starting can get lost, so wait for the size first.
-func openAtFirstResize(ctx context.Context, conn *websocket.Conn, opener Opener) (Shell, error) {
+func openAtFirstResize(ctx context.Context, conn *websocket.Conn, open OpenFunc) (Shell, error) {
 	for {
 		typ, data, err := conn.Read(ctx)
 		if err != nil {
@@ -64,7 +66,7 @@ func openAtFirstResize(ctx context.Context, conn *websocket.Conn, opener Opener)
 			continue
 		}
 		if size, ok := parseResize(data); ok {
-			return opener.Open(ctx, size)
+			return open(ctx, size)
 		}
 	}
 }

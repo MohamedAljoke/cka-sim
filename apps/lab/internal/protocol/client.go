@@ -71,8 +71,12 @@ func (c Client) Run(ctx context.Context, host, taskID string, script []byte) (st
 	return result.Output, nil
 }
 
-func (c Client) Open(ctx context.Context, size Size) (Shell, error) {
-	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(c.URL, "http")+"/shell", &websocket.DialOptions{
+func (c Client) Open(ctx context.Context, command string, size Size) (Shell, error) {
+	target := "ws" + strings.TrimPrefix(c.URL, "http") + "/shell"
+	if command != "" {
+		target += "?" + url.Values{"command": {command}}.Encode()
+	}
+	conn, _, err := websocket.Dial(ctx, target, &websocket.DialOptions{
 		HTTPHeader: c.auth(),
 	})
 	if err != nil {

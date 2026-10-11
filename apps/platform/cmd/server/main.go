@@ -16,6 +16,7 @@ import (
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/config"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/catalog"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/assistant"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/auth"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/desk"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/exam"
@@ -72,7 +73,12 @@ func run(ctx context.Context) error {
 	}
 	desks := desk.New(openDesk(provider, all, examDir), time.Now)
 	go desks.Watch(ctx, time.Minute, cfg.LabIdle)
-	practice := server.Practice{Tasks: all, Files: catalog.FS, Exams: true}
+	practice := server.Practice{
+		Tasks:      all,
+		Files:      catalog.FS,
+		Exams:      true,
+		Assistants: []assistant.Provider{assistant.Claude{}},
+	}
 
 	sessions := auth.Verifier{Secret: []byte(cfg.AuthSecret), Now: time.Now}
 	srv := &http.Server{Handler: auth.Require(sessions, server.New(desks, practice))}

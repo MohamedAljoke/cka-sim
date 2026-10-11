@@ -4,6 +4,7 @@ import '@fontsource-variable/jetbrains-mono'
 import './style.css'
 import { currentUser, type User } from './api'
 import type { App } from './app'
+import { showAssistant } from './assistant'
 import { showAccount, showLogin } from './auth'
 import { showExam } from './exam'
 import { showHome } from './home'
@@ -43,12 +44,15 @@ function start(user: User) {
 
   // The terminal opens once a split view has a ready lab, and stays open until the lab ends.
   const syncTerminal = () => {
-    if (labReady && !layout.classList.contains('single') && !closeTerminal) closeTerminal = openTerminal(terminal, () => lab.refresh())
+    if (labReady && !layout.classList.contains('single') && !closeTerminal) closeTerminal = openTerminal(terminal, '/ws/terminal', () => lab.refresh())
   }
+
+  const assistant = showAssistant(document.querySelector<HTMLElement>('#assistant')!)
 
   const go = (show: () => void) => {
     cleanups.forEach((cleanup) => cleanup())
     cleanups = []
+    app.assist(false)
     show()
   }
 
@@ -56,9 +60,11 @@ function start(user: User) {
     ready() {
       labReady = true
       syncTerminal()
+      assistant.lab(true)
     },
     ended() {
       labReady = false
+      assistant.lab(false)
       closeTerminal?.()
       closeTerminal = undefined
     },
@@ -72,6 +78,10 @@ function start(user: User) {
     split(on) {
       layout.classList.toggle('single', !on)
       syncTerminal()
+    },
+    assist(on) {
+      if (!on) assistant.end()
+      layout.classList.toggle('assist', on)
     },
     labChanged: () => lab.refresh(),
     onLeave: (cleanup) => cleanups.push(cleanup),

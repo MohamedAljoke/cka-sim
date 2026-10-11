@@ -71,7 +71,7 @@ func TestRefusesWrongToken(t *testing.T) {
 	url := startAgent(t, r, newFakeOpener())
 
 	_, runErr := protocol.Client{URL: url, Token: "guess"}.Run(context.Background(), "node", "wl-scale", nil)
-	_, openErr := protocol.Client{URL: url, Token: "guess"}.Open(context.Background(), protocol.Size{Cols: 80, Rows: 24})
+	_, openErr := protocol.Client{URL: url, Token: "guess"}.Open(context.Background(), "", protocol.Size{Cols: 80, Rows: 24})
 	endErr := protocol.Client{URL: url}.EndAll(context.Background())
 
 	for name, err := range map[string]error{"run": runErr, "open": openErr, "end shells": endErr} {
@@ -99,7 +99,7 @@ func TestRemoteShellCarriesBytesResizesAndClose(t *testing.T) {
 	opener := newFakeOpener()
 	remote := protocol.Client{URL: startAgent(t, &fakeRunner{}, opener), Token: token}
 
-	shell, err := remote.Open(context.Background(), protocol.Size{Cols: 120, Rows: 40})
+	shell, err := remote.Open(context.Background(), "", protocol.Size{Cols: 120, Rows: 40})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestRemoteShellCarriesBytesResizesAndClose(t *testing.T) {
 func TestRemoteShellEndsWhenShellExits(t *testing.T) {
 	opener := newFakeOpener()
 	shell, err := protocol.Client{URL: startAgent(t, &fakeRunner{}, opener), Token: token}.
-		Open(context.Background(), protocol.Size{Cols: 80, Rows: 24})
+		Open(context.Background(), "", protocol.Size{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,6 +141,22 @@ func TestRemoteShellEndsWhenShellExits(t *testing.T) {
 
 	if _, err := io.ReadAll(shell); err != nil {
 		t.Errorf("read after exit: %v, want a clean end", err)
+	}
+}
+
+func TestRemoteShellRunsTheCommandItWasOpenedWith(t *testing.T) {
+	opener := newFakeOpener()
+	remote := protocol.Client{URL: startAgent(t, &fakeRunner{}, opener), Token: token}
+
+	shell, err := remote.Open(context.Background(), "exec claude --continue", protocol.Size{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shell.Close()
+	receive(t, opener.opened)
+
+	if opener.command != "exec claude --continue" {
+		t.Errorf("command = %q, want the one sent", opener.command)
 	}
 }
 
@@ -171,16 +187,18 @@ func (r *fakeRunner) Run(ctx context.Context, host, taskID string, script []byte
 }
 
 type fakeOpener struct {
-	opened chan protocol.Size
-	shell  *fakeShell
-	ended  bool
+	opened  chan protocol.Size
+	command string
+	shell   *fakeShell
+	ended   bool
 }
 
 func newFakeOpener() *fakeOpener {
 	return &fakeOpener{opened: make(chan protocol.Size, 1), shell: newFakeShell()}
 }
 
-func (o *fakeOpener) Open(_ context.Context, size protocol.Size) (protocol.Shell, error) {
+func (o *fakeOpener) Open(_ context.Context, command string, size protocol.Size) (protocol.Shell, error) {
+	o.command = command
 	o.opened <- size
 	return o.shell, nil
 }

@@ -27,79 +27,101 @@ Both kinds use the same cka-sim tools through the same MCP server. Only the driv
 ## The page
 
 ```
-┌──────────────────────────────┬───────────────────────────────┐
-│ Task (task.md)  [Check]      │ Assistant  [Claude ▾]         │
-├──────────────────────────────┤                               │
-│                              │  cli kind: Claude Code TUI    │
-│ Lab terminal (/ws/terminal)  │  chat kind: chat bubbles      │
-│                              │                               │
-└──────────────────────────────┴───────────────────────────────┘
+┌──────────────────────────────┬───────────────────────────────────────┐
+│ ← Home                       │ Lab terminal (/ws/terminal)           │
+│ Task title, chips            │                                       │
+│ [Check] [Solution] [Reset]   │                                       │
+│ task.md                      ├───────────────────────────────────────┤
+│                              │ ⌄ ASSISTANT [Claude · subscr ▾] [Disc]│
+│                              │ cli: Claude Code (/ws/assistant)      │
+│                              │ chat (later): chat bubbles            │
+└──────────────────────────────┴───────────────────────────────────────┘
 ```
 
-- The assistant is a **collapsible side panel** (stacked under the terminal on narrow screens). The user never
-  leaves the page.
-- A dropdown picks the provider. v1 lists only "Claude (your subscription)". Codex and others are added as more
-  entries, not new screens.
-- In a `cli` pane the CLI still reads like a chat (Claude Code's TUI is a conversation). The pane is just a second
-  shell in the sandbox, so it reuses `terminal.ts` and `/ws/terminal`.
-- Exam mode hides the panel.
+Built in `apps/web` (`src/assistant.ts`):
+
+- The right column splits: the lab terminal on top, the **Assistant** panel below it. Collapsed, the panel is a
+  thin bar under the terminal. Open, the column splits 3:2.
+- A dropdown picks the provider. v1 lists only "Claude · your subscription". Codex and others are added as more
+  entries in `providers`, not new screens.
+- In a `cli` pane the vendor CLI is the chat (Claude Code's TUI is a conversation), shown with the same
+  `openTerminal` as the lab, over `/ws/assistant?provider=<id>`.
+- The panel only shows on a practice task (`app.assist(true)` in `practice.ts`). Every view change, and the lab
+  ending, disconnects it, so exams and Home never have a live assistant.
+- States: **Connect** (disabled until the lab is ready) → *Connecting…* → connected with **Disconnect**. An error
+  shows the message with **Retry**, e.g. "Claude Code is not installed in this lab yet" until the lab image has it.
 
 ## The flow (v1: Claude subscription)
 
-1. **Trigger:** on a task page, the user opens the Assistant panel and picks Claude.
+1. **Trigger:** on a practice task, the user opens the Assistant bar and clicks **Connect**.
 2. **Hops:**
-   - The web app asks `apps/auth` for an **assistant token**: a short-lived JWT scoped to `assistant`, tied to
-     their account.
-   - The web app calls `POST /api/assistant` on the platform with the provider id (`claude`) and the token.
-   - The platform's `assistant.Provider` for Claude prepares the sandbox through `Lab.Run`. It writes Claude Code's
-     MCP config, pointing at the cka-sim MCP app's public URL with the token, plus a **managed settings** file
-     (`/etc/claude-code/managed-settings.json`). That file denies Bash and Edit and allows only the cka-sim MCP
-     tools, so Claude can look and hint but can't solve the task. The user can't override managed settings from
-     inside Claude.
-   - The panel opens a second shell over `/ws/terminal` and runs `claude`. On first use Claude Code prints a login
-     URL; the user approves it and pastes the code back. The login lives only in their VM and dies with it. We
-     never read or store it.
+   - The web app calls `POST /api/assistant` with `{"provider": "claude"}` (`startAssistant` in `src/api.ts`).
+   - *(Not built: MCP.)* The platform gets an **assistant token** for this user from `apps/auth`, passing on the
+     user's own session. It's a short-lived JWT scoped to `assistant`.
+   - The platform's `assistant.Provider` for Claude prepares the sandbox through `Lab.Run` on the base host
+     (`cka-sim-base`, as root; `internal/assistant/claude.go`). It checks that `claude` is installed for
+     `candidate`, then writes a **managed settings** file (`/etc/claude-code/managed-settings.json`, from
+     `claude-settings.json`). That file denies Bash, Edit, Write and web access, locks permission rules, hooks and
+     MCP servers to itself, and disables bypass mode, so Claude can look and hint but can't solve the task. The
+     candidate can't change it: it's root's file. *(Not built: the MCP config pointing at the cka-sim MCP app with
+     the token, and adding that server to `allowedMcpServers`.)*
+   - The panel opens `GET /ws/assistant?provider=claude`. The platform prepares again (so a socket opened on its own
+     never skips the settings), then opens a shell through the lab agent's `GET /shell?command=…`, which runs
+     `bash -lc <command>` instead of a login shell. Claude's command is `claude --continue` when a conversation
+     exists and `claude` otherwise (`--continue` exits when there's nothing to continue), so leaving and coming back
+     to a task resumes the conversation. It's the same terminal protocol as `/ws/terminal`, and typing in it counts
+     as activity for the idle timer. On first use Claude Code prints a login URL; the user approves it and pastes
+     the code back. The login lives only in their VM and dies with it. We never read or store it.
    - The user asks *"review my attempt"*. Claude calls the MCP app (`apps/mcp`), which calls the platform API with
      the same token, which runs the work on the user's desk (`desk.Desks.For`). That's the same lab as the
      terminal.
-3. **What they see:** Claude's review in the side panel, e.g. *"2/3 checks pass; replicas are 3, the task asks
-   for 5."* If the lab isn't running, the tools say so ("start a lab first"). If the token has expired, the panel
-   offers **Reconnect**, which gets a fresh token and rewrites the config.
+3. **What they see:** Claude's review in the panel under the terminal, e.g. *"2/3 checks pass; replicas are 3, the
+   task asks for 5."* If the lab isn't running, the tools say so ("start a lab first"). If the socket drops, the
+   panel says "The assistant disconnected." and offers **Retry**, which gets a fresh token and rewrites the config.
+   During an exam the platform refuses both endpoints (409 `exam_running`), and beginning an exam ends every open
+   assistant shell (`desk.EndAssistants`), leaving the lab terminal alone.
 
 The sandbox reaches the MCP app over the internet, not in-cluster: lab egress allows the internet but no private
 ranges (`apps/lab/deploy/gke/lab-pool.yaml`). Users can also add the same MCP URL to Claude Code or Desktop on
-their own PC; it's the same server and the same token.
+their own PC; it's the same server, with a token they create themselves (later).
 
 ## The abstractions
 
-**Frontend** (`apps/web`): the panel renders a provider by its kind.
+**Frontend** (`apps/web/src/assistant.ts`): the panel only knows this type. Each provider draws its own screen.
 
 ```ts
-type AssistantProvider =
-  | { id: string; label: string; kind: "cli" }
-  | { id: string; label: string; kind: "chat" };
+type Provider = {
+  id: string
+  label: string
+  intro: string
+  prepare(): Promise<void>
+  mount(screen: HTMLElement, ended: () => void): () => void
+}
 ```
+
+`cli(id, label, intro)` builds a subscription provider: `prepare` is `POST /api/assistant`, and `mount` opens a
+terminal on `/ws/assistant?provider=<id>`. Codex is one more `cli(...)` line. A `chat` provider (later) implements
+`mount` with a chat UI instead.
 
 **Platform** (`apps/platform/internal/assistant`), owned by the engine as in [swappable parts]:
 
 ```go
+type Lab interface {
+	Run(ctx context.Context, host, taskID string, script []byte) (string, error)
+}
+
 type Provider interface {
 	ID() string
-	Kind() Kind
-	Prepare(ctx context.Context, lab *sandbox.Lab, conn Connection) (Launch, error)
-}
-
-type Connection struct {
-	MCPURL string
-	Token  string
-}
-
-type Launch struct {
-	Command []string
+	Prepare(ctx context.Context, lab Lab) error
+	Command() string
 }
 ```
 
-- `claude`: writes the MCP config and managed settings, then launches `claude`.
+`server.Practice.Assistants` lists the providers (`cmd/server/main.go` passes `assistant.Claude{}`), and
+`assistant.Find` picks one by id; an unknown id is 422 `assistant_unknown`. With MCP, `Prepare` will also take the
+connection (MCP URL and token) to write into the provider's config.
+
+- `claude`: writes the managed settings (later also the MCP config), then launches `claude`.
 - `codex` (later): writes `~/.codex/config.toml` with the MCP server and a read-only sandbox mode, then launches
   `codex`.
 - `chat` providers (later) don't use `Prepare` at all. They get a separate `Chat(ctx, messages, tools)` interface
@@ -142,13 +164,15 @@ before building. Deploy: one more Deployment and Service on GKE behind Caddy at 
 
 ## Build order (v1)
 
-1. Platform: bearer-token auth, the `assistant` scope, and the exam check, with tests.
-2. Platform: `GET /api/assistant/task`, `POST /api/assistant/inspect`, `GET /api/tasks/{id}/explain`.
-3. `apps/mcp`: module, Streamable HTTP server, the five tools. Test with Claude Code on the PC against `make dev`.
-4. `apps/auth`: issue assistant-scoped tokens.
-5. Platform: the `assistant` package with the `claude` provider and `POST /api/assistant`.
-6. Lab image: install Claude Code.
-7. Web: the Assistant side panel with the provider dropdown and the `cli` pane.
+1. ~~Web: the Assistant panel with the provider dropdown and the `cli` pane.~~ Done (`apps/web/src/assistant.ts`).
+2. ~~Platform: the `assistant` package with the `claude` provider, `POST /api/assistant` and `GET /ws/assistant`.~~
+   Done. The lab agent's shell contract gained a command (`Opener.Open(ctx, command, size)`, `/shell?command=`).
+3. Lab image: install Claude Code for `candidate` in `base.Dockerfile`.
+4. Platform: bearer-token auth, the `assistant` scope, and the exam check, with tests.
+5. Platform: `GET /api/assistant/task`, `POST /api/assistant/inspect`, `GET /api/tasks/{id}/explain`.
+6. `apps/auth`: issue assistant-scoped tokens.
+7. `apps/mcp`: module, Streamable HTTP server, the five tools. Test with Claude Code on the PC against `make dev`.
+   Then `Prepare` writes the MCP config and allows that server.
 
 Afterwards, ask whether to update EventCatalog (new service `mcp`, new flow).
 

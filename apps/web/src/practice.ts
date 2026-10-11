@@ -5,6 +5,7 @@ import { checkList, chips, el, hostLine, markdown, message, setStatus } from './
 export function showPractice(app: App, task: Task) {
   const { pane } = app
   app.split(true)
+  app.assist(true)
   // Aborting the request stops its script on the server, so leaving never blocks the next task.
   let running = new AbortController()
   const restart = () => {

@@ -33,7 +33,7 @@ const fallback = 'ui-monospace, Menlo, Consolas, monospace'
 const fontFamily = `'JetBrains Mono Variable', ${fallback}`
 
 // openTerminal returns a close for when the lab behind the shell ends.
-export function openTerminal(pane: HTMLElement, onDisconnect: () => void): () => void {
+export function openTerminal(pane: HTMLElement, path: string, onDisconnect: () => void): () => void {
   const term = new Terminal({
     cursorBlink: true,
     fontFamily: document.fonts.check(mono) ? fontFamily : fallback,
@@ -65,7 +65,7 @@ export function openTerminal(pane: HTMLElement, onDisconnect: () => void): () =>
   // A refused upgrade gives no status, so a socket that never opened may just be an expired session.
   const connect = (retried: boolean) => {
     let opened = false
-    socket = new WebSocket(`${scheme}://${location.host}/ws/terminal`)
+    socket = new WebSocket(`${scheme}://${location.host}${path}`)
     socket.binaryType = 'arraybuffer'
     socket.onopen = () => {
       opened = true

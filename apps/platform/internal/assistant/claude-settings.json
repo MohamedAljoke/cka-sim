@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "deny": ["Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch"],
+    "disableBypassPermissionsMode": "disable"
+  },
+  "allowManagedPermissionRulesOnly": true,
+  "allowManagedHooksOnly": true,
+  "allowManagedMcpServersOnly": true,
+  "allowedMcpServers": []
+}

@@ -1,21 +1,24 @@
 package server
 
 import (
+	"context"
 	"io/fs"
 	"log"
 	"net/http"
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/assistant"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/desk"
 	labagent "github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
 )
 
 type Practice struct {
-	Tasks []tasks.Task
-	Files fs.FS
-	Exams bool
+	Tasks      []tasks.Task
+	Files      fs.FS
+	Exams      bool
+	Assistants []assistant.Provider
 }
 
 func New(desks *desk.Desks, practice Practice) http.Handler {
@@ -30,9 +33,13 @@ func New(desks *desk.Desks, practice Practice) http.Handler {
 		if err != nil {
 			return err
 		}
-		labagent.Serve(w, r, d)
+		labagent.Serve(w, r, func(ctx context.Context, size labagent.Size) (labagent.Shell, error) {
+			return d.Open(ctx, "", size)
+		})
 		return nil
 	})
+	handle("GET /ws/assistant", a.serveAssistant)
+	handle("POST /api/assistant", a.startAssistant)
 	handle("GET /api/lab", a.getLab)
 	handle("POST /api/lab", a.startLab)
 	handle("DELETE /api/lab", a.endLab)

@@ -65,8 +65,12 @@ func currentContextHost() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func (o *Opener) Open(ctx context.Context, size protocol.Size) (protocol.Shell, error) {
+func (o *Opener) Open(ctx context.Context, command string, size protocol.Size) (protocol.Shell, error) {
 	tag := rand.Text()
+	cmd := []string{"bash", "-l"}
+	if command != "" {
+		cmd = []string{"bash", "-lc", command}
+	}
 	created, err := o.docker.ExecCreate(ctx, o.container, client.ExecCreateOptions{
 		TTY:          true,
 		AttachStdin:  true,
@@ -76,7 +80,7 @@ func (o *Opener) Open(ctx context.Context, size protocol.Size) (protocol.Shell, 
 		Env:          []string{tagVar + "=" + tag},
 		User:         o.user,
 		WorkingDir:   "/home/" + o.user,
-		Cmd:          []string{"bash", "-l"},
+		Cmd:          cmd,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create shell in %s: %w", o.container, err)

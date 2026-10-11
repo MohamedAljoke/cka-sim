@@ -136,12 +136,12 @@ func (l *Lab) Run(ctx context.Context, host, taskID string, script []byte) (stri
 	return box.Runner.Run(ctx, host, taskID, script)
 }
 
-func (l *Lab) Open(ctx context.Context, size labagent.Size) (labagent.Shell, error) {
+func (l *Lab) Open(ctx context.Context, command string, size labagent.Size) (labagent.Shell, error) {
 	box, err := l.current()
 	if err != nil {
 		return nil, err
 	}
-	return box.Shells.Open(ctx, size)
+	return box.Shells.Open(ctx, command, size)
 }
 
 func (l *Lab) EndAll(ctx context.Context) error {

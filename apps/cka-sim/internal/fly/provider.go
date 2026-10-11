@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/cka-sim/internal/cluster"
@@ -23,6 +25,8 @@ const (
 	// Each pool VM's dockerd listens on its private address only.
 	dockerPort    = "2375"
 	createTimeout = 3 * time.Minute
+	// A claimed Machine's network policy is named after it, so it can be found again after a restart.
+	lockPrefix = "cka-sim-lock-"
 )
 
 type Config struct {
@@ -39,6 +43,8 @@ type Provider struct {
 	healthWait time.Duration
 	box        func(ctx context.Context, id, host string) (sandbox.Box, error)
 	probe      func(ctx context.Context, b sandbox.Box) error
+	mu         sync.Mutex
+	relays     map[string]*relay
 }
 
 func New(c Config) *Provider {
@@ -52,7 +58,8 @@ func New(c Config) *Provider {
 		box: func(ctx context.Context, id, host string) (sandbox.Box, error) {
 			return sandbox.DockerBox(ctx, id, host, c.Lib)
 		},
-		probe: clusterAnswers,
+		probe:  clusterAnswers,
+		relays: map[string]*relay{},
 	}
 }
 
@@ -76,7 +83,7 @@ func (p *Provider) Create(ctx context.Context) (sandbox.Box, error) {
 			return box, nil
 		}
 		log.Printf("fly: machine %s is unusable, destroying it: %v", m.ID, err)
-		if err := p.api.destroy(context.WithoutCancel(ctx), m.ID); err != nil {
+		if err := p.release(context.WithoutCancel(ctx), m.ID); err != nil {
 			log.Printf("fly: destroy machine %s: %v", m.ID, err)
 		}
 	}
@@ -87,13 +94,30 @@ func (p *Provider) claim(ctx context.Context, m flyMachine) (sandbox.Box, error)
 	if err := p.api.setMetadata(ctx, m.ID, poolKey, claimed); err != nil {
 		return sandbox.Box{}, err
 	}
+	// Locked before it resumes, so the user's VM never runs with a way out. A selector on pool=claimed
+	// wouldn't do: Fly matches selectors when a policy is written, not when metadata changes.
+	if err := p.api.lock(ctx, lockPrefix+m.ID, m.ID); err != nil {
+		return sandbox.Box{}, err
+	}
 	if err := p.api.start(ctx, m.ID); err != nil {
 		return sandbox.Box{}, err
 	}
 	if err := p.api.waitStarted(ctx, m.ID); err != nil {
 		return sandbox.Box{}, err
 	}
-	return p.healthy(ctx, m.ID, "tcp://["+m.PrivateIP+"]:"+dockerPort)
+	r, err := startRelay(m.ID, "["+m.PrivateIP+"]:"+dockerPort)
+	if err != nil {
+		return sandbox.Box{}, err
+	}
+	box, err := p.healthy(ctx, m.ID, r.host())
+	if err != nil {
+		r.Close()
+		return sandbox.Box{}, err
+	}
+	p.mu.Lock()
+	p.relays[m.ID] = r
+	p.mu.Unlock()
+	return box, nil
 }
 
 // healthy retries for a while: dockerd and the API server can take a moment after a resume.
@@ -118,10 +142,40 @@ func (p *Provider) healthy(ctx context.Context, id, host string) (sandbox.Box, e
 }
 
 func (p *Provider) Destroy(ctx context.Context, b sandbox.Box) error {
-	return p.api.destroy(ctx, b.ID)
+	return p.release(ctx, b.ID)
 }
 
-// ReapClaimed destroys Machines a previous run of the server claimed and never gave back.
+// release destroys the Machine first, so it is never left running unlocked.
+func (p *Provider) release(ctx context.Context, id string) error {
+	p.mu.Lock()
+	if r, ok := p.relays[id]; ok {
+		r.Close()
+		delete(p.relays, id)
+	}
+	p.mu.Unlock()
+	if err := p.api.destroy(ctx, id); err != nil {
+		return err
+	}
+	return p.unlock(ctx, func(name string) bool { return name == lockPrefix+id })
+}
+
+func (p *Provider) unlock(ctx context.Context, match func(name string) bool) error {
+	all, err := p.api.policies(ctx)
+	if err != nil {
+		return err
+	}
+	for _, pol := range all {
+		if match(pol.Name) {
+			if err := p.api.deletePolicy(ctx, pol.ID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// ReapClaimed destroys Machines a previous run of the server claimed and never gave back, and the
+// locks they leave behind; this run holds no lab yet, so every lock is stale.
 func (p *Provider) ReapClaimed(ctx context.Context) error {
 	left, err := p.api.list(ctx, poolKey, claimed)
 	if err != nil {
@@ -133,7 +187,7 @@ func (p *Provider) ReapClaimed(ctx context.Context) error {
 		}
 		log.Printf("fly: destroyed machine %s, left claimed by an earlier run", m.ID)
 	}
-	return nil
+	return p.unlock(ctx, func(name string) bool { return strings.HasPrefix(name, lockPrefix) })
 }
 
 func clusterAnswers(ctx context.Context, b sandbox.Box) error {

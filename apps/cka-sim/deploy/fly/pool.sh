@@ -20,7 +20,7 @@ api() {
 
 add_one() {
   local id
-  id=$(fly machine run "$IMAGE" -a "$APP" -r "$REGION" \
+  id=$(fly machine run "$PINNED" -a "$APP" -r "$REGION" \
     --vm-cpu-kind performance --vm-cpus 2 --vm-memory 4096 --rootfs-size 20 \
     --restart no --metadata pool=building --detach 2>&1 | sed -n 's/.*Machine ID: *\([0-9a-f]*\).*/\1/p')
   if [ -z "$id" ]; then
@@ -28,7 +28,7 @@ add_one() {
     return 1
   fi
   echo "$id: created, building the cluster"
-  if api GET "/machines/$id/wait?state=started&timeout=60" >/dev/null &&
+  if started "$id" &&
     build "$id" &&
     api POST "/machines/$id/metadata/pool" -d '{"value":"ready"}' >/dev/null &&
     api POST "/machines/$id/suspend" >/dev/null &&
@@ -39,6 +39,16 @@ add_one() {
     api DELETE "/machines/$id?force=true" >/dev/null || true
     return 1
   fi
+}
+
+# Right after fly machine run returns, the API can answer 403 for the new VM for a few seconds.
+started() {
+  local try
+  for try in 1 2 3 4 5 6; do
+    api GET "/machines/$1/wait?state=started&timeout=60" >/dev/null 2>&1 && return 0
+    sleep 5
+  done
+  return 1
 }
 
 # ssh into a just-started VM can fail for a few seconds.
@@ -59,6 +69,10 @@ TOKEN=$(fly auth token 2>/dev/null | tail -1)
 case "${1:-}" in
 fill)
   n=${2:?how many VMs?}
+  # fly machine run can resolve the tag to an older push, so every VM gets the digest the tag has now.
+  fly auth docker >/dev/null
+  PINNED=$IMAGE@$(docker buildx imagetools inspect "$IMAGE" --format '{{json .Manifest}}' | jq -r .digest)
+  echo "image $PINNED"
   for _ in $(seq "$n"); do add_one & done
   wait
   ;;

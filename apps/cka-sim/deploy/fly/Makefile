@@ -6,7 +6,7 @@ REGION := gru
 APPS   := $(abspath ../../..)
 MODULE := $(abspath ../..)
 
-.PHONY: help apps image pool list deploy password down
+.PHONY: help apps image pool list probe deploy password down
 
 help:
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
@@ -33,6 +33,9 @@ pool: ## add N warm exam VMs: make pool N=2
 
 list: ## list the exam VMs and their pool state
 	FLY_LABS_APP=$(LABS) ./pool.sh list
+
+probe: ## check an exam VM is locked in: make probe ID=<machine>
+	FLY_LABS_APP=$(LABS) ./probe.sh $(ID)
 
 deploy: ## build and deploy the site
 	fly auth docker

@@ -108,9 +108,29 @@ Three Fly quirks, all handled in `apps/cka-sim/deploy/fly/lab-start.sh`:
   nodes exits (exit 137). The fix is to mount that hierarchy before dockerd. A full switch to v2 isn't possible,
   because Fly's init holds `cpu,cpuacct`. `cka-sim up` then adds its existing cgroup v1 patch.
 
+### Network lockdown (2026-10)
+
+A claimed VM is locked with a Fly [network policy](https://docs.fly.io/machines/guides-examples/network-policies)
+that denies all its egress. Fly has no deny-all, so the policy is one dummy rule, "allow TCP port 0". What we
+measured with throwaway apps and then on the real pool:
+
+| | Result |
+|---|---|
+| Internet (IPv4, IPv6), other labs, the site | blocked, so the private network is covered too |
+| The server connecting into the VM | works: connections are tracked |
+| A policy written while the VM runs, after a stop/start, after suspend/resume | applies, with no restart |
+| Changing a VM's metadata to match a policy's selector | **doesn't apply it**, so the lock selects the Machine by ID at claim |
+| A connection into the VM that stays silent for ~10s or more | **forgotten; the VM's replies are then dropped** (a silent 10s `docker exec` hangs ~170s) |
+| The same, through the server's keepalive relay (3s) | silent 20s and 70s both work |
+| Fly's DNS (`fdaa::3`) | still reachable; rules can't name it |
+
+Since the lock cuts off pulls, a VM only joins the pool if `cka-sim up` loaded every task image into the nodes.
+`make probe ID=<machine>` checks a VM from the inside.
+
 How it is wired is flow 7 in `docs/FLOWS.md`. Still to build:
 - automatic pool refill, as its own service;
-- an in-VM agent with a token instead of dockerd on the private network;
+- an in-VM agent with a token instead of dockerd on the private network (the lock keeps labs off each other's
+  dockerd, but other apps in the organisation can still reach it);
 - users, and one VM per user.
 
 Sprites were not tried.

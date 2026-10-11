@@ -45,6 +45,36 @@ func (m machines) destroy(ctx context.Context, id string) error {
 	return m.do(ctx, http.MethodDelete, "/machines/"+id+"?force=true", nil, nil)
 }
 
+type policy struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// lock cuts the Machine off from everything it could connect to: the internet, the private network,
+// other labs. Connections into it, such as the server's to its dockerd, still work.
+func (m machines) lock(ctx context.Context, name, id string) error {
+	return m.do(ctx, http.MethodPost, "/network_policies", map[string]any{
+		"name":     name,
+		"selector": map[string]any{"machines": []map[string]string{{"id": id}}},
+		// Fly has no deny-all: a direction with any rule denies the rest, and nothing listens on port 0.
+		"rules": []map[string]any{{
+			"action":    "allow",
+			"direction": "egress",
+			"ports":     []map[string]any{{"protocol": "tcp", "port": 0}},
+		}},
+	}, nil)
+}
+
+func (m machines) policies(ctx context.Context) ([]policy, error) {
+	var out []policy
+	err := m.do(ctx, http.MethodGet, "/network_policies", nil, &out)
+	return out, err
+}
+
+func (m machines) deletePolicy(ctx context.Context, id string) error {
+	return m.do(ctx, http.MethodDelete, "/network_policies/"+id, nil, nil)
+}
+
 func (m machines) do(ctx context.Context, method, path string, in, out any) error {
 	var body io.Reader
 	if in != nil {

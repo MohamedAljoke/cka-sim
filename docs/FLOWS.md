@@ -213,8 +213,10 @@ keeps the results; Home shows them as "Last exam" until the next exam replaces t
 a Fly token for the pool app and a password. `make image` builds `lab.Dockerfile` (dind plus the `cka-sim`
 CLI) and pushes it. `make pool N=2` runs `pool.sh fill`: for each VM it does `fly machine run` with
 2 performance CPUs and 4 GB, labels it `pool=building`, and runs `lab-build` in it over `fly ssh`. That waits
-for dockerd and runs `cka-sim up`. Then `pool.sh` sets `pool=ready` and suspends the VM (~2.5 min each, in
-parallel). `lab-start.sh`, the VM's entrypoint, works around three Fly quirks before dockerd starts:
+for dockerd and runs `cka-sim up`, and fails the VM if the task images didn't load into the nodes: a claimed
+VM can't pull them later. Then `pool.sh` sets `pool=ready` and suspends the VM (~2.5 min each, in
+parallel). Every VM runs the image digest `make image` last pushed, because `fly machine run` can resolve the
+`:lab` tag to an older push. `lab-start.sh`, the VM's entrypoint, works around three Fly quirks before dockerd starts:
 - an ext4 loop disk at `/var/lib/docker`, because the root disk is an overlay and Docker would fall back to `vfs`;
 - a `name=systemd` cgroup, without which systemd in the kind nodes exits;
 - `--dns 8.8.8.8`, because Fly's resolver is IPv6 only and image builds can't reach it.
@@ -232,15 +234,22 @@ nothing until a lab starts.
 **Starting an exam (or practising a task).** The lab starts as in flow 2, but `fly.Provider.Create` runs these steps:
 1. List the pool app's Machines with `metadata.pool=ready`.
 2. Label the first one `claimed`.
-3. Resume it (`POST /machines/{id}/start`) and wait for `started`.
-4. Hand its private address to `sandbox.DockerBox` as `tcp://[fdaa:…]:2375`. The same `runner.Node`
-   (`docker exec`) and `DockerOpener` as locally now talk to that VM's dockerd.
-5. Health check: `kubectl get --raw=/readyz` on the control plane, retried for 30s. If Fly cold-booted
+3. Lock it: write a network policy named `cka-sim-lock-<id>` that selects that Machine and denies all its egress.
+   From then on the VM reaches nothing, not the internet or other labs, though the server can still connect in.
+   It's written per Machine at claim time because Fly matches policy selectors when the policy is written, not
+   when `pool` changes.
+4. Resume it (`POST /machines/{id}/start`) and wait for `started`.
+5. Start a relay (`internal/fly/relay.go`): a Unix socket in the server, `/tmp/cka-sim-<id>.sock`, that forwards
+   to the VM's `[fdaa:…]:2375` with TCP keepalives every 3s. The lock forgets a connection after 5–10s of
+   silence and then drops the VM's replies, which would hang a quiet terminal. `sandbox.DockerBox` gets the
+   socket, and the same `runner.Node` (`docker exec`) and `DockerOpener` as locally now talk to that VM's dockerd.
+6. Health check: `kubectl get --raw=/readyz` on the control plane, retried for 30s. If Fly cold-booted
    the VM instead of restoring its snapshot, the cluster is gone, so the VM is destroyed and the next one is tried.
 
 The topbar shows "Lab ready in 4.0s · Fly". From here, setup scripts, checks and the terminal all run on
 that VM.
 
-**Ending.** End exam grades and tidies, then ends the lab, and `Destroy` deletes the Machine (`?force=true`). End lab
+**Ending.** End exam grades and tidies, then ends the lab, and `Destroy` closes the relay, deletes the Machine
+(`?force=true`), then deletes its lock. At startup the server also deletes every leftover `cka-sim-lock-` policy. End lab
 and `DELETE /api/exam` do the same. The pool is now one smaller. Nothing refills it yet: run `make pool N=1`. With an empty pool,
 the lab fails with "no warm VM in the pool", shown in the topbar.

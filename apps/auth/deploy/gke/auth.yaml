@@ -11,6 +11,8 @@ metadata:
   name: auth
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: cka-sim-auth
@@ -42,7 +44,7 @@ spec:
             runAsNonRoot: true
           resources:
             requests:
-              cpu: 50m
+              cpu: 25m
               memory: 64Mi
         - name: migrate
           image: ${AUTH_IMAGE}
@@ -76,7 +78,7 @@ spec:
               port: 7272
           resources:
             requests:
-              cpu: 50m
+              cpu: 25m
               memory: 64Mi
 ---
 apiVersion: v1

@@ -14,12 +14,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/MohamedAljoke/cka-sim/apps/auth/internal/accounts"
+	"github.com/MohamedAljoke/cka-sim/apps/auth/internal/refresh"
 	"github.com/MohamedAljoke/cka-sim/apps/auth/internal/server"
 	"github.com/MohamedAljoke/cka-sim/apps/auth/internal/session"
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/config"
 )
 
-const sessionTTL = 12 * time.Hour
+const (
+	accessTTL    = 15 * time.Minute
+	refreshTTL   = 30 * 24 * time.Hour
+	refreshGrace = 30 * time.Second
+)
 
 type settings struct {
 	Addr        string `key:"CKA_SIM_AUTH_ADDR" default:"127.0.0.1:7272"`
@@ -53,9 +58,11 @@ func run(ctx context.Context) error {
 	defer ln.Close()
 
 	secret := []byte(cfg.Secret)
-	signer := session.Signer{Secret: secret, TTL: sessionTTL, Now: time.Now}
+	signer := session.Signer{Secret: secret, TTL: accessTTL, Now: time.Now}
 	sessions := session.Verifier{Secret: secret, Now: time.Now}
-	srv := &http.Server{Handler: server.New(accounts.Postgres{Pool: pool}, signer, sessions)}
+	tokens := refresh.Postgres{Pool: pool, TTL: refreshTTL, Grace: refreshGrace, Now: time.Now}
+	handler := server.New(accounts.Postgres{Pool: pool}, signer, sessions, server.Refresh{Tokens: tokens, TTL: refreshTTL})
+	srv := &http.Server{Handler: handler}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

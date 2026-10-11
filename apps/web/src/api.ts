@@ -72,8 +72,7 @@ export type ExamState = {
 }
 
 export async function getExam(): Promise<ExamState | null> {
-  const res = await fetch('/api/exam')
-  if (res.status === 401) return dropSessionAndReload()
+  const res = await withSession('/api/exam', {})
   if (res.status === 404) return null
   if (!res.ok) throw await failure(res, 'GET', '/api/exam')
   return res.json()
@@ -126,10 +125,25 @@ export type User = {
 
 // currentUser is null when nobody is logged in; the session cookie is HttpOnly, so only the server can tell.
 export async function currentUser(): Promise<User | null> {
-  const res = await fetch('/api/auth/me')
+  let res = await fetch('/api/auth/me')
+  if (res.status === 401) {
+    if (!(await refreshSession())) return null
+    res = await fetch('/api/auth/me')
+  }
   if (res.status === 401) return null
   if (!res.ok) throw await failure(res, 'GET', '/api/auth/me')
   return res.json()
+}
+
+let refreshing: Promise<boolean> | undefined
+
+// One refresh at a time, across tabs too: each tab sends the cookie the previous refresh left behind.
+export function refreshSession(): Promise<boolean> {
+  const renew = () => fetch('/api/auth/refresh', { method: 'POST' }).then((res) => res.ok, () => false)
+  refreshing ??= (navigator.locks ? navigator.locks.request('cka-sim-refresh', renew) : renew()).finally(() => {
+    refreshing = undefined
+  })
+  return refreshing
 }
 
 export async function logIn(email: string, password: string): Promise<User> {
@@ -146,9 +160,15 @@ async function call(method: string, path: string, body?: unknown, signal?: Abort
     init.headers = { 'Content-Type': 'application/json' }
     init.body = JSON.stringify(body)
   }
-  const res = await fetch(path, init)
-  if (res.status === 401 && !path.startsWith('/api/auth/')) return dropSessionAndReload()
+  const res = path.startsWith('/api/auth/') ? await fetch(path, init) : await withSession(path, init)
   if (!res.ok) throw await failure(res, method, path)
+  return res
+}
+
+async function withSession(path: string, init: RequestInit): Promise<Response> {
+  let res = await fetch(path, init)
+  if (res.status === 401 && (await refreshSession())) res = await fetch(path, init)
+  if (res.status === 401) return dropSessionAndReload()
   return res
 }
 

@@ -28,13 +28,24 @@ roleRef:
   kind: Role
   name: cka-sim-app
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: caddy-data
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: standard-rwo
+  resources:
+    requests:
+      storage: 10Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: app
 spec:
   replicas: 1
-  # One server holds the lab and the exam, so never two at once.
+  # One server holds every user's lab and exam in memory, so never two at once.
   strategy:
     type: Recreate
   selector:
@@ -49,6 +60,10 @@ spec:
       nodeSelector:
         cloud.google.com/gke-nodepool: default-pool
       enableServiceLinks: false
+      volumes:
+        - name: caddy-data
+          persistentVolumeClaim:
+            claimName: caddy-data
       containers:
         - name: app
           image: ${APP_IMAGE}
@@ -67,12 +82,15 @@ spec:
                 secretKeyRef:
                   name: cka-sim-auth
                   key: secret
+          volumeMounts:
+            - name: caddy-data
+              mountPath: /root/.local/share/caddy
           ports:
             - containerPort: 80
             - containerPort: 443
           resources:
             requests:
-              cpu: 100m
+              cpu: 50m
               memory: 128Mi
 ---
 apiVersion: v1

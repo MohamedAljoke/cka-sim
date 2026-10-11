@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -65,10 +66,22 @@ func (v Verifier) FromRequest(r *http.Request) (Claims, error) {
 func Require(v Verifier, next http.Handler) http.Handler {
 	problems := httpx.NewProblems()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := v.FromRequest(r); err != nil {
+		claims, err := v.FromRequest(r)
+		if err != nil {
 			problems.Write(w, r, err)
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(WithClaims(r.Context(), claims)))
 	})
+}
+
+type claimsKey struct{}
+
+func WithClaims(ctx context.Context, c Claims) context.Context {
+	return context.WithValue(ctx, claimsKey{}, c)
+}
+
+func FromContext(ctx context.Context) (Claims, bool) {
+	c, ok := ctx.Value(claimsKey{}).(Claims)
+	return c, ok
 }

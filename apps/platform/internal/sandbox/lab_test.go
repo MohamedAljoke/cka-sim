@@ -11,7 +11,7 @@ import (
 )
 
 func TestNewLabHasNoBox(t *testing.T) {
-	lab := NewLab(&fakeProvider{}, fakeClock())
+	lab := NewLab(&fakeProvider{}, "a", fakeClock())
 
 	if got := lab.Status(); got.State != None || got.Provider != "Fake" {
 		t.Fatalf("status = %+v, want none from Fake", got)
@@ -20,7 +20,7 @@ func TestNewLabHasNoBox(t *testing.T) {
 
 func TestStartMakesTheLabReady(t *testing.T) {
 	p := &fakeProvider{gate: make(chan struct{})}
-	lab := NewLab(p, fakeClock())
+	lab := NewLab(p, "a", fakeClock())
 
 	lab.Start()
 	if got := lab.Status().State; got != Starting {
@@ -39,7 +39,7 @@ func TestStartMakesTheLabReady(t *testing.T) {
 }
 
 func TestRunAndOpenNeedAReadyLab(t *testing.T) {
-	lab := NewLab(&fakeProvider{}, fakeClock())
+	lab := NewLab(&fakeProvider{}, "a", fakeClock())
 
 	if _, err := lab.Run(context.Background(), "host", "task", nil); !errors.Is(err, ErrNoLab) {
 		t.Fatalf("Run before start = %v, want ErrNoLab", err)
@@ -51,7 +51,7 @@ func TestRunAndOpenNeedAReadyLab(t *testing.T) {
 
 func TestRunAndOpenReachTheBox(t *testing.T) {
 	p := &fakeProvider{}
-	lab := NewLab(p, fakeClock())
+	lab := NewLab(p, "a", fakeClock())
 	lab.Start()
 	ensure(t, lab)
 
@@ -69,7 +69,7 @@ func TestRunAndOpenReachTheBox(t *testing.T) {
 
 func TestEnsureStartsAndWaits(t *testing.T) {
 	p := &fakeProvider{gate: make(chan struct{})}
-	lab := NewLab(p, fakeClock())
+	lab := NewLab(p, "a", fakeClock())
 
 	done := make(chan error)
 	go func() { done <- lab.Ensure(context.Background()) }()
@@ -85,7 +85,7 @@ func TestEnsureStartsAndWaits(t *testing.T) {
 }
 
 func TestEnsureStopsWithItsContext(t *testing.T) {
-	lab := NewLab(&fakeProvider{gate: make(chan struct{})}, fakeClock())
+	lab := NewLab(&fakeProvider{gate: make(chan struct{})}, "a", fakeClock())
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -96,7 +96,7 @@ func TestEnsureStopsWithItsContext(t *testing.T) {
 
 func TestAFailedStartCanBeRetried(t *testing.T) {
 	p := &fakeProvider{err: errors.New("cluster is not up")}
-	lab := NewLab(p, fakeClock())
+	lab := NewLab(p, "a", fakeClock())
 
 	if err := lab.Ensure(context.Background()); err == nil {
 		t.Fatal("Ensure succeeded, want the create error")
@@ -113,7 +113,7 @@ func TestAFailedStartCanBeRetried(t *testing.T) {
 
 func TestStartingTwiceCreatesOneBox(t *testing.T) {
 	p := &fakeProvider{gate: make(chan struct{})}
-	lab := NewLab(p, fakeClock())
+	lab := NewLab(p, "a", fakeClock())
 
 	lab.Start()
 	lab.Start()
@@ -128,7 +128,7 @@ func TestStartingTwiceCreatesOneBox(t *testing.T) {
 
 func TestEndDestroysTheBox(t *testing.T) {
 	p := &fakeProvider{}
-	lab := NewLab(p, fakeClock())
+	lab := NewLab(p, "a", fakeClock())
 	lab.Start()
 	ensure(t, lab)
 
@@ -148,7 +148,7 @@ func TestEndDestroysTheBox(t *testing.T) {
 
 func TestEndWithoutABoxDoesNothing(t *testing.T) {
 	p := &fakeProvider{}
-	lab := NewLab(p, fakeClock())
+	lab := NewLab(p, "a", fakeClock())
 
 	if err := lab.End(context.Background()); err != nil {
 		t.Fatal(err)
@@ -189,7 +189,7 @@ type fakeProvider struct {
 
 func (p *fakeProvider) Name() string { return "Fake" }
 
-func (p *fakeProvider) Create(ctx context.Context) (Box, error) {
+func (p *fakeProvider) Create(ctx context.Context, _ string) (Box, error) {
 	if p.gate != nil {
 		<-p.gate
 	}

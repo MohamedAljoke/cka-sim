@@ -7,6 +7,7 @@ import (
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/domainerr"
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/desk"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/exam"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
 )
@@ -33,11 +34,15 @@ type examRequest struct {
 }
 
 func (a *api) getExam(w http.ResponseWriter, r *http.Request) error {
-	e, ok := a.Exam.Current()
+	d, err := a.desk(r)
+	if err != nil {
+		return err
+	}
+	e, ok := d.Exam.Current()
 	if !ok {
 		return exam.ErrNoExam
 	}
-	return httpx.WriteJSON(w, http.StatusOK, a.state(e))
+	return httpx.WriteJSON(w, http.StatusOK, state(d, e))
 }
 
 func (a *api) beginExam(w http.ResponseWriter, r *http.Request) error {
@@ -52,21 +57,29 @@ func (a *api) beginExam(w http.ResponseWriter, r *http.Request) error {
 	if len(pool) == 0 {
 		return exam.ErrNoMatch
 	}
-	if err := a.lock(r); err != nil {
+	d, err := a.desk(r)
+	if err != nil {
+		return err
+	}
+	if err := lock(r, d); err != nil {
 		return err
 	}
 	// The exam's setup waits for the lab, so starting an exam is enough to get one.
-	a.Lab.Start()
-	if err := a.Exam.Begin(pool, req.Count, req.Minutes, a.busy.Unlock); err != nil {
-		a.busy.Unlock()
+	d.Lab.Start()
+	if err := d.Exam.Begin(pool, req.Count, req.Minutes, d.Unlock); err != nil {
+		d.Unlock()
 		return err
 	}
-	e, _ := a.Exam.Current()
-	return httpx.WriteJSON(w, http.StatusAccepted, a.state(e))
+	e, _ := d.Exam.Current()
+	return httpx.WriteJSON(w, http.StatusAccepted, state(d, e))
 }
 
 func (a *api) flag(w http.ResponseWriter, r *http.Request) error {
-	if err := a.Exam.Flag(r.PathValue("id"), r.Method == http.MethodPut); err != nil {
+	d, err := a.desk(r)
+	if err != nil {
+		return err
+	}
+	if err := d.Exam.Flag(r.PathValue("id"), r.Method == http.MethodPut); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -75,40 +88,41 @@ func (a *api) flag(w http.ResponseWriter, r *http.Request) error {
 
 // Answers at once; grading holds the script lock until every check is back.
 func (a *api) endExam(w http.ResponseWriter, r *http.Request) error {
-	if err := a.lock(r); err != nil {
-		return err
-	}
-	e, err := a.Exam.End(a.busy.Unlock)
+	d, err := a.desk(r)
 	if err != nil {
-		a.busy.Unlock()
 		return err
 	}
-	return httpx.WriteJSON(w, http.StatusAccepted, a.state(e))
+	if err := lock(r, d); err != nil {
+		return err
+	}
+	e, err := d.Exam.End(d.Unlock)
+	if err != nil {
+		d.Unlock()
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusAccepted, state(d, e))
 }
 
 func (a *api) discardExam(w http.ResponseWriter, r *http.Request) error {
-	if err := a.lock(r); err != nil {
+	d, err := a.desk(r)
+	if err != nil {
 		return err
 	}
-	defer a.busy.Unlock()
-	if err := a.Exam.Discard(); err != nil {
+	if err := lock(r, d); err != nil {
+		return err
+	}
+	defer d.Unlock()
+	if err := d.Exam.Discard(); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
 
-func (a *api) resumeExam() {
-	a.busy.Lock()
-	if !a.Exam.Resume(a.busy.Unlock) {
-		a.busy.Unlock()
-	}
-}
-
-func (a *api) state(e exam.Exam) examState {
+func state(d *desk.Desk, e exam.Exam) examState {
 	s := examState{Exam: e, Now: time.Now()}
 	if e.Graded() {
-		percent, passed := exam.Score(e, a.Exam.Weights())
+		percent, passed := exam.Score(e, d.Exam.Weights())
 		s.Score = &score{Percent: percent, Passed: passed}
 	}
 	return s

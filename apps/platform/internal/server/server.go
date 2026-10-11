@@ -7,27 +7,31 @@ import (
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 
-	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/exam"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/desk"
 	labagent "github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
-	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
 )
 
 type Practice struct {
 	Tasks []tasks.Task
 	Files fs.FS
-	Exam  *exam.Session
+	Exams bool
 }
 
-func New(lab *sandbox.Lab, practice Practice) http.Handler {
-	a := &api{Practice: practice, Lab: lab}
+func New(desks *desk.Desks, practice Practice) http.Handler {
+	a := &api{Practice: practice, desks: desks}
 	problems := httpx.NewProblems(httpx.WithReporter(func(r *http.Request, err error) {
 		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
 	}))
 	mux := http.NewServeMux()
 	handle := func(pattern string, h httpx.Handler) { mux.HandleFunc(pattern, problems.Handle(h)) }
-	mux.HandleFunc("GET /ws/terminal", func(w http.ResponseWriter, r *http.Request) {
-		labagent.Serve(w, r, lab)
+	handle("GET /ws/terminal", func(w http.ResponseWriter, r *http.Request) error {
+		d, err := a.desk(r)
+		if err != nil {
+			return err
+		}
+		labagent.Serve(w, r, d.Lab)
+		return nil
 	})
 	handle("GET /api/lab", a.getLab)
 	handle("POST /api/lab", a.startLab)
@@ -38,8 +42,7 @@ func New(lab *sandbox.Lab, practice Practice) http.Handler {
 	handle("POST /api/tasks/{id}/check", a.checkTask)
 	handle("GET /api/tasks/{id}/solution", a.solution)
 	handle("POST /api/tasks/{id}/tidy", a.tidyTask)
-	if practice.Exam != nil {
-		a.resumeExam()
+	if practice.Exams {
 		handle("GET /api/exam", a.getExam)
 		handle("POST /api/exam", a.beginExam)
 		handle("PUT /api/exam/flags/{id}", a.flag)

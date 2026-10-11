@@ -6,9 +6,11 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/auth/internal/accounts"
 	"github.com/MohamedAljoke/cka-sim/apps/auth/internal/password"
+	"github.com/MohamedAljoke/cka-sim/apps/auth/internal/refresh"
 	"github.com/MohamedAljoke/cka-sim/apps/auth/internal/session"
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/domainerr"
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
@@ -18,21 +20,36 @@ type accountFinder interface {
 	ByEmail(ctx context.Context, email string) (accounts.Account, error)
 }
 
+type refreshTokens interface {
+	Start(ctx context.Context, accountID string) (string, error)
+	Rotate(ctx context.Context, token string) (accounts.Account, string, error)
+	Revoke(ctx context.Context, token string) error
+}
+
+type Refresh struct {
+	Tokens refreshTokens
+	TTL    time.Duration
+}
+
+const refreshCookieName = "__Secure-cka_sim_refresh"
+
 type handlers struct {
 	accounts accountFinder
 	signer   session.Signer
 	sessions session.Verifier
+	refresh  Refresh
 }
 
-func New(accounts accountFinder, signer session.Signer, sessions session.Verifier) http.Handler {
-	a := &handlers{accounts: accounts, signer: signer, sessions: sessions}
+func New(accounts accountFinder, signer session.Signer, sessions session.Verifier, refresh Refresh) http.Handler {
+	a := &handlers{accounts: accounts, signer: signer, sessions: sessions, refresh: refresh}
 	problems := httpx.NewProblems(httpx.WithReporter(func(r *http.Request, err error) {
 		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
 	}))
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/auth/login", problems.Handle(a.login))
+	mux.HandleFunc("POST /api/auth/refresh", problems.Handle(a.renew))
 	mux.HandleFunc("GET /api/auth/me", problems.Handle(a.me))
-	mux.HandleFunc("POST /api/auth/logout", a.logout)
+	mux.HandleFunc("POST /api/auth/logout", problems.Handle(a.logout))
 	return http.NewCrossOriginProtection().Handler(noStore(mux))
 }
 
@@ -53,11 +70,37 @@ func (a *handlers) login(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	token, err := a.signer.Issue(account)
+	refreshToken, err := a.refresh.Tokens.Start(r.Context(), account.ID)
 	if err != nil {
 		return err
 	}
-	http.SetCookie(w, sessionCookie(token, int(a.signer.TTL.Seconds())))
+	return a.setSession(w, account, refreshToken)
+}
+
+func (a *handlers) renew(w http.ResponseWriter, r *http.Request) error {
+	cookie, err := r.Cookie(refreshCookieName)
+	if err != nil {
+		clearSession(w)
+		return session.ErrNotLoggedIn
+	}
+	account, next, err := a.refresh.Tokens.Rotate(r.Context(), cookie.Value)
+	if errors.Is(err, refresh.ErrInvalid) {
+		clearSession(w)
+		return session.ErrNotLoggedIn
+	}
+	if err != nil {
+		return err
+	}
+	return a.setSession(w, account, next)
+}
+
+func (a *handlers) setSession(w http.ResponseWriter, account accounts.Account, refreshToken string) error {
+	access, err := a.signer.Issue(account)
+	if err != nil {
+		return err
+	}
+	http.SetCookie(w, accessCookie(access, int(a.signer.TTL.Seconds())))
+	http.SetCookie(w, refreshCookie(refreshToken, int(a.refresh.TTL.Seconds())))
 	return httpx.WriteJSON(w, http.StatusOK, user{ID: account.ID, Email: account.Email})
 }
 
@@ -87,17 +130,37 @@ func (a *handlers) me(w http.ResponseWriter, r *http.Request) error {
 	return httpx.WriteJSON(w, http.StatusOK, user{ID: claims.AccountID, Email: claims.Email})
 }
 
-// The token itself stays valid until it expires.
-func (a *handlers) logout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, sessionCookie("", -1))
+// The access token stays valid until it expires, at most one access TTL.
+func (a *handlers) logout(w http.ResponseWriter, r *http.Request) error {
+	clearSession(w)
+	if cookie, err := r.Cookie(refreshCookieName); err == nil {
+		if err := a.refresh.Tokens.Revoke(r.Context(), cookie.Value); err != nil {
+			return err
+		}
+	}
 	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
 
-func sessionCookie(token string, maxAge int) *http.Cookie {
+func clearSession(w http.ResponseWriter) {
+	http.SetCookie(w, accessCookie("", -1))
+	http.SetCookie(w, refreshCookie("", -1))
+}
+
+func accessCookie(token string, maxAge int) *http.Cookie {
+	return sessionCookie(session.CookieName, "/", token, maxAge)
+}
+
+// Scoped to the auth server, so the platform and every other request never carry it.
+func refreshCookie(token string, maxAge int) *http.Cookie {
+	return sessionCookie(refreshCookieName, "/api/auth", token, maxAge)
+}
+
+func sessionCookie(name, path, value string, maxAge int) *http.Cookie {
 	return &http.Cookie{
-		Name:     session.CookieName,
-		Value:    token,
-		Path:     "/",
+		Name:     name,
+		Value:    value,
+		Path:     path,
 		MaxAge:   maxAge,
 		HttpOnly: true,
 		Secure:   true,

@@ -70,8 +70,77 @@ func TestEndLabDuringAnExamIs409(t *testing.T) {
 	}
 }
 
-func getLab(t *testing.T, srv *httptest.Server) sandbox.Status {
+func TestEachAccountHasItsOwnLab(t *testing.T) {
+	srv, _ := newAPIWithoutLab(t, &fakeRunner{})
+
+	if status, body := requestAs(t, srv, "a", http.MethodPost, "/api/tasks/wl-scale/start", ""); status != http.StatusNoContent {
+		t.Fatalf("a's start got %d %q", status, body)
+	}
+
+	if got := getLabAs(t, srv, "b"); got.State != sandbox.None {
+		t.Errorf("b's lab is %s, want none", got.State)
+	}
+	if status, body := requestAs(t, srv, "b", http.MethodPost, "/api/tasks/wl-scale/start", ""); status != http.StatusNoContent {
+		t.Fatalf("b's start got %d %q", status, body)
+	}
+	if status, body := requestAs(t, srv, "a", http.MethodDelete, "/api/lab", ""); status != http.StatusNoContent {
+		t.Fatalf("a's end got %d %q", status, body)
+	}
+	if a, b := getLabAs(t, srv, "a"), getLabAs(t, srv, "b"); a.State != sandbox.None || b.State != sandbox.Ready {
+		t.Errorf("after a ends: a %s, b %s; want none and ready", a.State, b.State)
+	}
+}
+
+func TestOneAccountsScriptDoesNotBlockAnother(t *testing.T) {
+	r := &fakeRunner{started: make(chan struct{}), release: make(chan struct{})}
+	srv, _ := newAPIWithoutLab(t, r)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		requestAs(t, srv, "a", http.MethodPost, "/api/tasks/wl-scale/start", "")
+	}()
+	<-r.started
+
+	status, body := requestAs(t, srv, "b", http.MethodPost, "/api/tasks/wl-scale/start", "")
+
+	close(r.release)
+	<-done
+	if status != http.StatusNoContent {
+		t.Errorf("b's start got %d %q while a's script ran, want 204", status, body)
+	}
+}
+
+func TestAnExamBelongsToItsAccount(t *testing.T) {
+	srv, _ := newAPIWithoutLab(t, &fakeRunner{})
+	beginExam(t, srv)
+
+	status, body := requestAs(t, srv, "b", http.MethodGet, "/api/exam", "")
+
+	if status != http.StatusNotFound {
+		t.Errorf("b's exam got %d %q, want 404", status, body)
+	}
+	if status, body := requestAs(t, srv, "b", http.MethodPost, "/api/tasks/wl-scale/start", ""); status != http.StatusNoContent {
+		t.Errorf("b's practice got %d %q during a's exam, want 204", status, body)
+	}
+}
+
+func TestARequestWithoutAnAccountIsRefused(t *testing.T) {
+	srv := httptest.NewServer(New(readyDesks(t, &fakeRunner{}, newFakeOpener()), Practice{}))
+	t.Cleanup(srv.Close)
+
 	status, body := call(t, srv, http.MethodGet, "/api/lab")
+
+	if status != http.StatusUnauthorized || problemCode(t, body) != "not_logged_in" {
+		t.Errorf("got %d %q, want 401 not_logged_in", status, body)
+	}
+}
+
+func getLab(t *testing.T, srv *httptest.Server) sandbox.Status {
+	return getLabAs(t, srv, "a")
+}
+
+func getLabAs(t *testing.T, srv *httptest.Server, account string) sandbox.Status {
+	status, body := requestAs(t, srv, account, http.MethodGet, "/api/lab", "")
 	if status != http.StatusOK {
 		t.Fatalf("GET /api/lab got %d %q", status, body)
 	}

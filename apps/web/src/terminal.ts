@@ -1,6 +1,7 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { refreshSession } from './api'
 
 // The DSA guide's dark code panel, in hex because that is what xterm parses most reliably.
 const theme = {
@@ -52,8 +53,8 @@ export function openTerminal(pane: HTMLElement): () => void {
   }
 
   const scheme = location.protocol === 'https:' ? 'wss' : 'ws'
-  const socket = new WebSocket(`${scheme}://${location.host}/ws/terminal`)
-  socket.binaryType = 'arraybuffer'
+  let socket: WebSocket
+  let closed = false
   const isOpen = () => socket.readyState === WebSocket.OPEN
 
   const sendSize = () => {
@@ -61,12 +62,23 @@ export function openTerminal(pane: HTMLElement): () => void {
   }
   const encoder = new TextEncoder()
 
-  socket.onopen = () => {
-    sendSize()
-    term.focus()
+  // A refused upgrade gives no status, so a socket that never opened may just be an expired session.
+  const connect = (retried: boolean) => {
+    let opened = false
+    socket = new WebSocket(`${scheme}://${location.host}/ws/terminal`)
+    socket.binaryType = 'arraybuffer'
+    socket.onopen = () => {
+      opened = true
+      sendSize()
+      term.focus()
+    }
+    socket.onmessage = (event) => term.write(new Uint8Array(event.data))
+    socket.onclose = async () => {
+      if (!opened && !retried && (await refreshSession()) && !closed) connect(true)
+      else if (!closed) term.write('\r\n[disconnected]\r\n')
+    }
   }
-  socket.onmessage = (event) => term.write(new Uint8Array(event.data))
-  socket.onclose = () => term.write('\r\n[disconnected]\r\n')
+  connect(false)
 
   term.onData((keys) => {
     if (isOpen()) socket.send(encoder.encode(keys))
@@ -76,6 +88,7 @@ export function openTerminal(pane: HTMLElement): () => void {
   resizes.observe(pane)
 
   return () => {
+    closed = true
     socket.onclose = null
     socket.close()
     resizes.disconnect()

@@ -52,10 +52,10 @@ func New(c Config) (*Provider, error) {
 func (*Provider) Name() string { return "GKE" }
 
 // A claim that never becomes usable is deleted, so it doesn't hold a node.
-func (p *Provider) Create(ctx context.Context) (sandbox.Box, error) {
+func (p *Provider) Create(ctx context.Context, owner string) (sandbox.Box, error) {
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
-	name, err := p.kube.createClaim(ctx, p.pool)
+	name, err := p.kube.createClaim(ctx, p.pool, owner)
 	if err != nil {
 		return sandbox.Box{}, err
 	}

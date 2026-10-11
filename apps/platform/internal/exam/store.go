@@ -18,7 +18,7 @@ type FileStore struct {
 	Path string
 }
 
-func DefaultPath() (string, error) {
+func DefaultDir() (string, error) {
 	dir := os.Getenv("XDG_STATE_HOME")
 	if dir == "" {
 		home, err := os.UserHomeDir()
@@ -27,7 +27,7 @@ func DefaultPath() (string, error) {
 		}
 		dir = filepath.Join(home, ".local", "state")
 	}
-	return filepath.Join(dir, "cka-sim", "exam.json"), nil
+	return filepath.Join(dir, "cka-sim", "exams"), nil
 }
 
 func (s FileStore) Load() (*Exam, error) {

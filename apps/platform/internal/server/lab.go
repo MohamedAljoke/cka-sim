@@ -17,23 +17,35 @@ type labState struct {
 }
 
 func (a *api) getLab(w http.ResponseWriter, r *http.Request) error {
-	return httpx.WriteJSON(w, http.StatusOK, labState{Lab: a.Lab.Status(), Now: time.Now()})
+	d, err := a.desk(r)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, labState{Lab: d.Lab.Status(), Now: time.Now()})
 }
 
 func (a *api) startLab(w http.ResponseWriter, r *http.Request) error {
-	a.Lab.Start()
-	return httpx.WriteJSON(w, http.StatusAccepted, labState{Lab: a.Lab.Status(), Now: time.Now()})
+	d, err := a.desk(r)
+	if err != nil {
+		return err
+	}
+	d.Lab.Start()
+	return httpx.WriteJSON(w, http.StatusAccepted, labState{Lab: d.Lab.Status(), Now: time.Now()})
 }
 
 func (a *api) endLab(w http.ResponseWriter, r *http.Request) error {
-	if a.Exam != nil && a.Exam.Running() {
-		return errExamRunning
-	}
-	if err := a.lock(r); err != nil {
+	d, err := a.desk(r)
+	if err != nil {
 		return err
 	}
-	defer a.busy.Unlock()
-	if err := a.Lab.End(r.Context()); err != nil {
+	if d.Exam != nil && d.Exam.Running() {
+		return errExamRunning
+	}
+	if err := lock(r, d); err != nil {
+		return err
+	}
+	defer d.Unlock()
+	if err := d.Lab.End(r.Context()); err != nil {
 		return scriptFailed(err)
 	}
 	w.WriteHeader(http.StatusNoContent)

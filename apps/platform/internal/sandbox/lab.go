@@ -16,7 +16,7 @@ var ErrNoLab = domainerr.Conflict("no_lab", "no lab is running; start one first"
 
 type Provider interface {
 	Name() string
-	Create(ctx context.Context) (Box, error)
+	Create(ctx context.Context, owner string) (Box, error)
 	Destroy(ctx context.Context, b Box) error
 }
 
@@ -45,6 +45,7 @@ type Status struct {
 
 type Lab struct {
 	provider Provider
+	owner    string
 	now      func() time.Time
 	mu       sync.Mutex
 	status   Status
@@ -52,8 +53,8 @@ type Lab struct {
 	settled  chan struct{}
 }
 
-func NewLab(p Provider, now func() time.Time) *Lab {
-	return &Lab{provider: p, now: now, status: Status{State: None, Provider: p.Name()}}
+func NewLab(p Provider, owner string, now func() time.Time) *Lab {
+	return &Lab{provider: p, owner: owner, now: now, status: Status{State: None, Provider: p.Name()}}
 }
 
 func (l *Lab) Status() Status {
@@ -77,7 +78,7 @@ func (l *Lab) startLocked() chan struct{} {
 	l.status = Status{State: Starting, Provider: l.provider.Name(), Started: l.now()}
 	go func() {
 		// Not tied to a request: the page polls while the box is created.
-		box, err := l.provider.Create(context.Background())
+		box, err := l.provider.Create(context.Background(), l.owner)
 		l.mu.Lock()
 		defer l.mu.Unlock()
 		defer close(settled)

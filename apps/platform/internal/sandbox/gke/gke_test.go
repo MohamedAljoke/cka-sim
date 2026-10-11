@@ -23,7 +23,7 @@ func TestCreateClaimsALabAndReachesItsPod(t *testing.T) {
 	api.readyAfter = 2
 	p := newProvider(api, nil)
 
-	box, err := p.Create(context.Background())
+	box, err := p.Create(context.Background(), "id-1")
 
 	if err != nil {
 		t.Fatal(err)
@@ -35,8 +35,9 @@ func TestCreateClaimsALabAndReachesItsPod(t *testing.T) {
 		t.Errorf("agent addresses = %q, want the sandbox pod's IP", got)
 	}
 	created := api.created()
-	if created.Spec.WarmPoolRef.Name != "labs" || created.Metadata.Labels[managedBy] != ours {
-		t.Errorf("claim = %+v, want pool labs, labelled as ours", created)
+	if created.Spec.WarmPoolRef.Name != "labs" || created.Metadata.Labels[managedBy] != ours ||
+		created.Metadata.Labels[accountLabel] != "id-1" {
+		t.Errorf("claim = %+v, want pool labs, labelled as ours and with its account", created)
 	}
 }
 
@@ -44,7 +45,7 @@ func TestCreateDeletesAClaimThatNeverAnswers(t *testing.T) {
 	api := newFakeAPI(t)
 	p := newProvider(api, errors.New("connection refused"))
 
-	_, err := p.Create(context.Background())
+	_, err := p.Create(context.Background(), "id-1")
 
 	if err == nil || !strings.Contains(err.Error(), "connection refused") {
 		t.Fatalf("err = %v, want the probe's failure", err)
@@ -61,7 +62,7 @@ func TestCreateGivesUpWhenTheClaimNeverGetsReady(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	_, err := p.Create(ctx)
+	_, err := p.Create(ctx, "id-1")
 
 	if err == nil || !strings.Contains(err.Error(), "never became ready") {
 		t.Fatalf("err = %v, want never became ready", err)

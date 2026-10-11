@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/auth"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/desk"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/exam"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/grader"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox"
@@ -281,15 +283,18 @@ func TestRefusesCrossSitePost(t *testing.T) {
 }
 
 func newAPI(t *testing.T, r *fakeRunner) *httptest.Server {
-	srv, lab := newAPIWithoutLab(t, r)
-	if err := lab.Ensure(context.Background()); err != nil {
+	srv, desks := newAPIWithoutLab(t, r)
+	d, err := desks.For("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Lab.Ensure(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	return srv
 }
 
-func newAPIWithoutLab(t *testing.T, r *fakeRunner) (*httptest.Server, *sandbox.Lab) {
-	lab := sandbox.NewLab(fakeProvider{runner: r, shells: newFakeOpener()}, time.Now)
+func newAPIWithoutLab(t *testing.T, r *fakeRunner) (*httptest.Server, *desk.Desks) {
 	lockWait = 50 * time.Millisecond
 	files := fstest.MapFS{
 		"wl-scale/task.md":     {Data: []byte("---\nid: wl-scale\ntitle: Scale a Deployment\nhost: node-1\ndomain: workloads\ntopics: [deployments]\nweight: 4\n---\nScale it to 4.\n")},
@@ -303,29 +308,56 @@ func newAPIWithoutLab(t *testing.T, r *fakeRunner) (*httptest.Server, *sandbox.L
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := exam.Open(exam.Config{
-		Store:   exam.FileStore{Path: filepath.Join(t.TempDir(), "exam.json")},
-		Files:   files,
-		Runner:  lab,
-		Catalog: all,
-		Now:     time.Now,
-		Rand:    rand.New(rand.NewPCG(1, 2)),
-		Ready:   lab.Ensure,
+	dir := t.TempDir()
+	desks := desk.New(func(id string) (*desk.Desk, error) {
+		lab := sandbox.NewLab(fakeProvider{runner: r, shells: newFakeOpener()}, id, time.Now)
+		session, err := exam.Open(exam.Config{
+			Store:   exam.FileStore{Path: filepath.Join(dir, id+".json")},
+			Files:   files,
+			Runner:  lab,
+			Catalog: all,
+			Now:     time.Now,
+			Rand:    rand.New(rand.NewPCG(1, 2)),
+			Ready:   lab.Ensure,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &desk.Desk{Lab: lab, Exam: session}, nil
 	})
+	return serve(t, desks, Practice{Tasks: all, Files: files, Exams: true}), desks
+}
+
+func readyDesks(t *testing.T, r *fakeRunner, shells *fakeOpener) *desk.Desks {
+	desks := desk.New(func(id string) (*desk.Desk, error) {
+		return &desk.Desk{Lab: sandbox.NewLab(fakeProvider{runner: r, shells: shells}, id, time.Now)}, nil
+	})
+	d, err := desks.For("a")
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(New(lab, Practice{Tasks: all, Files: files, Exam: session}))
-	t.Cleanup(srv.Close)
-	return srv, lab
-}
-
-func readyLab(t *testing.T, r *fakeRunner, shells *fakeOpener) *sandbox.Lab {
-	lab := sandbox.NewLab(fakeProvider{runner: r, shells: shells}, time.Now)
-	if err := lab.Ensure(context.Background()); err != nil {
+	if err := d.Lab.Ensure(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	return lab
+	return desks
+}
+
+func serve(t *testing.T, desks *desk.Desks, practice Practice) *httptest.Server {
+	srv := httptest.NewServer(asAccount(New(desks, practice)))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+const accountHeader = "X-Test-Account"
+
+func asAccount(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.Header.Get(accountHeader)
+		if id == "" {
+			id = "a"
+		}
+		next.ServeHTTP(w, r.WithContext(auth.WithClaims(r.Context(), auth.Claims{AccountID: id})))
+	})
 }
 
 func call(t *testing.T, srv *httptest.Server, method, path string) (int, string) {
@@ -333,11 +365,16 @@ func call(t *testing.T, srv *httptest.Server, method, path string) (int, string)
 }
 
 func request(t *testing.T, srv *httptest.Server, method, path, payload string) (int, string) {
+	return requestAs(t, srv, "a", method, path, payload)
+}
+
+func requestAs(t *testing.T, srv *httptest.Server, account, method, path, payload string) (int, string) {
 	req, err := http.NewRequest(method, srv.URL+path, strings.NewReader(payload))
 	if err != nil {
 		t.Error(err)
 		return 0, ""
 	}
+	req.Header.Set(accountHeader, account)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Error(err)
@@ -412,7 +449,7 @@ type fakeProvider struct {
 
 func (fakeProvider) Name() string { return "Fake" }
 
-func (p fakeProvider) Create(context.Context) (sandbox.Box, error) {
+func (p fakeProvider) Create(context.Context, string) (sandbox.Box, error) {
 	return sandbox.Box{ID: "fake", Runner: p.runner, Shells: p.shells}, nil
 }
 

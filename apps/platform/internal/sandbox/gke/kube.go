@@ -22,6 +22,7 @@ const (
 	podPath        = "/api/v1/namespaces/%s/pods/%s"
 	managedBy      = "app.kubernetes.io/managed-by"
 	ours           = "cka-sim"
+	accountLabel   = "cka-sim/account"
 	ready          = "Ready"
 )
 
@@ -96,11 +97,11 @@ func inCluster() (kube, error) {
 	}, nil
 }
 
-func (k kube) createClaim(ctx context.Context, pool string) (string, error) {
+func (k kube) createClaim(ctx context.Context, pool, owner string) (string, error) {
 	body := map[string]any{
 		"apiVersion": "extensions.agents.x-k8s.io/v1beta1",
 		"kind":       "SandboxClaim",
-		"metadata":   map[string]any{"generateName": "lab-", "labels": map[string]string{managedBy: ours}},
+		"metadata":   map[string]any{"generateName": "lab-", "labels": map[string]string{managedBy: ours, accountLabel: owner}},
 		"spec":       map[string]any{"warmPoolRef": map[string]string{"name": pool}},
 	}
 	var created object

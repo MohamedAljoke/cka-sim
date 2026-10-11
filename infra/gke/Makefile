@@ -39,7 +39,7 @@ project: ## create the project, link billing, enable the APIs (once)
 
 cluster: ## create the cluster: a small system pool and an empty, tainted "labs" pool
 	$(GC) container clusters create $(CLUSTER) --zone $(ZONE) \
-	  --num-nodes 1 --machine-type e2-medium --disk-size 30 --enable-autoscaling --min-nodes 1 --max-nodes 2 \
+	  --num-nodes 1 --machine-type e2-medium --disk-size 30 --enable-autoscaling --min-nodes 1 --max-nodes 3 \
 	  --workload-pool $(PROJECT).svc.id.goog --enable-dataplane-v2
 	$(GC) compute networks subnets update default --region $(REGION) --add-secondary-ranges labs-pods=$(LAB_PODS)
 	@# Labs scale from 0: a node per lab, removed when its lab is gone.
@@ -102,18 +102,18 @@ site: image ## the app and auth on the platform pool, a warm lab in the pool, HT
 	$(MAKE) --no-print-directory pool POOL=$(POOL)
 	AUTH_IMAGE=$(AUTH_IMAGE) INSTANCE=$(INSTANCE) AUTH_GSA=$(AUTH_GSA) envsubst < $(AUTH)/deploy/gke/auth.yaml | kubectl apply -f -
 	@ip=$$($(GC) compute addresses describe cka-sim-site --region $(REGION) --format='value(address)'); \
-	APP_IMAGE=$(APP_IMAGE) SITE_IP=$$ip SITE_HOST=$$(echo $$ip | tr . -).sslip.io envsubst < $(PLATFORM)/deploy/gke/app.yaml | kubectl apply -f -
+	APP_IMAGE=$(APP_IMAGE) SITE_IP=$$ip SITE_HOST=$$ip.sslip.io envsubst < $(PLATFORM)/deploy/gke/app.yaml | kubectl apply -f -
 	kubectl rollout restart deployment/auth deployment/app
 
 url: ## print the site's link and login
-	@echo "https://$$($(GC) compute addresses describe cka-sim-site --region $(REGION) --format='value(address)' | tr . -).sslip.io"
-	@echo "log in as dev@cka-sim.local / cka-sim-dev"
+	@echo "https://$$($(GC) compute addresses describe cka-sim-site --region $(REGION) --format='value(address)').sslip.io"
+	@echo "log in as dev@cka-sim.local or dev2@cka-sim.local, password cka-sim-dev"
 
 site-down: ## remove the app, auth, the load balancer, its IP, and every lab
 	kubectl delete deployment app auth --ignore-not-found
 	kubectl delete sandboxclaims -l app.kubernetes.io/managed-by=cka-sim --ignore-not-found
 	$(MAKE) --no-print-directory pool POOL=0
-	kubectl delete service/site service/auth serviceaccount/cka-sim-auth \
+	kubectl delete service/site service/auth serviceaccount/cka-sim-auth pvc/caddy-data \
 	  secret/cka-sim-auth secret/cka-sim-db secret/cka-sim-site --ignore-not-found
 	$(GC) compute addresses delete cka-sim-site --region $(REGION) --quiet
 

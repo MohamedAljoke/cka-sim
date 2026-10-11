@@ -51,7 +51,7 @@ func TestRequireRefusesRequestsWithoutAValidSession(t *testing.T) {
 		"no cookie": nil,
 		"garbage":   {Name: CookieName, Value: "not-a-token"},
 	} {
-		res, body, reached := throughRequire(t, cookie)
+		res, body, _, reached := throughRequire(t, cookie)
 
 		if res.StatusCode != http.StatusUnauthorized || !strings.Contains(body, `"code":"not_logged_in"`) {
 			t.Errorf("%s: status %d: %s", name, res.StatusCode, body)
@@ -62,11 +62,14 @@ func TestRequireRefusesRequestsWithoutAValidSession(t *testing.T) {
 	}
 }
 
-func TestRequireLetsAValidSessionThrough(t *testing.T) {
-	res, body, reached := throughRequire(t, &http.Cookie{Name: CookieName, Value: sign(t, jwt.SigningMethodHS256, secret)})
+func TestRequireLetsAValidSessionThroughWithItsClaims(t *testing.T) {
+	res, body, claims, reached := throughRequire(t, &http.Cookie{Name: CookieName, Value: sign(t, jwt.SigningMethodHS256, secret)})
 
 	if res.StatusCode != http.StatusNoContent || !reached {
 		t.Errorf("status %d, reached %v: %s", res.StatusCode, reached, body)
+	}
+	if claims.AccountID != "id-1" || claims.Email != "dev@cka-sim.local" {
+		t.Errorf("claims in the context = %+v", claims)
 	}
 }
 
@@ -90,11 +93,12 @@ func sign(t *testing.T, method jwt.SigningMethod, key any) string {
 	return token
 }
 
-func throughRequire(t *testing.T, cookie *http.Cookie) (*http.Response, string, bool) {
+func throughRequire(t *testing.T, cookie *http.Cookie) (*http.Response, string, Claims, bool) {
 	t.Helper()
+	var claims Claims
 	reached := false
 	srv := Require(verifierAt(start), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reached = true
+		claims, reached = FromContext(r.Context())
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/api/tasks", nil)
@@ -103,5 +107,5 @@ func throughRequire(t *testing.T, cookie *http.Cookie) (*http.Response, string, 
 	}
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
-	return rec.Result(), rec.Body.String(), reached
+	return rec.Result(), rec.Body.String(), claims, reached
 }

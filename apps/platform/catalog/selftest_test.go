@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
 )
 
@@ -18,7 +18,7 @@ func TestSelftest(t *testing.T) {
 	if !*selftest {
 		t.Skip("needs -selftest and a running lab; run make selftest")
 	}
-	lab := api.Client{URL: cmp.Or(os.Getenv("CKA_SIM_LAB_URL"), "http://127.0.0.1:7171"), Token: os.Getenv("CKA_SIM_AGENT_TOKEN")}
+	lab := labagent.Client{URL: cmp.Or(os.Getenv("CKA_SIM_LAB_URL"), "http://127.0.0.1:7171"), Token: os.Getenv("CKA_SIM_AGENT_TOKEN")}
 	if err := lab.Healthy(context.Background()); err != nil {
 		t.Skipf("no lab answers; run make up: %v", err)
 	}

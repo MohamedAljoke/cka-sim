@@ -1,4 +1,4 @@
-package api
+package protocol
 
 import (
 	"context"
@@ -17,8 +17,6 @@ type control struct {
 	Rows uint   `json:"rows"`
 }
 
-// Serve carries one shell over a websocket: binary messages are the terminal's bytes both ways, and text
-// messages are {"type":"resize"} controls. The browser's terminal and the lab agent both speak it.
 func Serve(w http.ResponseWriter, r *http.Request, opener Opener) {
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {

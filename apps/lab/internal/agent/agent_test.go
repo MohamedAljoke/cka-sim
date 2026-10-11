@@ -11,14 +11,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
+	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/protocol"
 )
 
 const token = "s3cret"
 
 func TestRunSendsTheScriptToTheTasksHost(t *testing.T) {
 	r := &fakeRunner{out: "deployment scaled\n"}
-	client := api.Client{URL: startAgent(t, r, newFakeOpener()), Token: token}
+	client := protocol.Client{URL: startAgent(t, r, newFakeOpener()), Token: token}
 
 	out, err := client.Run(context.Background(), "cka-sim-control-plane", "wl-scale", []byte("kubectl scale"))
 
@@ -35,7 +35,7 @@ func TestRunSendsTheScriptToTheTasksHost(t *testing.T) {
 
 func TestRunKeepsOutputOfFailedScript(t *testing.T) {
 	r := &fakeRunner{out: "FAIL 2 replicas\n", err: errors.New("exit status 1")}
-	client := api.Client{URL: startAgent(t, r, newFakeOpener()), Token: token}
+	client := protocol.Client{URL: startAgent(t, r, newFakeOpener()), Token: token}
 
 	out, err := client.Run(context.Background(), "node", "wl-scale", nil)
 
@@ -49,7 +49,7 @@ func TestRunKeepsOutputOfFailedScript(t *testing.T) {
 
 func TestCancelStopsScriptOnAgent(t *testing.T) {
 	r := &fakeRunner{block: true, stopped: make(chan struct{})}
-	client := api.Client{URL: startAgent(t, r, newFakeOpener()), Token: token}
+	client := protocol.Client{URL: startAgent(t, r, newFakeOpener()), Token: token}
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := make(chan error)
@@ -70,9 +70,9 @@ func TestRefusesWrongToken(t *testing.T) {
 	r := &fakeRunner{}
 	url := startAgent(t, r, newFakeOpener())
 
-	_, runErr := api.Client{URL: url, Token: "guess"}.Run(context.Background(), "node", "wl-scale", nil)
-	_, openErr := api.Client{URL: url, Token: "guess"}.Open(context.Background(), api.Size{Cols: 80, Rows: 24})
-	endErr := api.Client{URL: url}.EndAll(context.Background())
+	_, runErr := protocol.Client{URL: url, Token: "guess"}.Run(context.Background(), "node", "wl-scale", nil)
+	_, openErr := protocol.Client{URL: url, Token: "guess"}.Open(context.Background(), protocol.Size{Cols: 80, Rows: 24})
+	endErr := protocol.Client{URL: url}.EndAll(context.Background())
 
 	for name, err := range map[string]error{"run": runErr, "open": openErr, "end shells": endErr} {
 		if err == nil || !strings.Contains(err.Error(), "401") {
@@ -97,13 +97,13 @@ func TestHealthNeedsNoToken(t *testing.T) {
 
 func TestRemoteShellCarriesBytesResizesAndClose(t *testing.T) {
 	opener := newFakeOpener()
-	remote := api.Client{URL: startAgent(t, &fakeRunner{}, opener), Token: token}
+	remote := protocol.Client{URL: startAgent(t, &fakeRunner{}, opener), Token: token}
 
-	shell, err := remote.Open(context.Background(), api.Size{Cols: 120, Rows: 40})
+	shell, err := remote.Open(context.Background(), protocol.Size{Cols: 120, Rows: 40})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := receive(t, opener.opened); got != (api.Size{Cols: 120, Rows: 40}) {
+	if got := receive(t, opener.opened); got != (protocol.Size{Cols: 120, Rows: 40}) {
 		t.Errorf("opened at %+v, want 120x40", got)
 	}
 
@@ -119,8 +119,8 @@ func TestRemoteShellCarriesBytesResizesAndClose(t *testing.T) {
 		t.Errorf("read %q, %v", buf[:n], err)
 	}
 
-	shell.Resize(context.Background(), api.Size{Cols: 200, Rows: 50})
-	if got := receive(t, opener.shell.resizes); got != (api.Size{Cols: 200, Rows: 50}) {
+	shell.Resize(context.Background(), protocol.Size{Cols: 200, Rows: 50})
+	if got := receive(t, opener.shell.resizes); got != (protocol.Size{Cols: 200, Rows: 50}) {
 		t.Errorf("resized to %+v, want 200x50", got)
 	}
 
@@ -130,8 +130,8 @@ func TestRemoteShellCarriesBytesResizesAndClose(t *testing.T) {
 
 func TestRemoteShellEndsWhenShellExits(t *testing.T) {
 	opener := newFakeOpener()
-	shell, err := api.Client{URL: startAgent(t, &fakeRunner{}, opener), Token: token}.
-		Open(context.Background(), api.Size{Cols: 80, Rows: 24})
+	shell, err := protocol.Client{URL: startAgent(t, &fakeRunner{}, opener), Token: token}.
+		Open(context.Background(), protocol.Size{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestRemoteShellEndsWhenShellExits(t *testing.T) {
 
 func TestEndAllReachesAgent(t *testing.T) {
 	opener := newFakeOpener()
-	err := api.Client{URL: startAgent(t, &fakeRunner{}, opener), Token: token}.EndAll(context.Background())
+	err := protocol.Client{URL: startAgent(t, &fakeRunner{}, opener), Token: token}.EndAll(context.Background())
 
 	if err != nil || !opener.ended {
 		t.Errorf("EndAll = %v, ended = %v", err, opener.ended)
@@ -171,16 +171,16 @@ func (r *fakeRunner) Run(ctx context.Context, host, taskID string, script []byte
 }
 
 type fakeOpener struct {
-	opened chan api.Size
+	opened chan protocol.Size
 	shell  *fakeShell
 	ended  bool
 }
 
 func newFakeOpener() *fakeOpener {
-	return &fakeOpener{opened: make(chan api.Size, 1), shell: newFakeShell()}
+	return &fakeOpener{opened: make(chan protocol.Size, 1), shell: newFakeShell()}
 }
 
-func (o *fakeOpener) Open(_ context.Context, size api.Size) (api.Shell, error) {
+func (o *fakeOpener) Open(_ context.Context, size protocol.Size) (protocol.Shell, error) {
 	o.opened <- size
 	return o.shell, nil
 }
@@ -194,7 +194,7 @@ type fakeShell struct {
 	out       *io.PipeReader
 	outWriter *io.PipeWriter
 	keys      chan string
-	resizes   chan api.Size
+	resizes   chan protocol.Size
 	closed    chan struct{}
 	closeOnce sync.Once
 }
@@ -204,7 +204,7 @@ func newFakeShell() *fakeShell {
 	return &fakeShell{
 		out: r, outWriter: w,
 		keys:    make(chan string, 10),
-		resizes: make(chan api.Size, 10),
+		resizes: make(chan protocol.Size, 10),
 		closed:  make(chan struct{}),
 	}
 }
@@ -216,7 +216,7 @@ func (s *fakeShell) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (s *fakeShell) Resize(_ context.Context, size api.Size) error {
+func (s *fakeShell) Resize(_ context.Context, size protocol.Size) error {
 	s.resizes <- size
 	return nil
 }

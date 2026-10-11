@@ -13,9 +13,10 @@ import (
 	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/config"
-	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/catalog"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/auth"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/exam"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox/gke"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox/local"
@@ -27,6 +28,7 @@ import (
 const addr = "127.0.0.1:7070"
 
 type settings struct {
+	AuthSecret string `key:"CKA_SIM_AUTH_SECRET" minLength:"32"`
 	AgentToken string `key:"CKA_SIM_AGENT_TOKEN"`
 	Provider   string `key:"CKA_SIM_PROVIDER" default:""`
 	LabURL     string `key:"CKA_SIM_LAB_URL" default:"http://127.0.0.1:7171"`
@@ -62,7 +64,8 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	srv := &http.Server{Handler: server.New(lab, practice)}
+	sessions := auth.Verifier{Secret: []byte(cfg.AuthSecret), Now: time.Now}
+	srv := &http.Server{Handler: auth.Require(sessions, server.New(lab, practice))}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -83,7 +86,7 @@ func run(ctx context.Context) error {
 func newProvider(ctx context.Context, cfg settings) (sandbox.Provider, error) {
 	switch cfg.Provider {
 	case "":
-		return local.Provider{Agent: api.Client{URL: cfg.LabURL, Token: cfg.AgentToken}}, nil
+		return local.Provider{Agent: labagent.Client{URL: cfg.LabURL, Token: cfg.AgentToken}}, nil
 	case "gke":
 		p, err := gke.New(gke.Config{Pool: cfg.Pool, AgentToken: cfg.AgentToken})
 		if err != nil {

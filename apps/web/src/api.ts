@@ -73,6 +73,7 @@ export type ExamState = {
 
 export async function getExam(): Promise<ExamState | null> {
   const res = await fetch('/api/exam')
+  if (res.status === 401) return dropSessionAndReload()
   if (res.status === 404) return null
   if (!res.ok) throw await failure(res, 'GET', '/api/exam')
   return res.json()
@@ -146,8 +147,15 @@ async function call(method: string, path: string, body?: unknown, signal?: Abort
     init.body = JSON.stringify(body)
   }
   const res = await fetch(path, init)
+  if (res.status === 401 && !path.startsWith('/api/auth/')) return dropSessionAndReload()
   if (!res.ok) throw await failure(res, method, path)
   return res
+}
+
+async function dropSessionAndReload(): Promise<never> {
+  await logOut().catch(() => {})
+  location.reload()
+  return new Promise(() => {})
 }
 
 // The Go servers answer with a problem document; anything on the way (Vite, Caddy) answers with text.

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
 )
 
 func TestNewLabHasNoBox(t *testing.T) {
@@ -44,7 +44,7 @@ func TestRunAndOpenNeedAReadyLab(t *testing.T) {
 	if _, err := lab.Run(context.Background(), "host", "task", nil); !errors.Is(err, ErrNoLab) {
 		t.Fatalf("Run before start = %v, want ErrNoLab", err)
 	}
-	if _, err := lab.Open(context.Background(), api.Size{}); !errors.Is(err, ErrNoLab) {
+	if _, err := lab.Open(context.Background(), labagent.Size{}); !errors.Is(err, ErrNoLab) {
 		t.Fatalf("Open before start = %v, want ErrNoLab", err)
 	}
 }
@@ -59,7 +59,7 @@ func TestRunAndOpenReachTheBox(t *testing.T) {
 	if err != nil || out != "ran task on host" {
 		t.Fatalf("Run = %q, %v", out, err)
 	}
-	if _, err := lab.Open(context.Background(), api.Size{}); err != nil {
+	if _, err := lab.Open(context.Background(), labagent.Size{}); err != nil {
 		t.Fatalf("Open = %v", err)
 	}
 	if p.shells.opened != 1 {
@@ -229,7 +229,7 @@ type fakeShells struct {
 	opened int
 }
 
-func (s *fakeShells) Open(ctx context.Context, size api.Size) (api.Shell, error) {
+func (s *fakeShells) Open(ctx context.Context, size labagent.Size) (labagent.Shell, error) {
 	s.opened++
 	return nil, nil
 }

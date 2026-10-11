@@ -14,15 +14,15 @@ import (
 	kindcluster "sigs.k8s.io/kind/pkg/cluster"
 	kindcmd "sigs.k8s.io/kind/pkg/cmd"
 
-	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
+	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/protocol"
 )
 
 const Name = "cka-sim"
 
-const ControlPlaneNode = api.ControlPlaneNode
+const ControlPlaneNode = protocol.ControlPlaneNode
 
 // kind names the nodes after the cluster, in the order of kind.yaml; cluster_test.go keeps api in step.
-var Nodes = api.Nodes
+var Nodes = protocol.Nodes
 
 const (
 	Base      = Name + "-base"

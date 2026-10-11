@@ -13,7 +13,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	labapi "github.com/MohamedAljoke/cka-sim/apps/lab/api"
+	labagent "github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
 )
 
 func TestOpensShellAtFirstResize(t *testing.T) {
@@ -23,7 +23,7 @@ func TestOpensShellAtFirstResize(t *testing.T) {
 	send(t, conn, websocket.MessageBinary, "typed too early")
 	send(t, conn, websocket.MessageText, `{"type":"resize","cols":120,"rows":40}`)
 
-	if got := receive(t, opener.opened); got != (labapi.Size{Cols: 120, Rows: 40}) {
+	if got := receive(t, opener.opened); got != (labagent.Size{Cols: 120, Rows: 40}) {
 		t.Errorf("opened at %+v, want 120x40", got)
 	}
 	send(t, conn, websocket.MessageBinary, "ls\r")
@@ -57,7 +57,7 @@ func TestForwardsResize(t *testing.T) {
 
 	send(t, conn, websocket.MessageText, `{"type":"resize","cols":200,"rows":50}`)
 
-	if got := receive(t, opener.shell.resizes); got != (labapi.Size{Cols: 200, Rows: 50}) {
+	if got := receive(t, opener.shell.resizes); got != (labagent.Size{Cols: 200, Rows: 50}) {
 		t.Errorf("resized to %+v, want 200x50", got)
 	}
 }
@@ -71,7 +71,7 @@ func TestIgnoresBadControlMessages(t *testing.T) {
 	}
 	send(t, conn, websocket.MessageText, `{"type":"resize","cols":90,"rows":30}`)
 
-	if got := receive(t, opener.shell.resizes); got != (labapi.Size{Cols: 90, Rows: 30}) {
+	if got := receive(t, opener.shell.resizes); got != (labagent.Size{Cols: 90, Rows: 30}) {
 		t.Errorf("first resize = %+v, want the only valid one, 90x30", got)
 	}
 }
@@ -134,16 +134,16 @@ func TestRefusesOtherOrigins(t *testing.T) {
 }
 
 type fakeOpener struct {
-	opened chan labapi.Size
+	opened chan labagent.Size
 	shell  *fakeShell
 	err    error
 }
 
 func newFakeOpener() *fakeOpener {
-	return &fakeOpener{opened: make(chan labapi.Size, 1), shell: newFakeShell()}
+	return &fakeOpener{opened: make(chan labagent.Size, 1), shell: newFakeShell()}
 }
 
-func (o *fakeOpener) Open(_ context.Context, size labapi.Size) (labapi.Shell, error) {
+func (o *fakeOpener) Open(_ context.Context, size labagent.Size) (labagent.Shell, error) {
 	o.opened <- size
 	if o.err != nil {
 		return nil, o.err
@@ -157,7 +157,7 @@ type fakeShell struct {
 	out       *io.PipeReader
 	outWriter *io.PipeWriter
 	keys      chan string
-	resizes   chan labapi.Size
+	resizes   chan labagent.Size
 	closed    chan struct{}
 	closeOnce sync.Once
 }
@@ -167,7 +167,7 @@ func newFakeShell() *fakeShell {
 	return &fakeShell{
 		out: r, outWriter: w,
 		keys:    make(chan string, 10),
-		resizes: make(chan labapi.Size, 10),
+		resizes: make(chan labagent.Size, 10),
 		closed:  make(chan struct{}),
 	}
 }
@@ -179,7 +179,7 @@ func (s *fakeShell) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (s *fakeShell) Resize(_ context.Context, size labapi.Size) error {
+func (s *fakeShell) Resize(_ context.Context, size labagent.Size) error {
 	s.resizes <- size
 	return nil
 }

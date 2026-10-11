@@ -18,10 +18,7 @@ require (
 
 require (
 	github.com/MohamedAljoke/cka-sim/apps/go-shared v0.0.0
-	github.com/MohamedAljoke/cka-sim/apps/lab v0.0.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 )
-
-// The lab lives next door in this repo; drop this once it has its own.
-replace github.com/MohamedAljoke/cka-sim/apps/lab => ../lab
 
 replace github.com/MohamedAljoke/cka-sim/apps/go-shared => ../go-shared

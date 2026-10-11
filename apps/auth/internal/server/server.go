@@ -14,20 +14,18 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 )
 
-// __Host- makes the browser refuse the cookie unless it is Secure, Path=/ and has no Domain.
-const CookieName = "__Host-cka_sim_session"
-
 type accountFinder interface {
 	ByEmail(ctx context.Context, email string) (accounts.Account, error)
 }
 
-type api struct {
+type handlers struct {
 	accounts accountFinder
 	signer   session.Signer
+	sessions session.Verifier
 }
 
-func New(accounts accountFinder, signer session.Signer) http.Handler {
-	a := &api{accounts: accounts, signer: signer}
+func New(accounts accountFinder, signer session.Signer, sessions session.Verifier) http.Handler {
+	a := &handlers{accounts: accounts, signer: signer, sessions: sessions}
 	problems := httpx.NewProblems(httpx.WithReporter(func(r *http.Request, err error) {
 		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
 	}))
@@ -43,7 +41,7 @@ type user struct {
 	Email string `json:"email"`
 }
 
-func (a *api) login(w http.ResponseWriter, r *http.Request) error {
+func (a *handlers) login(w http.ResponseWriter, r *http.Request) error {
 	var body struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -63,13 +61,10 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) error {
 	return httpx.WriteJSON(w, http.StatusOK, user{ID: account.ID, Email: account.Email})
 }
 
-var (
-	errWrongCredentials = domainerr.Unauthorized("wrong_credentials", "wrong email or password")
-	errNotLoggedIn      = domainerr.Unauthorized("not_logged_in", "not logged in")
-)
+var errWrongCredentials = domainerr.Unauthorized("wrong_credentials", "wrong email or password")
 
 // Same answer and cost for an unknown email and a wrong password, so neither leaks which emails exist.
-func (a *api) authenticate(ctx context.Context, email, plain string) (accounts.Account, error) {
+func (a *handlers) authenticate(ctx context.Context, email, plain string) (accounts.Account, error) {
 	account, err := a.accounts.ByEmail(ctx, email)
 	if errors.Is(err, accounts.ErrNotFound) {
 		password.VerifyDummy(plain)
@@ -84,27 +79,23 @@ func (a *api) authenticate(ctx context.Context, email, plain string) (accounts.A
 	return account, nil
 }
 
-func (a *api) me(w http.ResponseWriter, r *http.Request) error {
-	cookie, err := r.Cookie(CookieName)
+func (a *handlers) me(w http.ResponseWriter, r *http.Request) error {
+	claims, err := a.sessions.FromRequest(r)
 	if err != nil {
-		return errNotLoggedIn
-	}
-	claims, err := a.signer.Verify(cookie.Value)
-	if err != nil {
-		return errNotLoggedIn
+		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, user{ID: claims.AccountID, Email: claims.Email})
 }
 
 // The token itself stays valid until it expires.
-func (a *api) logout(w http.ResponseWriter, r *http.Request) {
+func (a *handlers) logout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, sessionCookie("", -1))
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func sessionCookie(token string, maxAge int) *http.Cookie {
 	return &http.Cookie{
-		Name:     CookieName,
+		Name:     session.CookieName,
 		Value:    token,
 		Path:     "/",
 		MaxAge:   maxAge,

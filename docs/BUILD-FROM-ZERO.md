@@ -56,11 +56,12 @@ These apply to every deliverable.
 
 **Layout.** Each application lives in its own folder under `apps/`, split by who owns what:
 - `apps/platform` decides **what** to run: the catalog, tasks, exams, grading, and the HTTP server the page
-  talks to (`cmd/server`). It never touches Docker; it reaches every lab through `apps/lab/api`.
+  talks to (`cmd/server`). It never touches Docker; it reaches every lab through the lab's agent.
 - `apps/lab` decides **how** it runs: the lab image with dockerd, the kind cluster and base host (`cmd/lab`:
   doctor, up, down, shell), and the agent (`cmd/agent`) that runs scripts and shells there. The same image
-  is a container on a laptop (`make up`) and a pod on its own VM on GKE. It could become its own repo:
-  `api/` is the only package another module imports.
+  is a container on a laptop (`make up`) and a pod on its own VM on GKE. It could become its own repo.
+- `apps/go-shared` holds config, domain errors and problem responses. It is the only module an app may
+  import: when two apps share a contract, each keeps its own copy (`make boundaries` checks this).
 - `apps/web` is the browser page (Vite + TypeScript).
 
 The repo root holds `README.md`, `Makefile`, `docs/`, `infra/` and `.github/`. In both Go modules,

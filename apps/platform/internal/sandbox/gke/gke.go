@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox"
 )
 
@@ -42,7 +42,7 @@ func New(c Config) (*Provider, error) {
 		poll:       time.Second,
 		healthWait: 30 * time.Second,
 		box: func(id, ip string) sandbox.Box {
-			agent := api.Client{URL: "http://" + net.JoinHostPort(ip, agentPort), Token: c.AgentToken}
+			agent := labagent.Client{URL: "http://" + net.JoinHostPort(ip, agentPort), Token: c.AgentToken}
 			return sandbox.Box{ID: id, Runner: agent, Shells: agent}
 		},
 		probe: sandbox.ClusterAnswers,

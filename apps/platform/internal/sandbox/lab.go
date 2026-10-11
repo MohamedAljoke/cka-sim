@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/domainerr"
-	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
 )
 
@@ -23,7 +23,7 @@ type Provider interface {
 type Box struct {
 	ID     string
 	Runner tasks.Runner
-	Shells api.Opener
+	Shells labagent.Opener
 }
 
 type State string
@@ -130,7 +130,7 @@ func (l *Lab) Run(ctx context.Context, host, taskID string, script []byte) (stri
 	return box.Runner.Run(ctx, host, taskID, script)
 }
 
-func (l *Lab) Open(ctx context.Context, size api.Size) (api.Shell, error) {
+func (l *Lab) Open(ctx context.Context, size labagent.Size) (labagent.Shell, error) {
 	box, err := l.current()
 	if err != nil {
 		return nil, err
@@ -156,6 +156,6 @@ func (l *Lab) current() (Box, error) {
 }
 
 func ClusterAnswers(ctx context.Context, b Box) error {
-	_, err := b.Runner.Run(ctx, api.ControlPlaneNode, "health", []byte("kubectl get --raw=/readyz\n"))
+	_, err := b.Runner.Run(ctx, labagent.ControlPlaneNode, "health", []byte("kubectl get --raw=/readyz\n"))
 	return err
 }

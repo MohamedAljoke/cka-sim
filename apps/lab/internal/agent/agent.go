@@ -9,7 +9,7 @@ import (
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/domainerr"
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
-	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
+	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/protocol"
 )
 
 const scriptLimit = 4 << 20 // 4 MiB
@@ -20,7 +20,7 @@ type Runner interface {
 	Run(ctx context.Context, host, taskID string, script []byte) (string, error)
 }
 
-func Handler(token string, runner Runner, shells api.Opener) http.Handler {
+func Handler(token string, runner Runner, shells protocol.Opener) http.Handler {
 	problems := httpx.NewProblems(httpx.WithReporter(func(r *http.Request, err error) {
 		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
 	}))
@@ -35,7 +35,7 @@ func Handler(token string, runner Runner, shells api.Opener) http.Handler {
 		return run(w, r, runner)
 	})
 	authed("GET /shell", func(w http.ResponseWriter, r *http.Request) error {
-		api.Serve(w, r, shells)
+		protocol.Serve(w, r, shells)
 		return nil
 	})
 	authed("POST /shells/end", func(w http.ResponseWriter, r *http.Request) error {
@@ -69,7 +69,7 @@ func run(w http.ResponseWriter, r *http.Request, runner Runner) error {
 		return httpx.TooLarge(err.Error())
 	}
 	out, err := runner.Run(r.Context(), host, taskID, script)
-	res := api.RunResult{Output: out}
+	res := protocol.RunResult{Output: out}
 	if err != nil {
 		res.Error = err.Error()
 	}

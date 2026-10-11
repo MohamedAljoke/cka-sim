@@ -61,7 +61,7 @@ func TestLoginRejectsABodyThatIsNotJSON(t *testing.T) {
 }
 
 func TestLoginFailsWhenTheStoreFails(t *testing.T) {
-	srv := New(fakeAccounts{err: errors.New("db down")}, signer())
+	srv := New(fakeAccounts{err: errors.New("db down")}, signer(), verifier())
 
 	res, body := call(t, srv, http.MethodPost, "/api/auth/login", `{"email":"dev@cka-sim.local","password":"cka-sim-dev"}`, nil)
 
@@ -85,7 +85,7 @@ func TestMeNeedsAValidCookie(t *testing.T) {
 	srv := newServer(t)
 	for name, cookie := range map[string]*http.Cookie{
 		"no cookie": nil,
-		"garbage":   {Name: CookieName, Value: "not-a-token"},
+		"garbage":   {Name: session.CookieName, Value: "not-a-token"},
 	} {
 		res, _ := call(t, srv, http.MethodGet, "/api/auth/me", "", cookie)
 
@@ -129,11 +129,17 @@ func newServer(t *testing.T) http.Handler {
 		t.Fatal(err)
 	}
 	dev := accounts.Account{ID: "id-1", Email: "dev@cka-sim.local", PasswordHash: hash}
-	return New(fakeAccounts{byEmail: map[string]accounts.Account{dev.Email: dev}}, signer())
+	return New(fakeAccounts{byEmail: map[string]accounts.Account{dev.Email: dev}}, signer(), verifier())
 }
 
+var testSecret = []byte("test secret")
+
 func signer() session.Signer {
-	return session.Signer{Secret: []byte("test secret"), TTL: time.Hour, Now: time.Now}
+	return session.Signer{Secret: testSecret, TTL: time.Hour, Now: time.Now}
+}
+
+func verifier() session.Verifier {
+	return session.Verifier{Secret: testSecret, Now: time.Now}
 }
 
 func call(t *testing.T, srv http.Handler, method, path, body string, cookie *http.Cookie) (*http.Response, string) {
@@ -150,10 +156,10 @@ func call(t *testing.T, srv http.Handler, method, path, body string, cookie *htt
 func cookieFrom(t *testing.T, res *http.Response) *http.Cookie {
 	t.Helper()
 	for _, c := range res.Cookies() {
-		if c.Name == CookieName {
+		if c.Name == session.CookieName {
 			return c
 		}
 	}
-	t.Fatalf("no %s cookie in %v", CookieName, res.Header["Set-Cookie"])
+	t.Fatalf("no %s cookie in %v", session.CookieName, res.Header["Set-Cookie"])
 	return nil
 }

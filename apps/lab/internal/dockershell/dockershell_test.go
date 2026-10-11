@@ -14,15 +14,15 @@ import (
 
 	"github.com/moby/moby/client"
 
-	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
 	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/cluster"
+	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/protocol"
 )
 
 func TestOpenStartsTaggedLoginShellAtBrowserSize(t *testing.T) {
 	d := &fakeDocker{}
 	o := &Opener{container: "node", user: "candidate", docker: d}
 
-	if _, err := o.Open(context.Background(), api.Size{Cols: 120, Rows: 40}); err != nil {
+	if _, err := o.Open(context.Background(), protocol.Size{Cols: 120, Rows: 40}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -49,7 +49,7 @@ func TestOpenStartsTaggedLoginShellAtBrowserSize(t *testing.T) {
 
 func TestShellCarriesKeystrokesAndOutput(t *testing.T) {
 	d := &fakeDocker{}
-	shell, err := (&Opener{docker: d}).Open(context.Background(), api.Size{Cols: 80, Rows: 24})
+	shell, err := (&Opener{docker: d}).Open(context.Background(), protocol.Size{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,12 +67,12 @@ func TestShellCarriesKeystrokesAndOutput(t *testing.T) {
 
 func TestResizeSetsRowsAndCols(t *testing.T) {
 	d := &fakeDocker{}
-	shell, err := (&Opener{docker: d}).Open(context.Background(), api.Size{Cols: 80, Rows: 24})
+	shell, err := (&Opener{docker: d}).Open(context.Background(), protocol.Size{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := shell.Resize(context.Background(), api.Size{Cols: 200, Rows: 50}); err != nil {
+	if err := shell.Resize(context.Background(), protocol.Size{Cols: 200, Rows: 50}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -83,7 +83,7 @@ func TestResizeSetsRowsAndCols(t *testing.T) {
 
 func TestCloseHangsUpOnlyThisShell(t *testing.T) {
 	d := &fakeDocker{}
-	shell, err := (&Opener{docker: d}).Open(context.Background(), api.Size{Cols: 80, Rows: 24})
+	shell, err := (&Opener{docker: d}).Open(context.Background(), protocol.Size{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestDockerShellOnCluster(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shell, err := o.Open(ctx, api.Size{Cols: 80, Rows: 24})
+	shell, err := o.Open(ctx, protocol.Size{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestDockerShellOnCluster(t *testing.T) {
 	if !readUntil(shell, "42", 10*time.Second) {
 		t.Fatal("never saw the shell print 42")
 	}
-	if err := shell.Resize(ctx, api.Size{Cols: 100, Rows: 30}); err != nil {
+	if err := shell.Resize(ctx, protocol.Size{Cols: 100, Rows: 30}); err != nil {
 		t.Fatal(err)
 	}
 	if err := shell.Close(); err != nil {

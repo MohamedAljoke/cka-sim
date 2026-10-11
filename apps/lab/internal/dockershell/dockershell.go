@@ -13,7 +13,7 @@ import (
 
 	"github.com/moby/moby/client"
 
-	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
+	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/protocol"
 )
 
 // Closing the exec stream leaves bash running in the container, so Close kills by this tag.
@@ -65,7 +65,7 @@ func currentContextHost() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func (o *Opener) Open(ctx context.Context, size api.Size) (api.Shell, error) {
+func (o *Opener) Open(ctx context.Context, size protocol.Size) (protocol.Shell, error) {
 	tag := rand.Text()
 	created, err := o.docker.ExecCreate(ctx, o.container, client.ExecCreateOptions{
 		TTY:          true,
@@ -122,7 +122,7 @@ type dockerShell struct {
 func (s *dockerShell) Read(p []byte) (int, error)  { return s.stream.Reader.Read(p) }
 func (s *dockerShell) Write(p []byte) (int, error) { return s.stream.Conn.Write(p) }
 
-func (s *dockerShell) Resize(ctx context.Context, size api.Size) error {
+func (s *dockerShell) Resize(ctx context.Context, size protocol.Size) error {
 	_, err := s.opener.docker.ExecResize(ctx, s.execID, client.ExecResizeOptions{Height: size.Rows, Width: size.Cols})
 	return err
 }
@@ -134,6 +134,6 @@ func (s *dockerShell) Close() error {
 	return s.opener.hangup(ctx, s.tag)
 }
 
-func consoleSize(s api.Size) client.ConsoleSize {
+func consoleSize(s protocol.Size) client.ConsoleSize {
 	return client.ConsoleSize{Height: s.Rows, Width: s.Cols}
 }

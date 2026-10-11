@@ -1,5 +1,15 @@
 # cka-sim
 
+## Comments: almost never
+
+Write code with no comments. A function's name and body already say what it does. That covers package
+docs, doc comments on types, funcs, fields and constants, comments on test helpers, and comments that
+narrate a step.
+
+Comment only a *why* the code can't show, such as a workaround or an outside constraint, and that is rare.
+If the code seems to need explaining, rename or refactor it instead. Before finishing, grep your changes
+for `//` and `/*` and delete every comment that fails this test.
+
 ## Explaining a flow
 
 When the dev asks how something works ("what happens when…", "big picture", "how does X reach Y"), read

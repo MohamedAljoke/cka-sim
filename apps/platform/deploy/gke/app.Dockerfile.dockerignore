@@ -2,3 +2,4 @@
 **/dist
 platform/bin
 lab/bin
+auth/bin

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
 )
 
@@ -22,8 +22,8 @@ func TestEveryShippedTaskLoads(t *testing.T) {
 		t.Fatal("the catalog has no tasks")
 	}
 	for _, task := range all {
-		if !slices.Contains(api.Nodes, task.Host) {
-			t.Errorf("%s: host %q is not a node, want one of %q", task.ID, task.Host, api.Nodes)
+		if !slices.Contains(labagent.Nodes, task.Host) {
+			t.Errorf("%s: host %q is not a node, want one of %q", task.ID, task.Host, labagent.Nodes)
 		}
 		scripts := tasks.Scripts
 		if task.Reset {

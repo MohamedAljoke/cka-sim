@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox"
 )
 
 // Ending the lab keeps the container.
 type Provider struct {
-	Agent api.Client
+	Agent labagent.Client
 }
 
 func (Provider) Name() string { return "Local Docker" }

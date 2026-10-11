@@ -36,11 +36,11 @@ out without a rewrite. The terminal is the most likely candidate.
 | attempt | quiz/exam sessions: chosen tasks, timers, scores, Check/Submit | — |
 | grading | runs `check.sh`, parses `PASS/FAIL <pts>` into a result | format in `catalog/lib.sh` |
 | sandbox | VM lifecycle, warm pool, one-per-user rule, idle timeout, reaper | `apps/platform/internal/sandbox`: `Provider`, one `Lab`, the `Local` and `gke` providers |
-| terminal | browser websocket ⇄ shell | `apps/lab/api` (the protocol), `apps/platform/internal/server` |
+| terminal | browser websocket ⇄ shell | `apps/platform/internal/labagent` and `apps/lab/internal/protocol` (one protocol, a copy on each side) |
 
 The **agent** is a separate binary (`apps/lab/cmd/agent`) that runs inside every lab, on a laptop as on a VM. It
 exposes `/run` and `/shell` on the private network only, behind a token, and does the `docker exec` there. The
-platform reaches it with `api.Client` and holds no Docker code.
+platform reaches it with `labagent.Client` and holds no Docker code.
 
 ### Boundary rules
 
@@ -102,20 +102,22 @@ The bill depends on **users with a lab open right now**, not total users. Each V
 ## Repo layout
 
 ```
-apps/platform/      what to run; imports only apps/lab/api from the lab
+apps/go-shared/     config, domainerr, httpx: the only module an app may import
+apps/platform/      what to run; imports no other app
   cmd/server        wires all domains (hosted or local)
   catalog/          tasks, lib.sh, images.txt
   internal/
     tasks/ exam/ grader/ server/
-    sandbox/        Lab + the Local provider; gke/ is the GKE one
+    sandbox/        Lab; local/ and gke/ are the providers
+    labagent/       its copy of the lab agent contract
+    auth/           its copy of the session check
 apps/auth/          users, login, session tokens (a JWT cookie the platform will check); its own Postgres
   cmd/server        127.0.0.1:7272
   internal/         accounts/ password/ session/ server/
   scripts/db/       sql-migrate migrations and seeds
 apps/lab/           how it runs; could become its own repo
-  api/              agent client, shell protocol, node names
   cmd/agent  cmd/lab
-  internal/  agent/ cluster/ runner/ doctor/ dockershell/
+  internal/  agent/ cluster/ runner/ doctor/ dockershell/ protocol/
   deploy/           the lab image, and the GKE warm pool
 infra/gke/          the GCP project and cluster
 ```

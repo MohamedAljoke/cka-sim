@@ -7,8 +7,8 @@ import (
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 
-	labapi "github.com/MohamedAljoke/cka-sim/apps/lab/api"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/exam"
+	labagent "github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
 )
@@ -27,7 +27,7 @@ func New(lab *sandbox.Lab, practice Practice) http.Handler {
 	mux := http.NewServeMux()
 	handle := func(pattern string, h httpx.Handler) { mux.HandleFunc(pattern, problems.Handle(h)) }
 	mux.HandleFunc("GET /ws/terminal", func(w http.ResponseWriter, r *http.Request) {
-		labapi.Serve(w, r, lab)
+		labagent.Serve(w, r, lab)
 	})
 	handle("GET /api/lab", a.getLab)
 	handle("POST /api/lab", a.startLab)

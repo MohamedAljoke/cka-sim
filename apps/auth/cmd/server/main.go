@@ -25,7 +25,7 @@ const (
 )
 
 type settings struct {
-	Secret      string `key:"CKA_SIM_AUTH_SECRET"`
+	Secret      string `key:"CKA_SIM_AUTH_SECRET" minLength:"32"`
 	DatabaseURL string `key:"CKA_SIM_AUTH_DATABASE_URL" default:"postgres://cka_sim:cka_sim@127.0.0.1:5434/cka_sim?sslmode=disable"`
 }
 
@@ -54,8 +54,10 @@ func run(ctx context.Context) error {
 	}
 	defer ln.Close()
 
-	signer := session.Signer{Secret: []byte(cfg.Secret), TTL: sessionTTL, Now: time.Now}
-	srv := &http.Server{Handler: server.New(accounts.Postgres{Pool: pool}, signer)}
+	secret := []byte(cfg.Secret)
+	signer := session.Signer{Secret: secret, TTL: sessionTTL, Now: time.Now}
+	sessions := session.Verifier{Secret: secret, Now: time.Now}
+	srv := &http.Server{Handler: server.New(accounts.Postgres{Pool: pool}, signer, sessions)}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -58,7 +58,7 @@ starting an exam starts it on the server. `Lab.Start` (`internal/sandbox/lab.go`
 `Create` in the background. `local.Provider.Create` (`internal/sandbox/local/local.go`) asks the agent's `/healthz` (if
 nothing answers: "run make up"), runs `kubectl get --raw=/readyz` on the control plane through it
 (`ClusterAnswers`, the same probe GKE uses), and closes any shells left over from a crashed server
-(`EndAll`). It returns a box whose runner and shells are both one `api.Client` (`apps/lab/api`).
+(`EndAll`). It returns a box whose runner and shells are both one `labagent.Client` (`apps/platform/internal/labagent`).
 
 The topbar (`src/lab.ts`) shows nothing while there is no lab. When a view tells it the server may have
 started one (`app.labChanged`), it asks `GET /api/lab` every second while the state is `starting` ("Starting
@@ -70,7 +70,7 @@ script lock and calls `Destroy`. Locally that closes the shells and keeps the cl
 **The terminal.** Practice and exam views are split: the question on the left and the terminal on the right
 (`app.split`, `src/main.ts`). Home and results are full width (`.exam.single` hides the terminal pane). The
 first time a split view finds the lab ready, `main.ts` opens a websocket to `/ws/terminal`. The server
-(`api.Serve`) opens a shell through the box's `api.Client`, which dials the agent's `/shell` and speaks the
+(`labagent.Serve`) opens a shell through the box's `labagent.Client`, which dials the agent's `/shell` and speaks the
 same protocol: binary messages for bytes, `{"type":"resize"}` text messages. In the lab, the agent's
 `dockershell.Opener` (`apps/lab/internal/dockershell`) runs the equivalent of
 `docker exec -it -u candidate -w /home/candidate cka-sim-base bash`, and bytes flow both ways from xterm
@@ -93,7 +93,7 @@ requests in parallel:
   namespace, such as `tr-kubelet`'s kubelet, and do nothing on a healthy cluster. It then calls `tasks.Start`,
   which reads `lib.sh` and `setup.sh` and hands them, in that order, to the runner with a 3-minute limit.
 
-The lab passes the script to its box's `api.Client`, which POSTs it to the agent's `/run?host=…&task=…`. In
+The lab passes the script to its box's `labagent.Client`, which POSTs it to the agent's `/run?host=…&task=…`. In
 the lab, the agent hands it to `runner.Node` (`apps/lab/internal/runner`), which runs
 `docker exec -i -e TASK_ID=<id> <task's host> bash -s` with the script on its stdin, and answers
 `{output, error}`. The script runs as root on the node the task names,
@@ -139,7 +139,7 @@ the broken state. While it runs, Check is disabled.
 
 `make selftest` runs `go test ./catalog -run TestSelftest -selftest` in `apps/platform`, with the agent token.
 The `-selftest` flag keeps `go test ./...` from touching the lab. `catalog/selftest_test.go` loads every task
-and talks to the lab the way the server does: an `api.Client` at `127.0.0.1:7171` (skipped if its `/healthz`
+and talks to the lab the way the server does: an `labagent.Client` at `127.0.0.1:7171` (skipped if its `/healthz`
 doesn't answer). For each task, `tasks.Selftest` runs setup, then check,
 which must earn 0 of more than 0 points (nothing to earn for doing nothing). It then runs `solution.sh`
 (`tasks.Solve`) and checks again, which must earn every point. The task's `reset.sh` runs before setup and
@@ -248,16 +248,16 @@ lab nodes.
    API, as the `cka-sim-app` service account. That account may only create, get, list and delete claims, and
    get pods.
 2. It polls the claim until it is `Ready` and names its sandbox, then reads that pod's IP.
-3. The box's runner and shells are one `api.Client` at `http://<pod IP>:7171`, with the token from the
+3. The box's runner and shells are one `labagent.Client` at `http://<pod IP>:7171`, with the token from the
    `cka-sim-agent` Secret, exactly as locally but with the pod's address.
 4. A `kubectl get --raw=/readyz` through the agent proves the lab answers. A claim that never gets ready or
    never answers is deleted.
 
 The topbar then reads "Lab ready in 1.4s · GKE".
 
-**Scripts and the terminal** work as in flows 2 and 3, only farther away: `api.Client` POSTs `lib.sh` and the
+**Scripts and the terminal** work as in flows 2 and 3, only farther away: `labagent.Client` POSTs `lib.sh` and the
 script to `/run`, and the agent hands it to `runner.Node`, so it runs as `docker exec … bash -s` on the task's
-node inside the lab pod. A keystroke goes from the browser to Caddy, the server (`api.Serve`), the agent's
+node inside the lab pod. A keystroke goes from the browser to Caddy, the server (`labagent.Serve`), the agent's
 `/shell` (`api.Serve` again, with `dockershell.Opener`), and finally `docker exec` on base in the lab pod.
 
 **Ending.** **End lab** (`DELETE /api/lab`) calls `Destroy`, which deletes the claim. agent-sandbox then

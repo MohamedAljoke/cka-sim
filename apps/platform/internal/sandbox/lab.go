@@ -1,5 +1,3 @@
-// Package sandbox gives the practice page and the exam a place to run: a box with a cluster,
-// a way to run task scripts on it, and a way to open shells on it.
 package sandbox
 
 import (
@@ -9,15 +7,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/domainerr"
 	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
 )
 
-var ErrNoLab = errors.New("no lab is running; start one first")
+var ErrNoLab = domainerr.Conflict("no_lab", "no lab is running; start one first")
 
 type Provider interface {
 	Name() string
-	// Create returns once the box's cluster is usable.
 	Create(ctx context.Context) (Box, error)
 	Destroy(ctx context.Context, b Box) error
 }
@@ -45,16 +43,13 @@ type Status struct {
 	Error    string    `json:"error,omitempty"`
 }
 
-// Lab holds at most one box. It is itself a tasks.Runner and an api.Opener, so the rest of
-// the engine runs on whatever box is current without knowing where it lives.
 type Lab struct {
 	provider Provider
 	now      func() time.Time
 	mu       sync.Mutex
 	status   Status
 	box      Box
-	// settled is closed when the current start succeeds or fails.
-	settled chan struct{}
+	settled  chan struct{}
 }
 
 func NewLab(p Provider, now func() time.Time) *Lab {
@@ -67,7 +62,6 @@ func (l *Lab) Status() Status {
 	return l.status
 }
 
-// Start creates a box in the background, unless one is ready or on its way.
 func (l *Lab) Start() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -99,7 +93,6 @@ func (l *Lab) startLocked() chan struct{} {
 	return settled
 }
 
-// Ensure starts the lab if needed and waits until it is ready.
 func (l *Lab) Ensure(ctx context.Context) error {
 	l.mu.Lock()
 	settled := l.startLocked()
@@ -162,7 +155,6 @@ func (l *Lab) current() (Box, error) {
 	return l.box, nil
 }
 
-// ClusterAnswers proves a box is usable: kubectl on the control plane, through the box's runner.
 func ClusterAnswers(ctx context.Context, b Box) error {
 	_, err := b.Runner.Run(ctx, api.ControlPlaneNode, "health", []byte("kubectl get --raw=/readyz\n"))
 	return err

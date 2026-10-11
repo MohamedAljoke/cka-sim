@@ -1,5 +1,3 @@
-// Package local is the lab container that make up runs on this machine, reached through its agent like a
-// lab on GKE.
 package local
 
 import (
@@ -10,7 +8,7 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox"
 )
 
-// Provider always hands out the same lab. Ending the lab keeps the container.
+// Ending the lab keeps the container.
 type Provider struct {
 	Agent api.Client
 }

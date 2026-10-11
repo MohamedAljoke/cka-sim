@@ -47,7 +47,7 @@ cluster: ## create the cluster: a small system pool and an empty, tainted "labs"
 
 image: ## build and push the lab image
 	$(GC) auth configure-docker $(REGION)-docker.pkg.dev --quiet
-	docker build -f $(LAB_DIR)/deploy/lab.Dockerfile -t $(IMAGE) $(LAB_DIR)
+	docker build -f $(LAB_DIR)/deploy/lab.Dockerfile -t $(IMAGE) $(APPS)
 	docker push $(IMAGE)
 
 sandbox: ## install agent-sandbox (the warm pool controller)

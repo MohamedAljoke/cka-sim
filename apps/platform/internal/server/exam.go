@@ -2,13 +2,16 @@ package server
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"time"
 
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/domainerr"
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/exam"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
 )
+
+var errExamLimits = domainerr.Unprocessable("invalid_exam", "count must be at least 1, and minutes between 1 and 240")
 
 type examState struct {
 	Exam  exam.Exam `json:"exam"`
@@ -29,83 +32,72 @@ type examRequest struct {
 	Topics  []string       `json:"topics"`
 }
 
-func (a *api) getExam(w http.ResponseWriter, r *http.Request) {
+func (a *api) getExam(w http.ResponseWriter, r *http.Request) error {
 	e, ok := a.Exam.Current()
 	if !ok {
-		http.Error(w, exam.ErrNoExam.Error(), http.StatusNotFound)
-		return
+		return exam.ErrNoExam
 	}
-	writeJSON(w, a.state(e))
+	return httpx.WriteJSON(w, http.StatusOK, a.state(e))
 }
 
-func (a *api) beginExam(w http.ResponseWriter, r *http.Request) {
+func (a *api) beginExam(w http.ResponseWriter, r *http.Request) error {
 	var req examRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "the body must be JSON like {\"count\": 16, \"minutes\": 120}", http.StatusBadRequest)
-		return
+		return httpx.Malformed(`the body must be JSON like {"count": 16, "minutes": 120}`)
 	}
 	if req.Count < 1 || req.Minutes < 1 || req.Minutes > 240 {
-		http.Error(w, "count must be at least 1, and minutes between 1 and 240", http.StatusBadRequest)
-		return
+		return errExamLimits
 	}
 	pool := tasks.Filter(a.Tasks, req.Domains, req.Topics)
 	if len(pool) == 0 {
-		http.Error(w, "no task matches those domains and topics", http.StatusBadRequest)
-		return
+		return exam.ErrNoMatch
 	}
-	if !a.lock(w, r) {
-		return
+	if err := a.lock(r); err != nil {
+		return err
 	}
 	// The exam's setup waits for the lab, so starting an exam is enough to get one.
 	a.Lab.Start()
 	if err := a.Exam.Begin(pool, req.Count, req.Minutes, a.busy.Unlock); err != nil {
 		a.busy.Unlock()
-		examError(w, err)
-		return
+		return err
 	}
 	e, _ := a.Exam.Current()
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(a.state(e))
+	return httpx.WriteJSON(w, http.StatusAccepted, a.state(e))
 }
 
-func (a *api) flag(w http.ResponseWriter, r *http.Request) {
+func (a *api) flag(w http.ResponseWriter, r *http.Request) error {
 	if err := a.Exam.Flag(r.PathValue("id"), r.Method == http.MethodPut); err != nil {
-		examError(w, err)
-		return
+		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
 
-// endExam answers at once; grading holds the script lock until every check is back.
-func (a *api) endExam(w http.ResponseWriter, r *http.Request) {
-	if !a.lock(w, r) {
-		return
+// Answers at once; grading holds the script lock until every check is back.
+func (a *api) endExam(w http.ResponseWriter, r *http.Request) error {
+	if err := a.lock(r); err != nil {
+		return err
 	}
 	e, err := a.Exam.End(a.busy.Unlock)
 	if err != nil {
 		a.busy.Unlock()
-		examError(w, err)
-		return
+		return err
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(a.state(e))
+	return httpx.WriteJSON(w, http.StatusAccepted, a.state(e))
 }
 
-func (a *api) discardExam(w http.ResponseWriter, r *http.Request) {
-	if !a.lock(w, r) {
-		return
+func (a *api) discardExam(w http.ResponseWriter, r *http.Request) error {
+	if err := a.lock(r); err != nil {
+		return err
 	}
 	defer a.busy.Unlock()
 	if err := a.Exam.Discard(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
 
-// resumeExam holds the script lock while setups or checks a restart interrupted run again.
 func (a *api) resumeExam() {
 	a.busy.Lock()
 	if !a.Exam.Resume(a.busy.Unlock) {
@@ -120,12 +112,4 @@ func (a *api) state(e exam.Exam) examState {
 		s.Score = &score{Percent: percent, Passed: passed}
 	}
 	return s
-}
-
-func examError(w http.ResponseWriter, err error) {
-	status := http.StatusConflict
-	if errors.Is(err, exam.ErrNoExam) {
-		status = http.StatusNotFound
-	}
-	http.Error(w, err.Error(), status)
 }

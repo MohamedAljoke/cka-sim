@@ -1,5 +1,3 @@
-// Package gke gives each lab its own GKE node: it claims a lab pod from an agent-sandbox warm pool, whose
-// cluster is already up, and reaches it through the agent in that pod.
 package gke
 
 import (
@@ -20,7 +18,6 @@ const (
 )
 
 type Config struct {
-	// Pool is the SandboxWarmPool to claim from.
 	Pool       string
 	AgentToken string
 }
@@ -54,7 +51,7 @@ func New(c Config) (*Provider, error) {
 
 func (*Provider) Name() string { return "GKE" }
 
-// Create claims a lab. A claim that never becomes usable is deleted, so it doesn't hold a node.
+// A claim that never becomes usable is deleted, so it doesn't hold a node.
 func (p *Provider) Create(ctx context.Context) (sandbox.Box, error) {
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
@@ -128,7 +125,6 @@ func (p *Provider) Destroy(ctx context.Context, b sandbox.Box) error {
 	return p.kube.deleteClaim(ctx, b.ID)
 }
 
-// ReapClaims deletes claims an earlier run of the server made and never gave back.
 func (p *Provider) ReapClaims(ctx context.Context) error {
 	names, err := p.kube.ourClaims(ctx)
 	if err != nil {

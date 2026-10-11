@@ -2,7 +2,6 @@ package exam
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -11,14 +10,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/domainerr"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/grader"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
 )
 
 var (
-	ErrNoExam  = errors.New("no exam")
-	ErrExists  = errors.New("an exam is already in progress")
-	ErrScoring = errors.New("the last exam is still being scored")
+	ErrNoExam    = domainerr.NotFound("no_exam", "no exam")
+	ErrExists    = domainerr.Conflict("exam_exists", "an exam is already in progress")
+	ErrScoring   = domainerr.Conflict("exam_scoring", "the last exam is still being scored")
+	ErrNoMatch   = domainerr.Unprocessable("no_matching_tasks", "no task matches those domains and topics")
+	ErrEnded     = domainerr.Conflict("exam_ended", "the exam has already ended")
+	ErrSettingUp = domainerr.Conflict("exam_setting_up", "the exam is still being set up")
 )
 
 type Config struct {
@@ -28,11 +31,10 @@ type Config struct {
 	Catalog []tasks.Task
 	Now     func() time.Time
 	Rand    *rand.Rand
-	// Ready, when set, waits until there is somewhere to run scripts.
-	Ready func(ctx context.Context) error
+	Ready   func(ctx context.Context) error
 }
 
-// Session owns the one exam there can be. Every change is saved before it's visible.
+// Every change is saved before it's visible.
 type Session struct {
 	cfg  Config
 	mu   sync.Mutex
@@ -76,8 +78,7 @@ func (s *Session) Weights() map[string]int {
 	return w
 }
 
-// Begin draws n of pool and saves a new exam in place of a scored one, then sets its tasks up
-// (see setUp) and calls release once every setup is done.
+// release is called once every setup is done.
 func (s *Session) Begin(pool []tasks.Task, n, minutes int, release func()) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -90,7 +91,7 @@ func (s *Session) Begin(pool []tasks.Task, n, minutes int, release func()) error
 	}
 	drawn := tasks.Draw(pool, n, s.cfg.Rand)
 	if len(drawn) == 0 {
-		return errors.New("no task matches")
+		return ErrNoMatch
 	}
 	e := &Exam{Minutes: minutes}
 	for _, t := range drawn {
@@ -104,9 +105,7 @@ func (s *Session) Begin(pool []tasks.Task, n, minutes int, release func()) error
 	return nil
 }
 
-// Resume finishes what a restart interrupted: setups that never ended, a clock never started, or
-// checks that never came back. It reports whether it had work to do; only then is release called,
-// as in Begin and End.
+// Only when Resume reports work to do is release called.
 func (s *Session) Resume(release func()) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -130,18 +129,17 @@ func (s *Session) Flag(id string, on bool) error {
 		return ErrNoExam
 	}
 	if s.exam.Over() {
-		return errors.New("the exam has ended")
+		return ErrEnded
 	}
 	i := slices.IndexFunc(s.exam.Tasks, func(t Task) bool { return t.ID == id })
 	if i < 0 {
-		return fmt.Errorf("task %q is not in this exam", id)
+		return domainerr.NotFound("task_not_in_exam", fmt.Sprintf("task %q is not in this exam", id))
 	}
 	s.exam.Tasks[i].Flagged = on
 	return s.cfg.Store.Save(*s.exam)
 }
 
-// End stops the exam and returns at once; grading runs in the background (see grade), and
-// release is called when it's done.
+// Grading runs in the background; release is called when it's done.
 func (s *Session) End(release func()) (Exam, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -150,9 +148,9 @@ func (s *Session) End(release func()) (Exam, error) {
 	case e == nil:
 		return Exam{}, ErrNoExam
 	case e.Over():
-		return Exam{}, errors.New("the exam has already ended")
+		return Exam{}, ErrEnded
 	case !e.Prepared() || e.SettingUp():
-		return Exam{}, errors.New("the exam is still being set up")
+		return Exam{}, ErrSettingUp
 	}
 	e.Ended = s.cfg.Now()
 	if err := s.cfg.Store.Save(*e); err != nil {
@@ -307,7 +305,6 @@ func (s *Session) fail(e *Exam, ids []string, err error) {
 	})
 }
 
-// update changes e and saves it, unless the exam was discarded meanwhile.
 func (s *Session) update(e *Exam, change func()) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -318,14 +315,13 @@ func (s *Session) update(e *Exam, change func()) {
 	s.saveInBackground(e)
 }
 
-// saveInBackground is for goroutines with no caller to return an error to.
 func (s *Session) saveInBackground(e *Exam) {
 	if err := s.cfg.Store.Save(*e); err != nil {
 		log.Printf("save the exam: %v", err)
 	}
 }
 
-// heal logs a failure instead of returning it: each task's own setup or check shows the damage.
+// Logged, not returned: each task's own setup or check shows the damage.
 func (s *Session) heal(ctx context.Context, keep func(tasks.Task) bool) {
 	var some []tasks.Task
 	for _, t := range s.cfg.Catalog {
@@ -340,7 +336,7 @@ func (s *Session) heal(ctx context.Context, keep func(tasks.Task) bool) {
 	log.Printf("exam heal: %s", since(began))
 }
 
-// tidy logs a failure, like heal: the next setup's heal and fresh_ns are the safety net.
+// Logged, not returned: the next setup's heal and fresh_ns are the safety net.
 func (s *Session) tidy(e *Exam) {
 	var some []tasks.Task
 	for _, t := range e.Tasks {

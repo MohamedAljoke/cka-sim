@@ -25,7 +25,6 @@ const (
 	ready          = "Ready"
 )
 
-// kube is the slice of the Kubernetes API this package uses, reached with the pod's service account.
 type kube struct {
 	base      string
 	namespace string

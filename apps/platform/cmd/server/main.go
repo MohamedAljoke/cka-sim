@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/config"
 	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/catalog"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/exam"
@@ -26,6 +26,13 @@ import (
 // Only this machine: the page's terminal can sudo on every node.
 const addr = "127.0.0.1:7070"
 
+type settings struct {
+	AgentToken string `key:"CKA_SIM_AGENT_TOKEN"`
+	Provider   string `key:"CKA_SIM_PROVIDER" default:""`
+	LabURL     string `key:"CKA_SIM_LAB_URL" default:"http://127.0.0.1:7171"`
+	Pool       string `key:"CKA_SIM_POOL" default:"labs"`
+}
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -36,12 +43,16 @@ func main() {
 }
 
 func run(ctx context.Context) error {
+	var cfg settings
+	if err := config.Load(&cfg); err != nil {
+		return fmt.Errorf("%w (make dev sets these)", err)
+	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("claim %s: %w", addr, err)
 	}
 	defer ln.Close()
-	provider, err := newProvider(ctx)
+	provider, err := newProvider(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -69,17 +80,12 @@ func run(ctx context.Context) error {
 	return lab.End(endCtx)
 }
 
-func newProvider(ctx context.Context) (sandbox.Provider, error) {
-	token := os.Getenv("CKA_SIM_AGENT_TOKEN")
-	if token == "" {
-		return nil, errors.New("CKA_SIM_AGENT_TOKEN is not set; make dev sets it")
-	}
-	switch name := os.Getenv("CKA_SIM_PROVIDER"); name {
+func newProvider(ctx context.Context, cfg settings) (sandbox.Provider, error) {
+	switch cfg.Provider {
 	case "":
-		url := cmp.Or(os.Getenv("CKA_SIM_LAB_URL"), "http://127.0.0.1:7171")
-		return local.Provider{Agent: api.Client{URL: url, Token: token}}, nil
+		return local.Provider{Agent: api.Client{URL: cfg.LabURL, Token: cfg.AgentToken}}, nil
 	case "gke":
-		p, err := gke.New(gke.Config{Pool: cmp.Or(os.Getenv("CKA_SIM_POOL"), "labs"), AgentToken: token})
+		p, err := gke.New(gke.Config{Pool: cfg.Pool, AgentToken: cfg.AgentToken})
 		if err != nil {
 			return nil, err
 		}
@@ -88,7 +94,7 @@ func newProvider(ctx context.Context) (sandbox.Provider, error) {
 		}
 		return p, nil
 	default:
-		return nil, fmt.Errorf("unknown CKA_SIM_PROVIDER %q; want gke or nothing", name)
+		return nil, fmt.Errorf("unknown CKA_SIM_PROVIDER %q; want gke or nothing", cfg.Provider)
 	}
 }
 

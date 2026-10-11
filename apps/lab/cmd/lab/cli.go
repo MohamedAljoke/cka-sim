@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/config"
 	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/cluster"
 	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/doctor"
 )
@@ -77,7 +78,15 @@ func problems(results []doctor.Result) []doctor.Result {
 	return slices.DeleteFunc(results, func(r doctor.Result) bool { return r.Status == doctor.OK })
 }
 
+type upSettings struct {
+	Images string `key:"CKA_SIM_IMAGES" default:""`
+}
+
 func runUp(ctx context.Context, stdout io.Writer) error {
+	var cfg upSettings
+	if err := config.Load(&cfg); err != nil {
+		return err
+	}
 	if err := report(stdout, problems(doctor.Run(ctx, doctor.Host()))); err != nil {
 		return err
 	}
@@ -110,7 +119,7 @@ func runUp(ctx context.Context, stdout io.Writer) error {
 	case <-ctx.Done():
 		return errors.New("interrupted; run lab down to remove the half-created cluster")
 	}
-	if images := imagesToPreload(); len(images) > 0 {
+	if images := imagesToPreload(cfg.Images); len(images) > 0 {
 		fmt.Fprintln(stdout, "loading the task images into the nodes")
 		if err := c.LoadImages(ctx, images); err != nil {
 			fmt.Fprintf(stdout, "warning: the first exam will pull the task images itself: %v\n", err)
@@ -121,8 +130,8 @@ func runUp(ctx context.Context, stdout io.Writer) error {
 	return nil
 }
 
-func imagesToPreload() []string {
-	return slices.DeleteFunc(strings.Split(os.Getenv("CKA_SIM_IMAGES"), ","), func(s string) bool { return s == "" })
+func imagesToPreload(list string) []string {
+	return slices.DeleteFunc(strings.Split(list, ","), func(s string) bool { return s == "" })
 }
 
 func printHowToConnect(stdout io.Writer, c *cluster.Cluster) {

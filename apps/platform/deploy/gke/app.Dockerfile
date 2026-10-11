@@ -8,8 +8,9 @@ COPY web .
 RUN npm run build
 
 FROM golang:1.26-alpine AS go
-# The platform's go.mod points at ../lab, so the two sit side by side as in the repo.
+# The platform's go.mod points at ../lab and ../go-shared, so they sit side by side as in the repo.
 WORKDIR /src/platform
+COPY go-shared /src/go-shared
 COPY lab /src/lab
 COPY platform/go.mod platform/go.sum ./
 RUN go mod download

@@ -125,8 +125,6 @@ type createdClaim struct {
 	} `json:"spec"`
 }
 
-// fakeAPI answers like the API server with agent-sandbox installed: one claim, lab-1, bound to sandbox
-// labs-x whose pod has IP 10.80.0.5 once readyAfter polls have passed.
 type fakeAPI struct {
 	mu         sync.Mutex
 	log        []string

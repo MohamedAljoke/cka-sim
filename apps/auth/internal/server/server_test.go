@@ -23,11 +23,15 @@ func TestLoginSetsTheSessionCookie(t *testing.T) {
 		t.Fatalf("status %d: %s", res.StatusCode, body)
 	}
 	if body != `{"id":"id-1","email":"dev@cka-sim.local"}` {
-		t.Errorf("body = %s", body)
+		t.Errorf("body = %s, want the user and no token", body)
 	}
-	c := sessionCookie(t, res)
-	if !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Path != "/" || c.MaxAge != int(time.Hour.Seconds()) {
+	c := cookieFrom(t, res)
+	if !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteStrictMode || c.Path != "/" || c.Domain != "" ||
+		c.MaxAge != int(time.Hour.Seconds()) {
 		t.Errorf("cookie = %+v", c)
+	}
+	if cc := res.Header.Get("Cache-Control"); cc != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", cc)
 	}
 }
 
@@ -70,7 +74,7 @@ func TestMeIsTheLoggedInUser(t *testing.T) {
 	srv := newServer(t)
 	login, _ := call(t, srv, http.MethodPost, "/api/auth/login", `{"email":"dev@cka-sim.local","password":"cka-sim-dev"}`, nil)
 
-	res, body := call(t, srv, http.MethodGet, "/api/auth/me", "", sessionCookie(t, login))
+	res, body := call(t, srv, http.MethodGet, "/api/auth/me", "", cookieFrom(t, login))
 
 	if res.StatusCode != http.StatusOK || body != `{"id":"id-1","email":"dev@cka-sim.local"}` {
 		t.Errorf("status %d: %s", res.StatusCode, body)
@@ -97,7 +101,7 @@ func TestLogoutExpiresTheCookie(t *testing.T) {
 	if res.StatusCode != http.StatusNoContent {
 		t.Fatalf("status %d", res.StatusCode)
 	}
-	if c := sessionCookie(t, res); c.Value != "" || c.MaxAge >= 0 {
+	if c := cookieFrom(t, res); c.Value != "" || c.MaxAge >= 0 || !c.Secure {
 		t.Errorf("cookie = %+v", c)
 	}
 }
@@ -143,7 +147,7 @@ func call(t *testing.T, srv http.Handler, method, path, body string, cookie *htt
 	return rec.Result(), strings.TrimSpace(rec.Body.String())
 }
 
-func sessionCookie(t *testing.T, res *http.Response) *http.Cookie {
+func cookieFrom(t *testing.T, res *http.Response) *http.Cookie {
 	t.Helper()
 	for _, c := range res.Cookies() {
 		if c.Name == CookieName {

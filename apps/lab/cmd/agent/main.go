@@ -1,5 +1,3 @@
-// cka-sim-agent runs next to a lab's Docker, on another machine than the server, and lets the server run
-// task scripts and open shells there.
 package main
 
 import (
@@ -12,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/config"
 	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/agent"
 	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/cluster"
 	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/dockershell"
@@ -19,6 +18,10 @@ import (
 )
 
 const addr = ":7171"
+
+type settings struct {
+	AgentToken string `key:"CKA_SIM_AGENT_TOKEN"`
+}
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -30,16 +33,16 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-	token := os.Getenv("CKA_SIM_AGENT_TOKEN")
-	if token == "" {
-		return errors.New("CKA_SIM_AGENT_TOKEN is not set")
+	var cfg settings
+	if err := config.Load(&cfg); err != nil {
+		return err
 	}
 	shells, err := dockershell.New(cluster.Base, cluster.Candidate)
 	if err != nil {
 		return err
 	}
 	// Scripts arrive whole: the platform puts its lib.sh in front.
-	srv := &http.Server{Addr: addr, Handler: agent.Handler(token, runner.Node{}, shells)}
+	srv := &http.Server{Addr: addr, Handler: agent.Handler(cfg.AgentToken, runner.Node{}, shells)}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

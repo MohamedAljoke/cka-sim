@@ -13,17 +13,15 @@ import (
 	"strings"
 
 	"github.com/coder/websocket"
+
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 )
 
-// Client reaches a lab through its agent. It runs task scripts and opens shells there, so one Client is
-// both a lab's runner and its shell opener.
 type Client struct {
-	// URL is the agent's base, such as http://10.80.0.5:7171.
 	URL   string
 	Token string
 }
 
-// RunResult is the agent's answer to a script.
 type RunResult struct {
 	Output string `json:"output"`
 	Error  string `json:"error,omitempty"`
@@ -45,7 +43,6 @@ func (c Client) Healthy(ctx context.Context) error {
 	return nil
 }
 
-// Run runs script as root on host. Cancelling ctx stops the script in the lab.
 func (c Client) Run(ctx context.Context, host, taskID string, script []byte) (string, error) {
 	query := url.Values{"host": {host}, "task": {taskID}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.URL+"/run?"+query.Encode(), bytes.NewReader(script))
@@ -62,8 +59,7 @@ func (c Client) Run(ctx context.Context, host, taskID string, script []byte) (st
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		msg, _ := io.ReadAll(res.Body)
-		return "", fmt.Errorf("lab's agent: %s: %s", res.Status, bytes.TrimSpace(msg))
+		return "", fmt.Errorf("lab's agent: %s: %s", res.Status, failure(res))
 	}
 	var result RunResult
 	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
@@ -104,10 +100,17 @@ func (c Client) EndAll(ctx context.Context) error {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(res.Body)
-		return fmt.Errorf("end shells through the agent: %s: %s", res.Status, body)
+		return fmt.Errorf("end shells through the agent: %s: %s", res.Status, failure(res))
 	}
 	return nil
+}
+
+func failure(res *http.Response) string {
+	body, _ := io.ReadAll(io.LimitReader(res.Body, 64<<10))
+	if p, ok := httpx.ParseProblem(body); ok {
+		return p.Detail
+	}
+	return string(bytes.TrimSpace(body))
 }
 
 func (c Client) auth() http.Header {

@@ -1,74 +1,77 @@
-// Package agent lets a server run task scripts and open shells on a lab that lives on another machine.
-// The agent runs next to the lab's Docker and runs scripts and shells there; api.Client is the server's side.
 package agent
 
 import (
 	"context"
 	"crypto/subtle"
-	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/domainerr"
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
 )
 
 const scriptLimit = 4 << 20 // 4 MiB
 
+var errWrongToken = domainerr.Unauthorized("wrong_token", "wrong or missing token")
+
 type Runner interface {
 	Run(ctx context.Context, host, taskID string, script []byte) (string, error)
 }
 
-// Handler serves the agent. Scripts run as root on the cluster's nodes, so every route but the health
-// check wants the token.
 func Handler(token string, runner Runner, shells api.Opener) http.Handler {
+	problems := httpx.NewProblems(httpx.WithReporter(func(r *http.Request, err error) {
+		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
+	}))
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.Handle("POST /run", authed(token, func(w http.ResponseWriter, r *http.Request) {
-		run(w, r, runner)
-	}))
-	mux.Handle("GET /shell", authed(token, func(w http.ResponseWriter, r *http.Request) {
+	authed := func(pattern string, h httpx.Handler) {
+		mux.HandleFunc(pattern, problems.Handle(checkToken(token, h)))
+	}
+	authed("POST /run", func(w http.ResponseWriter, r *http.Request) error {
+		return run(w, r, runner)
+	})
+	authed("GET /shell", func(w http.ResponseWriter, r *http.Request) error {
 		api.Serve(w, r, shells)
-	}))
-	mux.Handle("POST /shells/end", authed(token, func(w http.ResponseWriter, r *http.Request) {
+		return nil
+	})
+	authed("POST /shells/end", func(w http.ResponseWriter, r *http.Request) error {
 		if err := shells.EndAll(r.Context()); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			return domainerr.Unavailable("end_shells_failed", err.Error()).AsFault()
 		}
 		w.WriteHeader(http.StatusNoContent)
-	}))
+		return nil
+	})
 	return mux
 }
 
-func authed(token string, next http.HandlerFunc) http.Handler {
+func checkToken(token string, next httpx.Handler) httpx.Handler {
 	want := []byte("Bearer " + token)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) error {
 		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), want) != 1 {
-			http.Error(w, "wrong or missing token", http.StatusUnauthorized)
-			return
+			return errWrongToken
 		}
-		next(w, r)
-	})
+		return next(w, r)
+	}
 }
 
-// run's script stops when the server hangs up, since it runs on the request's context.
-func run(w http.ResponseWriter, r *http.Request, runner Runner) {
+// A failing script still answers 200: its error travels in the RunResult.
+func run(w http.ResponseWriter, r *http.Request, runner Runner) error {
 	host, taskID := r.URL.Query().Get("host"), r.URL.Query().Get("task")
 	if host == "" || taskID == "" {
-		http.Error(w, "host and task are required", http.StatusBadRequest)
-		return
+		return httpx.Malformed("host and task are required")
 	}
 	script, err := io.ReadAll(http.MaxBytesReader(w, r.Body, scriptLimit))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
-		return
+		return httpx.TooLarge(err.Error())
 	}
 	out, err := runner.Run(r.Context(), host, taskID, script)
 	res := api.RunResult{Output: out}
 	if err != nil {
 		res.Error = err.Error()
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(res)
+	return httpx.WriteJSON(w, http.StatusOK, res)
 }

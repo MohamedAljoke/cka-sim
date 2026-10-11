@@ -16,7 +16,12 @@ require (
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
 
-require github.com/MohamedAljoke/cka-sim/apps/lab v0.0.0
+require (
+	github.com/MohamedAljoke/cka-sim/apps/go-shared v0.0.0
+	github.com/MohamedAljoke/cka-sim/apps/lab v0.0.0
+)
 
 // The lab lives next door in this repo; drop this once it has its own.
 replace github.com/MohamedAljoke/cka-sim/apps/lab => ../lab
+
+replace github.com/MohamedAljoke/cka-sim/apps/go-shared => ../go-shared

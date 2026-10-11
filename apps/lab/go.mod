@@ -16,6 +16,7 @@ require (
 	al.essio.dev/pkg/shellescape v1.5.1 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
+	github.com/MohamedAljoke/cka-sim/apps/go-shared v0.0.0
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
@@ -43,3 +44,5 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 )
+
+replace github.com/MohamedAljoke/cka-sim/apps/go-shared => ../go-shared

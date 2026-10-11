@@ -16,6 +16,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/exam"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/grader"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox"
@@ -65,7 +66,7 @@ func TestQuestionUnknownTaskIs404(t *testing.T) {
 
 	status, body := call(t, srv, http.MethodGet, "/api/tasks/nope/question")
 
-	if status != http.StatusNotFound || !strings.Contains(body, `no task "nope"`) {
+	if status != http.StatusNotFound || problemCode(t, body) != "task_not_found" {
 		t.Errorf("got %d %q", status, body)
 	}
 }
@@ -145,7 +146,7 @@ func TestStartUnknownTaskIs404(t *testing.T) {
 
 	status, body := call(t, srv, http.MethodPost, "/api/tasks/nope/start")
 
-	if status != http.StatusNotFound || !strings.Contains(body, `no task "nope"`) {
+	if status != http.StatusNotFound || problemCode(t, body) != "task_not_found" {
 		t.Errorf("got %d %q", status, body)
 	}
 }
@@ -176,7 +177,7 @@ func TestStartShowsSetupFailure(t *testing.T) {
 
 	status, body := call(t, srv, http.MethodPost, "/api/tasks/wl-scale/start")
 
-	if status != http.StatusInternalServerError || !strings.Contains(body, "namespace stuck") {
+	if status != http.StatusServiceUnavailable || !strings.Contains(body, "namespace stuck") {
 		t.Errorf("got %d %q", status, body)
 	}
 }
@@ -207,7 +208,7 @@ func TestCheckUnknownTaskIs404(t *testing.T) {
 
 	status, body := call(t, srv, http.MethodPost, "/api/tasks/nope/check")
 
-	if status != http.StatusNotFound || !strings.Contains(body, `no task "nope"`) {
+	if status != http.StatusNotFound || problemCode(t, body) != "task_not_found" {
 		t.Errorf("got %d %q", status, body)
 	}
 }
@@ -236,7 +237,7 @@ func TestCheckShowsScriptFailure(t *testing.T) {
 
 	status, body := call(t, srv, http.MethodPost, "/api/tasks/wl-scale/check")
 
-	if status != http.StatusInternalServerError || !strings.Contains(body, "kubectl: not found") {
+	if status != http.StatusServiceUnavailable || !strings.Contains(body, "kubectl: not found") {
 		t.Errorf("got %d %q", status, body)
 	}
 }
@@ -416,3 +417,12 @@ func (p fakeProvider) Create(context.Context) (sandbox.Box, error) {
 }
 
 func (fakeProvider) Destroy(context.Context, sandbox.Box) error { return nil }
+
+func problemCode(t *testing.T, body string) string {
+	t.Helper()
+	p, ok := httpx.ParseProblem([]byte(body))
+	if !ok {
+		t.Fatalf("not a problem document: %q", body)
+	}
+	return p.Code
+}

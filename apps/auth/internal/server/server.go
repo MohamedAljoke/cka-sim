@@ -1,4 +1,3 @@
-// Package server serves login, logout and "who am I" over HTTP.
 package server
 
 import (
@@ -11,10 +10,12 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/auth/internal/accounts"
 	"github.com/MohamedAljoke/cka-sim/apps/auth/internal/password"
 	"github.com/MohamedAljoke/cka-sim/apps/auth/internal/session"
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/domainerr"
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 )
 
-// CookieName is the cookie the session token travels in.
-const CookieName = "cka_sim_session"
+// __Host- makes the browser refuse the cookie unless it is Secure, Path=/ and has no Domain.
+const CookieName = "__Host-cka_sim_session"
 
 type accountFinder interface {
 	ByEmail(ctx context.Context, email string) (accounts.Account, error)
@@ -27,11 +28,14 @@ type api struct {
 
 func New(accounts accountFinder, signer session.Signer) http.Handler {
 	a := &api{accounts: accounts, signer: signer}
+	problems := httpx.NewProblems(httpx.WithReporter(func(r *http.Request, err error) {
+		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
+	}))
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/auth/login", a.login)
-	mux.HandleFunc("GET /api/auth/me", a.me)
+	mux.HandleFunc("POST /api/auth/login", problems.Handle(a.login))
+	mux.HandleFunc("GET /api/auth/me", problems.Handle(a.me))
 	mux.HandleFunc("POST /api/auth/logout", a.logout)
-	return http.NewCrossOriginProtection().Handler(mux)
+	return http.NewCrossOriginProtection().Handler(noStore(mux))
 }
 
 type user struct {
@@ -39,46 +43,32 @@ type user struct {
 	Email string `json:"email"`
 }
 
-func (a *api) login(w http.ResponseWriter, r *http.Request) {
+func (a *api) login(w http.ResponseWriter, r *http.Request) error {
 	var body struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "body must be JSON with email and password", http.StatusBadRequest)
-		return
+		return httpx.Malformed("body must be JSON with email and password")
 	}
 	account, err := a.authenticate(r.Context(), body.Email, body.Password)
-	if errors.Is(err, errWrongCredentials) {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
 	if err != nil {
-		log.Printf("login: %v", err)
-		http.Error(w, "login failed", http.StatusInternalServerError)
-		return
+		return err
 	}
 	token, err := a.signer.Issue(account)
 	if err != nil {
-		log.Printf("login: %v", err)
-		http.Error(w, "login failed", http.StatusInternalServerError)
-		return
+		return err
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieName,
-		Value:    token,
-		Path:     "/",
-		MaxAge:   int(a.signer.TTL.Seconds()),
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
-	writeJSON(w, user{ID: account.ID, Email: account.Email})
+	http.SetCookie(w, sessionCookie(token, int(a.signer.TTL.Seconds())))
+	return httpx.WriteJSON(w, http.StatusOK, user{ID: account.ID, Email: account.Email})
 }
 
-var errWrongCredentials = errors.New("wrong email or password")
+var (
+	errWrongCredentials = domainerr.Unauthorized("wrong_credentials", "wrong email or password")
+	errNotLoggedIn      = domainerr.Unauthorized("not_logged_in", "not logged in")
+)
 
-// authenticate gives one answer, at one cost, for an unknown email and a wrong password, so neither
-// the reply nor its timing says which emails have an account.
+// Same answer and cost for an unknown email and a wrong password, so neither leaks which emails exist.
 func (a *api) authenticate(ctx context.Context, email, plain string) (accounts.Account, error) {
 	account, err := a.accounts.ByEmail(ctx, email)
 	if errors.Is(err, accounts.ErrNotFound) {
@@ -94,33 +84,39 @@ func (a *api) authenticate(ctx context.Context, email, plain string) (accounts.A
 	return account, nil
 }
 
-func (a *api) me(w http.ResponseWriter, r *http.Request) {
+func (a *api) me(w http.ResponseWriter, r *http.Request) error {
 	cookie, err := r.Cookie(CookieName)
 	if err != nil {
-		http.Error(w, "not logged in", http.StatusUnauthorized)
-		return
+		return errNotLoggedIn
 	}
 	claims, err := a.signer.Verify(cookie.Value)
 	if err != nil {
-		http.Error(w, "not logged in", http.StatusUnauthorized)
-		return
+		return errNotLoggedIn
 	}
-	writeJSON(w, user{ID: claims.AccountID, Email: claims.Email})
+	return httpx.WriteJSON(w, http.StatusOK, user{ID: claims.AccountID, Email: claims.Email})
 }
 
-// logout only drops the cookie: the token itself stays valid until it expires.
+// The token itself stays valid until it expires.
 func (a *api) logout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieName,
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	http.SetCookie(w, sessionCookie("", -1))
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func writeJSON(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+func sessionCookie(token string, maxAge int) *http.Cookie {
+	return &http.Cookie{
+		Name:     CookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	}
+}
+
+func noStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
 }

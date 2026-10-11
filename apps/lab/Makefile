@@ -18,7 +18,7 @@ doctor: ## check this machine can run a lab
 	go run ./cmd/lab doctor
 
 image: ## build the lab image
-	docker build -q -f deploy/lab.Dockerfile -t $(IMAGE) . >/dev/null
+	docker build -q -f deploy/lab.Dockerfile -t $(IMAGE) .. >/dev/null
 
 $(TOKEN_FILE):
 	@mkdir -p $(dir $@)

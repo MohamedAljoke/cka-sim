@@ -44,11 +44,12 @@ func TestBeginExamSetsUpThenStartsTheClock(t *testing.T) {
 func TestBeginExamRejects(t *testing.T) {
 	tests := []struct {
 		name, body string
+		want       int
 	}{
-		{"not JSON", "sixteen"},
-		{"no tasks", `{"count": 0, "minutes": 30}`},
-		{"no time", `{"count": 1, "minutes": 0}`},
-		{"too long", `{"count": 1, "minutes": 600}`},
+		{"not JSON", "sixteen", http.StatusBadRequest},
+		{"no tasks", `{"count": 0, "minutes": 30}`, http.StatusUnprocessableEntity},
+		{"no time", `{"count": 1, "minutes": 0}`, http.StatusUnprocessableEntity},
+		{"too long", `{"count": 1, "minutes": 600}`, http.StatusUnprocessableEntity},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -56,8 +57,8 @@ func TestBeginExamRejects(t *testing.T) {
 
 			status, body := request(t, srv, http.MethodPost, "/api/exam", tt.body)
 
-			if status != http.StatusBadRequest {
-				t.Errorf("got %d %q, want 400", status, body)
+			if status != tt.want {
+				t.Errorf("got %d %q, want %d", status, body, tt.want)
 			}
 		})
 	}
@@ -128,7 +129,7 @@ func TestFlagAQuestion(t *testing.T) {
 	if getState(t, srv).Exam.Tasks[0].Flagged {
 		t.Error("still flagged after DELETE")
 	}
-	if status, _ := call(t, srv, http.MethodPut, "/api/exam/flags/nope"); status != http.StatusConflict {
+	if status, _ := call(t, srv, http.MethodPut, "/api/exam/flags/nope"); status != http.StatusNotFound {
 		t.Errorf("flagging a task outside the exam got %d", status)
 	}
 }
@@ -174,8 +175,8 @@ func TestBeginAFocusedExam(t *testing.T) {
 		`{"count": 1, "minutes": 30, "domains": ["storage"]}`,
 		`{"count": 1, "minutes": 30, "topics": ["rbac"]}`,
 	} {
-		if status, body := request(t, srv, http.MethodPost, "/api/exam", payload); status != http.StatusBadRequest {
-			t.Errorf("%s got %d %q, want 400", payload, status, body)
+		if status, body := request(t, srv, http.MethodPost, "/api/exam", payload); status != http.StatusUnprocessableEntity {
+			t.Errorf("%s got %d %q, want 422", payload, status, body)
 		}
 	}
 	payload := `{"count": 1, "minutes": 30, "domains": ["workloads"], "topics": ["deployments"]}`

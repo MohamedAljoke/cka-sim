@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -17,12 +16,18 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/auth/internal/accounts"
 	"github.com/MohamedAljoke/cka-sim/apps/auth/internal/server"
 	"github.com/MohamedAljoke/cka-sim/apps/auth/internal/session"
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/config"
 )
 
 const (
 	addr       = "127.0.0.1:7272"
 	sessionTTL = 12 * time.Hour
 )
+
+type settings struct {
+	Secret      string `key:"CKA_SIM_AUTH_SECRET"`
+	DatabaseURL string `key:"CKA_SIM_AUTH_DATABASE_URL" default:"postgres://cka_sim:cka_sim@127.0.0.1:5434/cka_sim?sslmode=disable"`
+}
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -34,11 +39,11 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-	secret := os.Getenv("CKA_SIM_AUTH_SECRET")
-	if secret == "" {
-		return errors.New("CKA_SIM_AUTH_SECRET is not set; make auth sets it")
+	var cfg settings
+	if err := config.Load(&cfg); err != nil {
+		return fmt.Errorf("%w (make auth sets these)", err)
 	}
-	pool, err := connect(ctx)
+	pool, err := connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
@@ -49,7 +54,7 @@ func run(ctx context.Context) error {
 	}
 	defer ln.Close()
 
-	signer := session.Signer{Secret: []byte(secret), TTL: sessionTTL, Now: time.Now}
+	signer := session.Signer{Secret: []byte(cfg.Secret), TTL: sessionTTL, Now: time.Now}
 	srv := &http.Server{Handler: server.New(accounts.Postgres{Pool: pool}, signer)}
 	go func() {
 		<-ctx.Done()
@@ -64,10 +69,8 @@ func run(ctx context.Context) error {
 	return nil
 }
 
-// connect pings once, so a missing Postgres fails here instead of on the first login.
-func connect(ctx context.Context) (*pgxpool.Pool, error) {
-	url := cmp.Or(os.Getenv("CKA_SIM_AUTH_DATABASE_URL"),
-		"postgres://cka_sim:cka_sim@127.0.0.1:5434/cka_sim?sslmode=disable")
+// Ping now, so a missing Postgres fails at start instead of on the first login.
+func connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
 	pool, err := pgxpool.New(ctx, url)
 	if err != nil {
 		return nil, fmt.Errorf("open the database: %w", err)

@@ -25,7 +25,8 @@ waits for its `/healthz`: about 2 minutes the first time, seconds when the conta
 
 Next, `make dev` builds `bin/server` and starts it in the background with the token, then starts Vite on 5173.
 `vite.config.ts` forwards `/api` and `/ws` to the Go server on `127.0.0.1:7070`. The server
-(`apps/platform/cmd/server/main.go`) claims the port, loads the catalog (`tasks.Load(catalog.FS)`: every
+(`apps/platform/cmd/server/main.go`) reads its settings (`config.Load` from `apps/go-shared`: missing ones all
+fail at once, before anything starts), claims the port, loads the catalog (`tasks.Load(catalog.FS)`: every
 `catalog/<id>/task.md` and its scripts, and `lib.sh`, built into the binary) and makes a **lab** with the
 `local.Provider` pointing at `http://127.0.0.1:7171`. It doesn't touch the lab yet; that happens when
 a lab starts (flow 2). Then it serves.
@@ -124,7 +125,7 @@ host through the same runner as setup, with `lib.sh` in front. Each `check <poin
 in the script prints `PASS` or `FAIL` with its points and description. `grader.Parse`
 (`internal/grader/grader.go`) keeps only those lines, ignoring kubectl noise, and adds up earned and total.
 The page shows a bold `2 / 4` and one ✓/✗ line per check. If `check.sh` itself crashes, the server answers
-500 with its output, and the page shows "Check failed: …" rather than a silent 0.
+503 with its output as the problem document's `detail`, and the page shows "Check failed: …" rather than a silent 0.
 
 **Solution.** **Solution** sends `GET /api/tasks/{id}/solution`, which returns the task's `explain.md`,
 loaded at startup. No script runs. The page renders it with `marked` under the question; pressing again
@@ -150,9 +151,9 @@ and the checks at fault, for example:
 
 **Starting.** On Home, the **Mock exam** card (`apps/web/src/home.ts`) sends
 `POST /api/exam {count, minutes, domains, topics}`. A multi-select with everything chosen sends an empty
-list, which means any; otherwise it sends what you chose. `beginExam` (`internal/server/exam.go`) checks the numbers (400 if they are out of range) and
+list, which means any; otherwise it sends what you chose. `beginExam` (`internal/server/exam.go`) checks the numbers (400 for a body that isn't JSON, 422 if they are out of range) and
 narrows the catalog with `tasks.Filter` (`internal/tasks/draw.go`): a task must be in one of the domains
-and have one of the topics, where an empty list means any. No match gives 400. It takes the script lock,
+and have one of the topics, where an empty list means any. No match gives 422. It takes the script lock,
 so a running practice setup gets 409, and starts the lab if there is none. Then it calls
 `exam.Session.Begin` (`internal/exam/session.go`) with that pool. A finished, scored exam is replaced; one
 still being scored gives 409 "the last exam is still being scored". `tasks.Draw` picks the tasks:

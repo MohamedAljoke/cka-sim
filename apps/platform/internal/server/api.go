@@ -2,15 +2,22 @@ package server
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/domainerr"
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
+)
+
+var (
+	errScriptRunning = domainerr.Conflict("script_running", "a script is already running")
+	errDuringExam    = domainerr.Conflict("exam_running", "not during an exam")
 )
 
 type api struct {
@@ -24,67 +31,82 @@ type listedTask struct {
 	DomainTitle string `json:"domainTitle"`
 }
 
-func (a *api) listTasks(w http.ResponseWriter, r *http.Request) {
+func (a *api) listTasks(w http.ResponseWriter, r *http.Request) error {
 	listed := make([]listedTask, len(a.Tasks))
 	for i, t := range a.Tasks {
 		listed[i] = listedTask{Task: t, DomainTitle: tasks.Titles[t.Domain]}
 	}
-	writeJSON(w, listed)
+	return httpx.WriteJSON(w, http.StatusOK, listed)
 }
 
-func (a *api) question(w http.ResponseWriter, r *http.Request) {
-	t, ok := a.findTask(w, r)
-	if !ok {
-		return
+func (a *api) question(w http.ResponseWriter, r *http.Request) error {
+	t, err := a.findTask(r)
+	if err != nil {
+		return err
 	}
-	writeJSON(w, map[string]string{"question": t.Question})
+	return httpx.WriteJSON(w, http.StatusOK, map[string]string{"question": t.Question})
 }
 
-func (a *api) startTask(w http.ResponseWriter, r *http.Request) {
-	t, ok := a.findTask(w, r)
-	if !ok || a.duringExam(w) || !a.ensureLab(w, r) || !a.lock(w, r) {
-		return
+func (a *api) startTask(w http.ResponseWriter, r *http.Request) error {
+	t, err := a.practiceTask(r)
+	if err != nil {
+		return err
 	}
 	defer a.busy.Unlock()
 	// A cancelled request stops the script; setup is idempotent, so the next start rebuilds it.
 	ctx := r.Context()
 	if err := tasks.Heal(ctx, a.Files, a.Lab, a.Tasks); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return scriptFailed(err)
 	}
 	if err := tasks.Start(ctx, a.Files, a.Lab, t); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return scriptFailed(err)
 	}
 	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
 
-func (a *api) checkTask(w http.ResponseWriter, r *http.Request) {
-	t, ok := a.findTask(w, r)
-	if !ok || a.duringExam(w) || !a.ensureLab(w, r) || !a.lock(w, r) {
-		return
+func (a *api) checkTask(w http.ResponseWriter, r *http.Request) error {
+	t, err := a.practiceTask(r)
+	if err != nil {
+		return err
 	}
 	defer a.busy.Unlock()
 	result, err := tasks.Check(r.Context(), a.Files, a.Lab, t)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return scriptFailed(err)
 	}
-	writeJSON(w, result)
+	return httpx.WriteJSON(w, http.StatusOK, result)
 }
 
-// tidyTask cleans up after practice in the background, so the next setup finds nothing to delete.
-func (a *api) tidyTask(w http.ResponseWriter, r *http.Request) {
-	t, ok := a.findTask(w, r)
-	if !ok || a.duringExam(w) {
-		return
+// The caller unlocks.
+func (a *api) practiceTask(r *http.Request) (tasks.Task, error) {
+	t, err := a.findTask(r)
+	if err != nil {
+		return tasks.Task{}, err
+	}
+	if err := a.notDuringExam(); err != nil {
+		return tasks.Task{}, err
+	}
+	if err := a.ensureLab(r); err != nil {
+		return tasks.Task{}, err
+	}
+	return t, a.lock(r)
+}
+
+func (a *api) tidyTask(w http.ResponseWriter, r *http.Request) error {
+	t, err := a.findTask(r)
+	if err != nil {
+		return err
+	}
+	if err := a.notDuringExam(); err != nil {
+		return err
 	}
 	if a.Lab.Status().State != sandbox.Ready {
 		w.WriteHeader(http.StatusNoContent)
-		return
+		return nil
 	}
-	if !a.lock(w, r) {
-		return
+	if err := a.lock(r); err != nil {
+		return err
 	}
 	go func() {
 		defer a.busy.Unlock()
@@ -93,61 +115,63 @@ func (a *api) tidyTask(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	w.WriteHeader(http.StatusAccepted)
+	return nil
 }
 
-func (a *api) solution(w http.ResponseWriter, r *http.Request) {
-	t, ok := a.findTask(w, r)
-	if !ok || a.duringExam(w) {
-		return
+func (a *api) solution(w http.ResponseWriter, r *http.Request) error {
+	t, err := a.findTask(r)
+	if err != nil {
+		return err
 	}
-	writeJSON(w, map[string]string{"explain": t.Explain})
+	if err := a.notDuringExam(); err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, map[string]string{"explain": t.Explain})
 }
 
 // lockWait covers a script the page just cancelled, which takes a moment to stop, and the tidy
 // after leaving a task, which may restart a kubelet that task broke.
 var lockWait = 60 * time.Second
 
-// lock lets one script run at a time: setup and check would otherwise race on the same namespace.
-func (a *api) lock(w http.ResponseWriter, r *http.Request) bool {
+// Setup and check would otherwise race on the same namespace.
+func (a *api) lock(r *http.Request) error {
 	deadline := time.Now().Add(lockWait)
 	for !a.busy.TryLock() {
 		if time.Now().After(deadline) || r.Context().Err() != nil {
-			http.Error(w, "a script is already running", http.StatusConflict)
-			return false
+			return errScriptRunning
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return true
+	return nil
 }
 
-// ensureLab starts the lab if there is none, so practising a task is enough to get one.
-func (a *api) ensureLab(w http.ResponseWriter, r *http.Request) bool {
+func (a *api) ensureLab(r *http.Request) error {
 	if err := a.Lab.Ensure(r.Context()); err != nil {
-		http.Error(w, "the lab failed to start: "+err.Error(), http.StatusServiceUnavailable)
-		return false
+		return domainerr.Unavailable("lab_failed", "the lab failed to start: "+err.Error()).AsFault()
 	}
-	return true
+	return nil
 }
 
-// duringExam keeps practice's checks and solutions away from a running exam.
-func (a *api) duringExam(w http.ResponseWriter) bool {
+func (a *api) notDuringExam() error {
 	if a.Exam != nil && a.Exam.Running() {
-		http.Error(w, "not during an exam", http.StatusConflict)
-		return true
+		return errDuringExam
 	}
-	return false
+	return nil
 }
 
-func (a *api) findTask(w http.ResponseWriter, r *http.Request) (tasks.Task, bool) {
+func (a *api) findTask(r *http.Request) (tasks.Task, error) {
 	id := r.PathValue("id")
 	t, ok := tasks.Find(a.Tasks, id)
 	if !ok {
-		http.Error(w, fmt.Sprintf("no task %q", id), http.StatusNotFound)
+		return tasks.Task{}, domainerr.NotFound("task_not_found", fmt.Sprintf("no task %q", id))
 	}
-	return t, ok
+	return t, nil
 }
 
-func writeJSON(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+// Not an Internal error: the learner needs the script's reason to act on it.
+func scriptFailed(err error) error {
+	if _, ok := errors.AsType[*domainerr.Error](err); ok {
+		return err
+	}
+	return domainerr.Unavailable("script_failed", err.Error()).AsFault()
 }

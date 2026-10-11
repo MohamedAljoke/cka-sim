@@ -118,6 +118,27 @@ export async function endLab(): Promise<void> {
   await call('DELETE', '/api/lab')
 }
 
+export type User = {
+  id: string
+  email: string
+}
+
+// currentUser is null when nobody is logged in; the session cookie is HttpOnly, so only the server can tell.
+export async function currentUser(): Promise<User | null> {
+  const res = await fetch('/api/auth/me')
+  if (res.status === 401) return null
+  if (!res.ok) throw await failure(res, 'GET', '/api/auth/me')
+  return res.json()
+}
+
+export async function logIn(email: string, password: string): Promise<User> {
+  return (await call('POST', '/api/auth/login', { email, password })).json()
+}
+
+export async function logOut(): Promise<void> {
+  await call('POST', '/api/auth/logout')
+}
+
 async function call(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<Response> {
   const init: RequestInit = { method, signal }
   if (body !== undefined) {

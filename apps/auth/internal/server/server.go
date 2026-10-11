@@ -45,23 +45,23 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "body must be JSON with email and password")
+		http.Error(w, "body must be JSON with email and password", http.StatusBadRequest)
 		return
 	}
 	account, err := a.authenticate(r.Context(), body.Email, body.Password)
 	if errors.Is(err, errWrongCredentials) {
-		writeError(w, http.StatusUnauthorized, err.Error())
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 	if err != nil {
 		log.Printf("login: %v", err)
-		writeError(w, http.StatusInternalServerError, "login failed")
+		http.Error(w, "login failed", http.StatusInternalServerError)
 		return
 	}
 	token, err := a.signer.Issue(account)
 	if err != nil {
 		log.Printf("login: %v", err)
-		writeError(w, http.StatusInternalServerError, "login failed")
+		http.Error(w, "login failed", http.StatusInternalServerError)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -97,12 +97,12 @@ func (a *api) authenticate(ctx context.Context, email, plain string) (accounts.A
 func (a *api) me(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(CookieName)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "not logged in")
+		http.Error(w, "not logged in", http.StatusUnauthorized)
 		return
 	}
 	claims, err := a.signer.Verify(cookie.Value)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "not logged in")
+		http.Error(w, "not logged in", http.StatusUnauthorized)
 		return
 	}
 	writeJSON(w, user{ID: claims.AccountID, Email: claims.Email})
@@ -123,10 +123,4 @@ func (a *api) logout(w http.ResponseWriter, r *http.Request) {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

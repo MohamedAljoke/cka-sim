@@ -16,8 +16,9 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/catalog"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/exam"
-	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/gke"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox/gke"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox/local"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/server"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
 )
@@ -76,7 +77,7 @@ func newProvider(ctx context.Context) (sandbox.Provider, error) {
 	switch name := os.Getenv("CKA_SIM_PROVIDER"); name {
 	case "":
 		url := cmp.Or(os.Getenv("CKA_SIM_LAB_URL"), "http://127.0.0.1:7171")
-		return sandbox.Local{Agent: api.Client{URL: url, Token: token}}, nil
+		return local.Provider{Agent: api.Client{URL: url, Token: token}}, nil
 	case "gke":
 		p, err := gke.New(gke.Config{Pool: cmp.Or(os.Getenv("CKA_SIM_POOL"), "labs"), AgentToken: token})
 		if err != nil {

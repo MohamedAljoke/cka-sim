@@ -161,3 +161,9 @@ func (l *Lab) current() (Box, error) {
 	}
 	return l.box, nil
 }
+
+// ClusterAnswers proves a box is usable: kubectl on the control plane, through the box's runner.
+func ClusterAnswers(ctx context.Context, b Box) error {
+	_, err := b.Runner.Run(ctx, api.ControlPlaneNode, "health", []byte("kubectl get --raw=/readyz\n"))
+	return err
+}

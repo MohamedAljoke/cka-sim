@@ -27,7 +27,7 @@ Next, `make dev` builds `bin/server` and starts it in the background with the to
 `vite.config.ts` forwards `/api` and `/ws` to the Go server on `127.0.0.1:7070`. The server
 (`apps/platform/cmd/server/main.go`) claims the port, loads the catalog (`tasks.Load(catalog.FS)`: every
 `catalog/<id>/task.md` and its scripts, and `lib.sh`, built into the binary) and makes a **lab** with the
-`sandbox.Local` provider pointing at `http://127.0.0.1:7171`. It doesn't touch the lab yet; that happens when
+`local.Provider` pointing at `http://127.0.0.1:7171`. It doesn't touch the lab yet; that happens when
 a lab starts (flow 2). Then it serves.
 
 Ctrl-C reaches the server directly, because it runs as a binary and not through `go run`. The Makefile's
@@ -54,7 +54,7 @@ never the scripts. Home has, top to bottom:
 started; on GKE it's a pod on its own VM (flow 7), behind the same `sandbox.Provider` interface. Either way
 the server reaches it only through the agent inside it. There's no Start button. Practising a task or
 starting an exam starts it on the server. `Lab.Start` (`internal/sandbox/lab.go`) calls the provider's
-`Create` in the background. `Local.Create` (`internal/sandbox/local.go`) asks the agent's `/healthz` (if
+`Create` in the background. `local.Provider.Create` (`internal/sandbox/local/local.go`) asks the agent's `/healthz` (if
 nothing answers: "run make up"), runs `kubectl get --raw=/readyz` on the control plane through it
 (`ClusterAnswers`, the same probe GKE uses), and closes any shells left over from a crashed server
 (`EndAll`). It returns a box whose runner and shells are both one `api.Client` (`apps/lab/api`).
@@ -227,7 +227,7 @@ tainted `labs` pool. That node is a VM, and the pod is privileged so kind can ru
 Deployment `app` on the shared system pool, behind a LoadBalancer on a static IP. Caddy asks for the password,
 gets an HTTPS certificate for `<ip>.sslip.io`, serves the page, and passes `/api` and `/ws` to the server on
 `127.0.0.1:7070`. The server starts with `CKA_SIM_PROVIDER=gke`, so `cmd/server/main.go` makes a `gke.Provider`
-(`internal/gke`) instead of `sandbox.Local`. It first deletes any claim an earlier run left behind
+(`internal/sandbox/gke`) instead of a `local.Provider`. It first deletes any claim an earlier run left behind
 (`ReapClaims`), since each one holds a node.
 
 **A lab pod warming up.** `lab-start.sh` starts dockerd on its Unix socket only, then runs `lab up`
@@ -242,7 +242,7 @@ The VPC firewall rule `cka-sim-labs-apart` (`make wall`) stops lab nodes and lab
 lab nodes.
 
 **Starting a lab.** Opening a task starts the lab as in flow 3, but `gke.Provider.Create` runs instead of
-`Local.Create`:
+`local.Provider.Create`:
 1. It POSTs a `SandboxClaim` (`lab-…`, labelled `app.kubernetes.io/managed-by: cka-sim`) to the Kubernetes
    API, as the `cka-sim-app` service account. That account may only create, get, list and delete claims, and
    get pods.

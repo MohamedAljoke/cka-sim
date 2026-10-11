@@ -8,6 +8,7 @@ AUTH := apps/auth
 TOKEN := CKA_SIM_AGENT_TOKEN="$$(cat $(HOME)/.config/cka-sim/agent-token)"
 # Signs login sessions; the platform will read the same file to check them.
 AUTH_SECRET := $(HOME)/.config/cka-sim/auth-secret
+AUTH_ENV := CKA_SIM_AUTH_SECRET="$$(cat $(AUTH_SECRET))"
 
 .PHONY: help doctor up down shell serve web dev db auth test selftest
 
@@ -32,17 +33,19 @@ serve: ## run the backend for the page on 127.0.0.1:7070
 web: $(WEB)/node_modules ## serve the page with hot reload on http://localhost:5173
 	cd $(WEB) && npm run dev
 
-# The binary runs directly, not via go run, so Ctrl-C reaches it and the trap can wait for it.
-dev: up $(WEB)/node_modules ## lab up, then the backend and the page together
+# The binaries run directly, not via go run, so Ctrl-C reaches them and the trap can wait for them.
+dev: up db $(WEB)/node_modules $(AUTH_SECRET) ## lab and Postgres up, then auth, the backend and the page together
 	@cd $(PLATFORM) && go build -o bin/server ./cmd/server
-	@$(TOKEN) $(PLATFORM)/bin/server & server=$$!; trap 'kill $$server 2>/dev/null; wait $$server' INT TERM EXIT; cd $(WEB) && npm run dev
+	@cd $(AUTH) && go build -o bin/server ./cmd/server
+	@$(TOKEN) $(PLATFORM)/bin/server & server=$$!; $(AUTH_ENV) $(AUTH)/bin/server & auth=$$!; \
+	  trap 'kill $$server $$auth 2>/dev/null; wait $$server $$auth' INT TERM EXIT; cd $(WEB) && npm run dev
 
 db: ## start Postgres, then apply migrations and seeds
 	docker compose up -d --wait postgres
 	@$(MAKE) --no-print-directory -C $(AUTH) migrate seed
 
 auth: $(AUTH_SECRET) ## run the auth server on 127.0.0.1:7272 (make db first)
-	cd $(AUTH) && CKA_SIM_AUTH_SECRET="$$(cat $(AUTH_SECRET))" go run ./cmd/server
+	cd $(AUTH) && $(AUTH_ENV) go run ./cmd/server
 
 test: ## vet and test the Go code
 	cd $(LAB) && go vet ./... && go test ./...

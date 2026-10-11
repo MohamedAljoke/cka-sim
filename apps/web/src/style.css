@@ -194,6 +194,21 @@ a {
   min-width: 0;
 }
 
+.account {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.account .email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  color: var(--color-foreground-muted);
+}
+
 .lab .status {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -542,7 +557,8 @@ a {
   margin-top: 0.75rem;
 }
 
-.exam-form label {
+.exam-form label,
+.login-form label {
   display: grid;
   gap: 4px;
   font: 650 0.68rem/1.2 var(--font-body);
@@ -551,7 +567,8 @@ a {
   color: var(--color-foreground-subtle);
 }
 
-.exam-form input {
+.exam-form input,
+.login-form input {
   width: 6rem;
   padding: 7px 10px;
   font: 500 0.92rem var(--font-mono);
@@ -565,6 +582,29 @@ a {
 
 .exam-form .error {
   flex-basis: 100%;
+  margin: 0;
+}
+
+.login {
+  max-width: 24rem;
+  margin: clamp(1rem, 8vh, 4rem) auto 0;
+}
+
+.login-form {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.login-form input {
+  width: 100%;
+}
+
+.login-form .error:empty {
+  display: none;
+}
+
+.login-form .error {
   margin: 0;
 }
 

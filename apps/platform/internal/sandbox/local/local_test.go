@@ -1,4 +1,4 @@
-package sandbox
+package local
 
 import (
 	"context"
@@ -11,18 +11,18 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/lab/api"
 )
 
-func TestLocalCreateAsksForMakeUpWhenNoLabAnswers(t *testing.T) {
-	_, err := Local{Agent: api.Client{URL: "http://127.0.0.1:1"}}.Create(context.Background())
+func TestCreateAsksForMakeUpWhenNoLabAnswers(t *testing.T) {
+	_, err := Provider{Agent: api.Client{URL: "http://127.0.0.1:1"}}.Create(context.Background())
 
 	if err == nil || !strings.Contains(err.Error(), "run make up") {
 		t.Errorf("err = %v, want one that says to run make up", err)
 	}
 }
 
-func TestLocalCreateProbesTheClusterAndEndsLeftoverShells(t *testing.T) {
+func TestCreateProbesTheClusterAndEndsLeftoverShells(t *testing.T) {
 	agent := startFakeAgent(t)
 
-	box, err := Local{Agent: api.Client{URL: agent.url}}.Create(context.Background())
+	box, err := Provider{Agent: api.Client{URL: agent.url}}.Create(context.Background())
 
 	if err != nil {
 		t.Fatal(err)

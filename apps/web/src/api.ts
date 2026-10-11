@@ -103,6 +103,7 @@ export type Lab = {
   started?: string
   ready?: string
   error?: string
+  ended?: string
 }
 
 export type LabState = {

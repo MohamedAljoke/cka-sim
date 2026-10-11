@@ -33,6 +33,9 @@ export function showLab(bar: HTMLElement, hooks: Hooks) {
     } else if (lab.state === 'failed') {
       setStatus(status, 'error', `Lab failed: ${lab.error}`)
       bar.replaceChildren(status)
+    } else if (lab.ended) {
+      setStatus(status, '', `Lab ${lab.ended}; it starts again with your next task`)
+      bar.replaceChildren(status)
     } else {
       bar.replaceChildren()
     }

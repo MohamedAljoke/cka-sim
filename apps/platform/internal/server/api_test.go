@@ -324,14 +324,14 @@ func newAPIWithoutLab(t *testing.T, r *fakeRunner) (*httptest.Server, *desk.Desk
 			return nil, err
 		}
 		return &desk.Desk{Lab: lab, Exam: session}, nil
-	})
+	}, time.Now)
 	return serve(t, desks, Practice{Tasks: all, Files: files, Exams: true}), desks
 }
 
 func readyDesks(t *testing.T, r *fakeRunner, shells *fakeOpener) *desk.Desks {
 	desks := desk.New(func(id string) (*desk.Desk, error) {
 		return &desk.Desk{Lab: sandbox.NewLab(fakeProvider{runner: r, shells: shells}, id, time.Now)}, nil
-	})
+	}, time.Now)
 	d, err := desks.For("a")
 	if err != nil {
 		t.Fatal(err)

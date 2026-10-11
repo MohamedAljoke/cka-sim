@@ -31,11 +31,12 @@ import (
 const addr = "127.0.0.1:7070"
 
 type settings struct {
-	AuthSecret string `key:"CKA_SIM_AUTH_SECRET" minLength:"32"`
-	AgentToken string `key:"CKA_SIM_AGENT_TOKEN"`
-	Provider   string `key:"CKA_SIM_PROVIDER" default:""`
-	LabURL     string `key:"CKA_SIM_LAB_URL" default:"http://127.0.0.1:7171"`
-	Pool       string `key:"CKA_SIM_POOL" default:"labs"`
+	AuthSecret string        `key:"CKA_SIM_AUTH_SECRET" minLength:"32"`
+	AgentToken string        `key:"CKA_SIM_AGENT_TOKEN"`
+	Provider   string        `key:"CKA_SIM_PROVIDER" default:""`
+	LabURL     string        `key:"CKA_SIM_LAB_URL" default:"http://127.0.0.1:7171"`
+	Pool       string        `key:"CKA_SIM_POOL" default:"labs"`
+	LabIdle    time.Duration `key:"CKA_SIM_LAB_IDLE" default:"30m"`
 }
 
 func main() {
@@ -69,7 +70,8 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	desks := desk.New(openDesk(provider, all, examDir))
+	desks := desk.New(openDesk(provider, all, examDir), time.Now)
+	go desks.Watch(ctx, time.Minute, cfg.LabIdle)
 	practice := server.Practice{Tasks: all, Files: catalog.FS, Exams: true}
 
 	sessions := auth.Verifier{Secret: []byte(cfg.AuthSecret), Now: time.Now}

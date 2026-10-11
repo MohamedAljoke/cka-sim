@@ -41,6 +41,7 @@ type Status struct {
 	Started  time.Time `json:"started,omitzero"`
 	Ready    time.Time `json:"ready,omitzero"`
 	Error    string    `json:"error,omitempty"`
+	Ended    string    `json:"ended,omitempty"`
 }
 
 type Lab struct {
@@ -110,6 +111,10 @@ func (l *Lab) Ensure(ctx context.Context) error {
 }
 
 func (l *Lab) End(ctx context.Context) error {
+	return l.EndBecause(ctx, "")
+}
+
+func (l *Lab) EndBecause(ctx context.Context, reason string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.status.State != Ready {
@@ -119,7 +124,7 @@ func (l *Lab) End(ctx context.Context) error {
 		return err
 	}
 	l.box = Box{}
-	l.status = Status{State: None, Provider: l.provider.Name()}
+	l.status = Status{State: None, Provider: l.provider.Name(), Ended: reason}
 	return nil
 }
 

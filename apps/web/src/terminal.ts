@@ -33,7 +33,7 @@ const fallback = 'ui-monospace, Menlo, Consolas, monospace'
 const fontFamily = `'JetBrains Mono Variable', ${fallback}`
 
 // openTerminal returns a close for when the lab behind the shell ends.
-export function openTerminal(pane: HTMLElement): () => void {
+export function openTerminal(pane: HTMLElement, onDisconnect: () => void): () => void {
   const term = new Terminal({
     cursorBlink: true,
     fontFamily: document.fonts.check(mono) ? fontFamily : fallback,
@@ -75,7 +75,10 @@ export function openTerminal(pane: HTMLElement): () => void {
     socket.onmessage = (event) => term.write(new Uint8Array(event.data))
     socket.onclose = async () => {
       if (!opened && !retried && (await refreshSession()) && !closed) connect(true)
-      else if (!closed) term.write('\r\n[disconnected]\r\n')
+      else if (!closed) {
+        term.write('\r\n[disconnected]\r\n')
+        onDisconnect()
+      }
     }
   }
   connect(false)

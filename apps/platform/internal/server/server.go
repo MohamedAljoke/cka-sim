@@ -30,7 +30,7 @@ func New(desks *desk.Desks, practice Practice) http.Handler {
 		if err != nil {
 			return err
 		}
-		labagent.Serve(w, r, d.Lab)
+		labagent.Serve(w, r, d)
 		return nil
 	})
 	handle("GET /api/lab", a.getLab)

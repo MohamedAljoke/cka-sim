@@ -43,7 +43,7 @@ function start(user: User) {
 
   // The terminal opens once a split view has a ready lab, and stays open until the lab ends.
   const syncTerminal = () => {
-    if (labReady && !layout.classList.contains('single') && !closeTerminal) closeTerminal = openTerminal(terminal)
+    if (labReady && !layout.classList.contains('single') && !closeTerminal) closeTerminal = openTerminal(terminal, () => lab.refresh())
   }
 
   const go = (show: () => void) => {

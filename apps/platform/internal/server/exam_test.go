@@ -206,6 +206,7 @@ func TestScoreWaitsForEveryCheck(t *testing.T) {
 	if state := waitScored(t, srv); state.Score == nil || state.Score.Percent != 100 {
 		t.Errorf("score %+v, want 100%%", state.Score)
 	}
+	waitTidied(t, srv)
 }
 
 func TestScoreDoesNotWaitForTidy(t *testing.T) {
@@ -213,13 +214,14 @@ func TestScoreDoesNotWaitForTidy(t *testing.T) {
 	srv := newAPI(t, r)
 	beginExam(t, srv)
 	r.pause()
-	defer r.resume()
 
 	call(t, srv, http.MethodPost, "/api/exam/end")
 
 	if state := waitScored(t, srv); state.Score.Percent != 100 || !state.Exam.Scoring() {
 		t.Errorf("got %+v, want 100%% while the tidy still runs", state)
 	}
+	r.resume()
+	waitTidied(t, srv)
 }
 
 func beginExam(t *testing.T, srv *httptest.Server) {
@@ -251,6 +253,17 @@ func waitScored(t *testing.T, srv *httptest.Server) examState {
 	}
 	t.Fatal("the exam was never scored")
 	return examState{}
+}
+
+func waitTidied(t *testing.T, srv *httptest.Server) {
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if !getState(t, srv).Exam.Scoring() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the exam never finished tidying")
 }
 
 func getState(t *testing.T, srv *httptest.Server) examState {

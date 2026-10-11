@@ -196,8 +196,8 @@ lock and calls `Session.End`, which saves `ended` and answers 202 at once; you a
 "Scoring…". In the background, `grade` runs every `check.sh` at once through `tasks.Check`, saving each
 task's `grader.Result` as it lands. A check that crashes counts as 0 and keeps its error. Checks that wait for
 the cluster to settle only wait when the wait can succeed: `tr-kubelet` when the kubelet is running,
-`ar-etcd` when etcd or the API server is missing or started in the last 2 minutes, `tr-scheduler` when a
-scheduler container runs, `st-pvc` when Pod `writer` exists, `wl-rollout` when the Deployment is back on the
+`ar-etcd` when etcd or the API server is missing or started in the last 2 minutes, `tr-scheduler` when its
+manifest runs `kube-scheduler` again, `st-pvc` when Pod `writer` exists, `wl-rollout` when the Deployment is back on the
 good image, `tr-service` when the Service has endpoints. So an untouched task scores in under 3 seconds
 instead of up to 150. Then `tasks.Tidy`
 runs the exam's `reset.sh` scripts, so a kubelet left broken doesn't outlive the exam, and deletes the

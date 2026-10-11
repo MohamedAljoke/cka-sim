@@ -1,0 +1,15 @@
+# The page's terminal can sudo on every node, so everything sits behind the password.
+{$SITE_HOST} {
+	basic_auth {
+		cka {$SITE_HASH}
+	}
+	@backend path /api/* /ws/*
+	handle @backend {
+		reverse_proxy 127.0.0.1:7070
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -35,11 +35,12 @@ out without a rewrite. The terminal is the most likely candidate.
 | catalog | tasks (`task.md`, scripts), read-only from the embedded FS | `catalog/` |
 | attempt | quiz/exam sessions: chosen tasks, timers, scores, Check/Submit | — |
 | grading | runs `check.sh`, parses `PASS/FAIL <pts>` into a result | format in `catalog/lib.sh` |
-| sandbox | VM lifecycle, warm pool, one-per-user rule, idle timeout, reaper | `internal/sandbox`: `Provider`, one `Lab`, the `Local` provider |
-| terminal | browser websocket ⇄ shell | `internal/terminal`, `internal/server` |
+| sandbox | VM lifecycle, warm pool, one-per-user rule, idle timeout, reaper | `apps/platform/internal/sandbox`: `Provider`, one `Lab`, the `Local` and `gke` providers |
+| terminal | browser websocket ⇄ shell | `apps/lab/api` (the protocol), `apps/platform/internal/server` |
 
-The **agent** is a separate binary (`cmd/agent`) that runs inside each sandbox VM. It exposes `shell` and `run-script`
-on the private network only, and it is mostly today's `DockerOpener` and script code moved into the VM.
+The **agent** is a separate binary (`apps/lab/cmd/agent`) that runs inside every lab, on a laptop as on a VM. It
+exposes `/run` and `/shell` on the private network only, behind a token, and does the `docker exec` there. The
+platform reaches it with `api.Client` and holds no Docker code.
 
 ### Boundary rules
 
@@ -98,18 +99,22 @@ When "Start" finds an active sandbox, it either reconnects to it (page refresh, 
 The bill depends on **users with a lab open right now**, not total users. Each VM needs about 4 GB of RAM for kind.
 50 users practising at the same time means 50 VMs, plus whatever the warm pool keeps idle.
 
-## Rough repo layout (target)
+## Repo layout
 
 ```
-apps/cka-sim/
-  cmd/server    # wires all domains (hosted or local)
-  cmd/agent     # runs inside each sandbox VM
-  cmd/cli
-  catalog/
+apps/platform/      what to run; imports only apps/lab/api from the lab
+  cmd/server        wires all domains (hosted or local)
+  catalog/          tasks, lib.sh, images.txt
   internal/
-    identity/  attempt/  grading/
-    sandbox/   (+ fly/, kind/ providers)
-    terminal/  (+ docker opener, agent opener)
+    tasks/ exam/ grader/ server/
+    sandbox/        Lab + the Local provider; gke/ is the GKE one
+    (later) auth/   users, login, session tokens; a session owns a Lab
+apps/lab/           how it runs; could become its own repo
+  api/              agent client, shell protocol, node names
+  cmd/agent  cmd/lab
+  internal/  agent/ cluster/ runner/ doctor/ dockershell/
+  deploy/           the lab image, and the GKE warm pool
+infra/gke/          the GCP project and cluster
 ```
 
 ## Open questions

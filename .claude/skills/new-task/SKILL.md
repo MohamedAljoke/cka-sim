@@ -1,6 +1,6 @@
 ---
 name: new-task
-description: Turn a Kubernetes/CKA concept into a cka-sim practice task in apps/cka-sim/catalog/<id>/ (task.md, setup.sh, check.sh, solution.sh, explain.md, and reset.sh when setup breaks the cluster), then prove it on the running cluster. Use when the user says "make this a task", "turn X into a task", "add a task for <concept>", or picks a question from docs/CKA-QUESTION-BANK.md.
+description: Turn a Kubernetes/CKA concept into a cka-sim practice task in apps/platform/catalog/<id>/ (task.md, setup.sh, check.sh, solution.sh, explain.md, and reset.sh when setup breaks the cluster), then prove it on the running cluster. Use when the user says "make this a task", "turn X into a task", "add a task for <concept>", or picks a question from docs/CKA-QUESTION-BANK.md.
 ---
 
 # New cka-sim task
@@ -13,10 +13,10 @@ task. Work in pair mode: show the **idea first**, then write the files once they
 1. Find the concept in `docs/CKA-QUESTION-BANK.md`. Reuse its ID area (T/A/N/W/S) and check its
    **Needs** column. If it's not there, decide which domain it belongs to and add it to the bank later.
 2. Check the cluster can host it. Today it's kind with `cka-sim-control-plane`, `cka-sim-worker` and
-   `cka-sim-worker2` (`internal/cluster/cluster.go`). There is no metrics-server, no
+   `cka-sim-worker2` (`apps/lab/api/api.go`). There is no metrics-server, no
    policy-enforcing CNI, no Gateway API and no Helm. If the task needs one of these, say so and stop:
    the cluster comes first.
-3. Look at `ls apps/cka-sim/catalog/` so the new task doesn't duplicate an existing one.
+3. Look at `ls apps/platform/catalog/` so the new task doesn't duplicate an existing one.
 4. Propose the task in a few lines and wait for an OK:
    - id, title, domain and host
    - the scenario: what setup breaks or leaves undone
@@ -25,7 +25,7 @@ task. Work in pair mode: show the **idea first**, then write the files once they
 
 ## 2. Write the folder
 
-Copy the shape of `apps/cka-sim/catalog/tr-service/` (troubleshooting) or `wl-scale/` (build
+Copy the shape of `apps/platform/catalog/tr-service/` (troubleshooting) or `wl-scale/` (build
 something). Read both before you start.
 
 ### `task.md`
@@ -99,12 +99,11 @@ order: last                        # optional, see below
 ## 3. Prove it
 
 ```sh
-cd apps/cka-sim
-go test ./catalog/...          # the frontmatter parses, the host is a real node, no script is empty
-make selftest TASK=<id>        # setup → every check FAILs → solution → every check PASSes
+(cd apps/platform && go test ./catalog/...)   # frontmatter parses, host is a node, images are in images.txt
+make selftest TASK=<id>                       # setup → every check FAILs → solution → every check PASSes
 ```
 
-`make selftest` needs the cluster up (`make up`). Also break the "don't modify" rule by hand once and
+`make selftest` needs the lab up (`make up`). Also break the "don't modify" rule by hand once and
 re-run `check.sh` to see that check fail.
 
 If the task came from the question bank, fill in its **Covered** cell with `main \`<id>\``.

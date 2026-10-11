@@ -1,0 +1,91 @@
+# The main app on the shared platform pool. It may only claim labs and read their pods' addresses.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cka-sim-app
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cka-sim-app
+rules:
+  - apiGroups: [extensions.agents.x-k8s.io]
+    resources: [sandboxclaims]
+    verbs: [create, get, list, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cka-sim-app
+subjects:
+  - kind: ServiceAccount
+    name: cka-sim-app
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cka-sim-app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+spec:
+  replicas: 1
+  # One server holds the lab and the exam, so never two at once.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: cka-sim-app
+  template:
+    metadata:
+      labels:
+        app: cka-sim-app
+    spec:
+      serviceAccountName: cka-sim-app
+      nodeSelector:
+        cloud.google.com/gke-nodepool: default-pool
+      enableServiceLinks: false
+      containers:
+        - name: app
+          image: ${APP_IMAGE}
+          env:
+            - name: CKA_SIM_PROVIDER
+              value: gke
+            - name: CKA_SIM_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cka-sim-agent
+                  key: token
+            - name: SITE_HOST
+              value: ${SITE_HOST}
+            - name: SITE_HASH
+              valueFrom:
+                secretKeyRef:
+                  name: cka-sim-site
+                  key: hash
+          ports:
+            - containerPort: 80
+            - containerPort: 443
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: site
+spec:
+  type: LoadBalancer
+  loadBalancerIP: ${SITE_IP}
+  selector:
+    app: cka-sim-app
+  ports:
+    - name: http
+      port: 80
+    - name: https
+      port: 443

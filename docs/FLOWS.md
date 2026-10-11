@@ -6,31 +6,33 @@ New flows go here in the same shape: the trigger, then each hop in order, then w
 
 ## 1. `make dev`: from the command to a ready server
 
-`make dev` first runs `make up`, which is `cka-sim up` (`cmd/cli`). That creates a kind cluster of three
-containers built from `internal/cluster/node.Dockerfile`: `cka-sim-control-plane`, `cka-sim-worker` and
-`cka-sim-worker2`. Each node has a `candidate` user with sudo, sshd, and `k` with completion.
+`make dev` first runs `make up`, which is `apps/lab/Makefile`'s `up`. It runs `lab doctor` on this machine,
+builds the lab image (`apps/lab/deploy/lab.Dockerfile`: dockerd, the `lab` CLI and the agent), and makes the
+agent token `~/.config/cka-sim/agent-token` once. Then it starts the privileged container `cka-sim-lab`, or
+reuses it if it's running. That's the same image GKE runs as a pod on its own VM; here it's a container. The
+volume `cka-sim-lab-docker` is the lab's own Docker, so the node and task images survive a `make down`.
 
-`up` then calls `Cluster.Prepare` (`internal/cluster/base.go`). It builds `base.Dockerfile` and starts
-`cka-sim-base` on the `kind` network, so the node names resolve from it. Base has no kubectl. `Prepare` gives
-base's `candidate` an ssh key and, on every node, installs that key in `authorized_keys` and the cluster's
-admin kubeconfig for both `candidate` and `root`. If base already exists, `Prepare` does nothing, so open
-terminals survive a second `up`.
+Inside, `lab-start.sh` starts dockerd and runs `lab up` (`apps/lab/cmd/lab`). That creates a kind cluster of
+three containers built from `internal/cluster/node.Dockerfile`: `cka-sim-control-plane`, `cka-sim-worker` and
+`cka-sim-worker2`, each with a `candidate` user with sudo, sshd, and `k` with completion. `Cluster.Prepare`
+(`internal/cluster/base.go`) then builds and starts `cka-sim-base` on the `kind` network, so the node names
+resolve from it. Base has no kubectl. `Prepare` gives base's `candidate` an ssh key and, on every node,
+installs that key and the cluster's admin kubeconfig for both `candidate` and `root`. Then `LoadImages`
+(`internal/cluster/images.go`) pulls the images in `CKA_SIM_IMAGES` and imports them into each node's
+containerd. The Makefile sets that variable from the platform's `catalog/images.txt`, because the lab knows
+nothing about tasks. Last, `lab-start.sh` execs the agent on `:7171`, published on `127.0.0.1` only. `make up`
+waits for its `/healthz`: about 2 minutes the first time, seconds when the container is already up.
 
-A new cluster then gets the task images (`Cluster.LoadImages`, `internal/cluster/images.go`): `up` pulls
-any of `cluster.Images` this machine's Docker lacks, then pipes `docker save` into each node's `ctr images
-import`. That adds about 8 s, and the first exam doesn't wait on Docker Hub on every node. If it fails, `up`
-only warns, and the first exam pulls the images itself. `catalog_test.go` fails when a script uses an image
-the list lacks.
-
-Next, `make dev` builds `bin/server` and starts it in the background, then starts Vite on 5173.
+Next, `make dev` builds `bin/server` and starts it in the background with the token, then starts Vite on 5173.
 `vite.config.ts` forwards `/api` and `/ws` to the Go server on `127.0.0.1:7070`. The server
-(`cmd/server/main.go`) claims the port, loads the catalog (`tasks.Load(catalog.FS)`: every
-`catalog/<id>/task.md` and its scripts, built into the binary) and `lib.sh`, and makes a **lab** with the
-`sandbox.Local` provider (`internal/sandbox`). It doesn't touch the cluster yet; that happens when a lab
-starts (flow 2). Then it serves.
+(`apps/platform/cmd/server/main.go`) claims the port, loads the catalog (`tasks.Load(catalog.FS)`: every
+`catalog/<id>/task.md` and its scripts, and `lib.sh`, built into the binary) and makes a **lab** with the
+`sandbox.Local` provider pointing at `http://127.0.0.1:7171`. It doesn't touch the lab yet; that happens when
+a lab starts (flow 2). Then it serves.
 
 Ctrl-C reaches the server directly, because it runs as a binary and not through `go run`. The Makefile's
-trap waits for it, and on the way out the server ends the lab, which closes every page shell.
+trap waits for it, and on the way out the server ends the lab, which closes every page shell. The lab
+container keeps running; `make down` deletes its cluster and the container.
 
 ## 2. Opening the page: home, the lab and the terminal
 
@@ -48,13 +50,14 @@ never the scripts. Home has, top to bottom:
 - **Practise a task.** The filtered catalog.
 - **Last exam.** "Last exam: 62% · FAIL" with **View results**, above the rest, when there is a finished exam.
 
-**The lab.** A lab is the box your cluster lives in. Locally that's the kind cluster `make up` made; a
-hosted site would give each user a VM instead, behind the same `sandbox.Provider` interface. There's no
-Start button. Practising a task or starting an exam starts it on the server. `Lab.Start`
-(`internal/sandbox/lab.go`) calls the provider's `Create` in the background. `Local.Create`
-(`internal/sandbox/local.go`) checks that the cluster and base are up (`cluster.RequireUp`), closes any
-shells left over from a crashed server (`EndAll`), and returns a box: the runner and the `DockerOpener` for
-this cluster.
+**The lab.** A lab is the box your cluster lives in. Locally that's the `cka-sim-lab` container `make up`
+started; on GKE it's a pod on its own VM (flow 7), behind the same `sandbox.Provider` interface. Either way
+the server reaches it only through the agent inside it. There's no Start button. Practising a task or
+starting an exam starts it on the server. `Lab.Start` (`internal/sandbox/lab.go`) calls the provider's
+`Create` in the background. `Local.Create` (`internal/sandbox/local.go`) asks the agent's `/healthz` (if
+nothing answers: "run make up"), runs `kubectl get --raw=/readyz` on the control plane through it
+(`ClusterAnswers`, the same probe GKE uses), and closes any shells left over from a crashed server
+(`EndAll`). It returns a box whose runner and shells are both one `api.Client` (`apps/lab/api`).
 
 The topbar (`src/lab.ts`) shows nothing while there is no lab. When a view tells it the server may have
 started one (`app.labChanged`), it asks `GET /api/lab` every second while the state is `starting` ("Starting
@@ -65,10 +68,12 @@ script lock and calls `Destroy`. Locally that closes the shells and keeps the cl
 
 **The terminal.** Practice and exam views are split: the question on the left and the terminal on the right
 (`app.split`, `src/main.ts`). Home and results are full width (`.exam.single` hides the terminal pane). The
-first time a split view finds the lab ready, `main.ts` opens a websocket to `/ws/terminal`. The server's
-`DockerOpener` (`internal/terminal/docker.go`) answers with the equivalent of
-`docker exec -it -u candidate -w /home/candidate cka-sim-base bash` and pipes bytes both ways between xterm
-and that shell. So you land on `candidate@base` with no kubectl, as in the exam. The terminal stays open
+first time a split view finds the lab ready, `main.ts` opens a websocket to `/ws/terminal`. The server
+(`api.Serve`) opens a shell through the box's `api.Client`, which dials the agent's `/shell` and speaks the
+same protocol: binary messages for bytes, `{"type":"resize"}` text messages. In the lab, the agent's
+`dockershell.Opener` (`apps/lab/internal/dockershell`) runs the equivalent of
+`docker exec -it -u candidate -w /home/candidate cka-sim-base bash`, and bytes flow both ways from xterm
+through the server and the agent to that shell. So you land on `candidate@base` with no kubectl, as in the exam. The terminal stays open
 while you move between views, and closes when the lab ends. When the tab closes, the shell is hung up as the
 same user; root can't do it, because reading another user's process environment needs ptrace, which
 Docker withholds.
@@ -85,13 +90,15 @@ requests in parallel:
   a setup is already running, it answers 409. It first calls `tasks.Heal` (`internal/tasks/run.go`), which runs
   the `reset.sh` of every task that ships one. These put back what a task left unsolved broke outside its
   namespace, such as `tr-kubelet`'s kubelet, and do nothing on a healthy cluster. It then calls `tasks.Start`,
-  which reads `setup.sh` and hands it to the runner with a 3-minute limit.
+  which reads `lib.sh` and `setup.sh` and hands them, in that order, to the runner with a 3-minute limit.
 
-The lab passes the script to its box's runner. The local one (`internal/runner/runner.go`) runs `docker exec -i -e TASK_ID=<id> <task's host> bash -s` and
-writes `lib.sh` followed by `setup.sh` to its stdin. The script runs as root on the node the task names,
+The lab passes the script to its box's `api.Client`, which POSTs it to the agent's `/run?host=…&task=…`. In
+the lab, the agent hands it to `runner.Node` (`apps/lab/internal/runner`), which runs
+`docker exec -i -e TASK_ID=<id> <task's host> bash -s` with the script on its stdin, and answers
+`{output, error}`. The script runs as root on the node the task names,
 using root's kubeconfig. Helpers such as `fresh_ns` wipe and recreate the task's namespace before the
-script builds the broken state. **Home** or **Reset** aborts the request, and the runner then kills the
-script's whole process group inside the node (it runs under `setsid`, so its `kubectl` and `sleep` go too).
+script builds the broken state. **Home** or **Reset** aborts the request; the dropped HTTP request cancels the script on the agent, and the
+runner then kills the script's whole process group inside the node (it runs under `setsid`, so its `kubectl` and `sleep` go too).
 That frees the lock, and the next start waits up to 60 seconds for it. A half-built task is harmless,
 because every setup starts from `fresh_ns` and the resets. `fresh_ns` also labels the namespace
 `cka-sim/task=<id>`, so the task can be tidied later.
@@ -129,9 +136,10 @@ the broken state. While it runs, Check is disabled.
 
 ## 5. `make selftest`: proving every task is fair
 
-`make selftest` runs `go test ./catalog -run TestSelftest -selftest`. The `-selftest` flag keeps
-`go test ./...` from touching the cluster. `catalog/selftest_test.go` loads every task and `lib.sh` and
-builds the same `runner.Node` the server uses. For each task, `tasks.Selftest` runs setup, then check,
+`make selftest` runs `go test ./catalog -run TestSelftest -selftest` in `apps/platform`, with the agent token.
+The `-selftest` flag keeps `go test ./...` from touching the lab. `catalog/selftest_test.go` loads every task
+and talks to the lab the way the server does: an `api.Client` at `127.0.0.1:7171` (skipped if its `/healthz`
+doesn't answer). For each task, `tasks.Selftest` runs setup, then check,
 which must earn 0 of more than 0 points (nothing to earn for doing nothing). It then runs `solution.sh`
 (`tasks.Solve`) and checks again, which must earn every point. The task's `reset.sh` runs before setup and
 again when the subtest ends, so one failing task can't break the node for the next. A failure names the task
@@ -204,3 +212,56 @@ points missing starts open and red: its ✓/✗ checks, the solution, and **Try 
 in practice once scoring is done. The percentage with PASS or FAIL appears when every row is in; until the
 tidy finishes, "Tidying up the cluster…" shows under it and **Try again** stays disabled. **Home**
 keeps the results; Home shows them as "Last exam" until the next exam replaces them.
+
+## 7. The hosted site on GKE: the lab on its own VM
+
+`make site` in `infra/gke` builds two images.
+
+**The lab image.** `apps/lab/deploy/lab.Dockerfile`, the same image `make up` runs locally: dockerd, the `lab`
+CLI and the agent (`cmd/agent`). The pool's template (`apps/lab/deploy/gke/lab-pool.yaml`) sets
+`CKA_SIM_IMAGES` from the platform's `catalog/images.txt`.
+The SandboxWarmPool `labs` (`lab-pool.yaml`, agent-sandbox) keeps one lab pod warm, alone on a node of the
+tainted `labs` pool. That node is a VM, and the pod is privileged so kind can run.
+
+**The app image.** `apps/platform/deploy/gke/app.Dockerfile` contains the page, the server and Caddy, but no Docker. It runs as the
+Deployment `app` on the shared system pool, behind a LoadBalancer on a static IP. Caddy asks for the password,
+gets an HTTPS certificate for `<ip>.sslip.io`, serves the page, and passes `/api` and `/ws` to the server on
+`127.0.0.1:7070`. The server starts with `CKA_SIM_PROVIDER=gke`, so `cmd/server/main.go` makes a `gke.Provider`
+(`internal/gke`) instead of `sandbox.Local`. It first deletes any claim an earlier run left behind
+(`ReapClaims`), since each one holds a node.
+
+**A lab pod warming up.** `lab-start.sh` starts dockerd on its Unix socket only, then runs `lab up`
+(flow 1's cluster, inside the pod), then `exec cka-sim-agent` on `:7171`. The readiness probe is the agent's
+`/healthz`, so a lab counts as warm only once its whole cluster is built. On a new node this takes about
+7 min; on a node that already has the image, 1.5 to 3.5 min. The pool's template also brings a NetworkPolicy:
+- Inbound: only pods labelled `app: cka-sim-app` may reach the lab, and only port 7171.
+- Outbound: the internet and the cluster's DNS (`node-local-dns`, `kube-dns`), but no private ranges and no
+  metadata address.
+
+The VPC firewall rule `cka-sim-labs-apart` (`make wall`) stops lab nodes and lab pods from reaching other
+lab nodes.
+
+**Starting a lab.** Opening a task starts the lab as in flow 3, but `gke.Provider.Create` runs instead of
+`Local.Create`:
+1. It POSTs a `SandboxClaim` (`lab-…`, labelled `app.kubernetes.io/managed-by: cka-sim`) to the Kubernetes
+   API, as the `cka-sim-app` service account. That account may only create, get, list and delete claims, and
+   get pods.
+2. It polls the claim until it is `Ready` and names its sandbox, then reads that pod's IP.
+3. The box's runner and shells are one `api.Client` at `http://<pod IP>:7171`, with the token from the
+   `cka-sim-agent` Secret, exactly as locally but with the pod's address.
+4. A `kubectl get --raw=/readyz` through the agent proves the lab answers. A claim that never gets ready or
+   never answers is deleted.
+
+The topbar then reads "Lab ready in 1.4s · GKE".
+
+**Scripts and the terminal** work as in flows 2 and 3, only farther away: `api.Client` POSTs `lib.sh` and the
+script to `/run`, and the agent hands it to `runner.Node`, so it runs as `docker exec … bash -s` on the task's
+node inside the lab pod. A keystroke goes from the browser to Caddy, the server (`api.Serve`), the agent's
+`/shell` (`api.Serve` again, with `dockershell.Opener`), and finally `docker exec` on base in the lab pod.
+
+**Ending.** **End lab** (`DELETE /api/lab`) calls `Destroy`, which deletes the claim. agent-sandbox then
+removes the lab's pod, the terminal's socket drops, and the pool warms a new lab. If the pool has no warm lab,
+a start waits for a new one (up to 15 min) and the topbar keeps showing "Starting lab on GKE…".
+
+Not built yet: per-user labs (the server still holds one `Lab` for everyone with the password), and deleting
+a lab's node when its claim ends, so a later lab can still land on a node a previous user had.

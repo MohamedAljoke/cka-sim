@@ -6,36 +6,42 @@ on:
   pull_request:
 
 jobs:
-  cli-test:
+  test:
     strategy:
       fail-fast: false
       matrix:
+        app: [lab, platform]
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
-        working-directory: apps/cka-sim
+        working-directory: apps/${{ matrix.app }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
-          go-version-file: apps/cka-sim/go.mod
-          cache-dependency-path: apps/cka-sim/go.sum
+          go-version-file: apps/${{ matrix.app }}/go.mod
+          cache-dependency-path: apps/${{ matrix.app }}/go.sum
       - run: go vet ./...
       - run: go test ./...
-      - run: go run ./cmd/cli version
+      - if: matrix.app == 'lab'
+        run: go run ./cmd/lab version
 
-  cli-build:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [lab, platform]
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/cka-sim
+        working-directory: apps/${{ matrix.app }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
-          go-version-file: apps/cka-sim/go.mod
-          cache-dependency-path: apps/cka-sim/go.sum
+          go-version-file: apps/${{ matrix.app }}/go.mod
+          cache-dependency-path: apps/${{ matrix.app }}/go.sum
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - name: Cross-compile for every release target

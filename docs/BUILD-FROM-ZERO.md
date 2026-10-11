@@ -29,7 +29,9 @@ Every deliverable has the same parts:
 - **Learn**: the concept the deliverable teaches
 
 Commands marked **host** run in your terminal. **node** means inside a node container
-(`docker exec -it <node> bash`). All Go commands run from `apps/cka-sim`.
+(`docker exec -it cka-sim-lab docker exec -it <node> bash`). Deliverables before the platform/lab split
+(2026-10-11) name `apps/cka-sim` and `cka-sim up`; that code now lives in `apps/lab` (cluster, doctor,
+runner, shells, the `lab` CLI) and `apps/platform` (catalog, tasks, exams, grading, the server).
 
 ```
 ✅ D0 skeleton + CI ─► ✅ D1 doctor ─► ✅ D2 up / down
@@ -52,15 +54,18 @@ tasks from the CLI. After **D15** you have the full timed exam. After **D17** st
 
 These apply to every deliverable.
 
-**Layout.** Each application lives in its own folder under `apps/`: `apps/cka-sim` is the Go module
-that builds the `cka-sim` binary, and `apps/web` is the browser page (Vite + TypeScript). The repo
-root only holds what has to be there: `README.md`, `docs/` and `.github/`.
+**Layout.** Each application lives in its own folder under `apps/`, split by who owns what:
+- `apps/platform` decides **what** to run: the catalog, tasks, exams, grading, and the HTTP server the page
+  talks to (`cmd/server`). It never touches Docker; it reaches every lab through `apps/lab/api`.
+- `apps/lab` decides **how** it runs: the lab image with dockerd, the kind cluster and base host (`cmd/lab`:
+  doctor, up, down, shell), and the agent (`cmd/agent`) that runs scripts and shells there. The same image
+  is a container on a laptop (`make up`) and a pod on its own VM on GKE. It could become its own repo:
+  `api/` is the only package another module imports.
+- `apps/web` is the browser page (Vite + TypeScript).
 
-**Inside `apps/cka-sim`.** `internal/` holds the engine: checking the machine, the cluster, the
-terminal, tasks, grading. Two thin front doors drive it: the CLI (`cmd/cli`: `main.go` is the entry point,
-`cli.go` the commands) and the HTTP server the page talks to (`cmd/server`). They are separate
-`main` packages: the server is not a CLI command. Anything a command can do,
-a web request can trigger too. Neither front door holds logic of its own.
+The repo root holds `README.md`, `Makefile`, `docs/`, `infra/` and `.github/`. In both Go modules,
+`internal/` holds the logic and `cmd/` the thin front doors: anything a command can do, a web request can
+trigger too.
 
 **Swappable parts.** Anything that talks to the outside world sits behind a small interface that
 the engine owns: the cluster provider (kind today), how a shell is opened (`docker exec` today, ssh

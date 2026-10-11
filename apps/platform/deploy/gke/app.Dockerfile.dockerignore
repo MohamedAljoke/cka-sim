@@ -1,0 +1,4 @@
+**/node_modules
+**/dist
+platform/bin
+lab/bin

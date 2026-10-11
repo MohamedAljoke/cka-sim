@@ -1,0 +1,110 @@
+# The warm pool: agent-sandbox keeps ${POOL_SIZE} labs with their cluster up; a SandboxClaim takes one.
+# ${IMAGES} is the platform's catalog/images.txt, comma-separated, for the lab to preload.
+apiVersion: extensions.agents.x-k8s.io/v1beta1
+kind: SandboxTemplate
+metadata:
+  name: lab
+spec:
+  # Only the app may reach a lab, and only its agent. Egress is agent-sandbox's default (the internet, but no
+  # private ranges or metadata address) plus the cluster's DNS, which lives in a private range. GKE answers DNS
+  # from node-local-dns on the pod's own node, falling back to kube-dns.
+  networkPolicy:
+    ingress:
+      - from:
+          - podSelector:
+              matchLabels:
+                app: cka-sim-app
+        ports:
+          - protocol: TCP
+            port: 7171
+    egress:
+      - to:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: kube-system
+            podSelector:
+              matchExpressions:
+                - key: k8s-app
+                  operator: In
+                  values: [kube-dns, node-local-dns]
+        ports:
+          - protocol: UDP
+            port: 53
+          - protocol: TCP
+            port: 53
+      - to:
+          - ipBlock:
+              cidr: 0.0.0.0/0
+              except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16]
+          - ipBlock:
+              cidr: ::/0
+              except: [fc00::/7, fe80::/10]
+  podTemplate:
+    metadata:
+      labels:
+        app: cka-sim-lab
+    spec:
+      nodeSelector:
+        pool: labs
+      tolerations:
+        - key: lab
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: cka-sim-lab
+              topologyKey: kubernetes.io/hostname
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      containers:
+        - name: lab
+          image: ${IMAGE}
+          securityContext:
+            privileged: true
+          env:
+            - name: CKA_SIM_IMAGES
+              value: "${IMAGES}"
+            - name: CKA_SIM_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cka-sim-agent
+                  key: token
+          resources:
+            requests:
+              cpu: "1"
+              memory: 4Gi
+          # The agent starts only once lab up is done, so this means the whole lab is ready.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 7171
+            periodSeconds: 5
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: docker
+              mountPath: /var/lib/docker
+            - name: modules
+              mountPath: /lib/modules
+              readOnly: true
+      volumes:
+        - name: docker
+          emptyDir: {}
+        - name: modules
+          hostPath:
+            path: /lib/modules
+---
+apiVersion: extensions.agents.x-k8s.io/v1beta1
+kind: SandboxWarmPool
+metadata:
+  name: labs
+spec:
+  replicas: ${POOL_SIZE}
+  # Warm labs are rebuilt when the template changes, not only new ones.
+  updateStrategy:
+    type: Recreate
+  sandboxTemplateRef:
+    name: lab

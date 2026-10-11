@@ -17,7 +17,7 @@ Checked on 2026-10-09.
   - [certland.net: CKA Certified Kubernetes Administrator guide 2026](https://certland.net/blog/cka-certified-kubernetes-administrator-guide-2026/)
   - [examcert.app: CKA study guide 2026](https://www.examcert.app/blog/cka-study-guide-2026/)
 - **Our own tasks:** the 8 tasks on branch `archive/v1` (`tasks/`) and `wl-scale` on `main`
-  (`apps/cka-sim/catalog/`).
+  (`apps/platform/catalog/`).
 - **Common practice topics:** what shows up again and again in killer.sh-style mock exams.
 
 ## The exam, in short
@@ -48,7 +48,7 @@ Things the exam environment does that our tasks should copy:
 
 ## How to read the lists
 
-- **Covered** shows where a task already exists: `main` means `apps/cka-sim/catalog/<id>`, and `v1`
+- **Covered** shows where a task already exists: `main` means `apps/platform/catalog/<id>`, and `v1`
   means `archive/v1:tasks/<domain>/<id>`.
 - **Needs** lists what the cluster must have beyond a plain 1-control-plane, 1-worker kind cluster.
   This decides when we can build the task.
@@ -324,7 +324,7 @@ The work of turning these questions into catalog tasks, kept here so it survives
 **Rules:**
 - Only questions the current cluster can host get built now.
 - Each task is proven with `go test ./catalog -run 'TestSelftest/^<id>$' -selftest -count=1 -v`.
-- Changes stay in `apps/cka-sim/catalog/` and `docs/`.
+- Changes stay in `apps/platform/catalog/` and `docs/`.
 - At the end, every question that wasn't built gets a `later: <reason>` note in its Covered cell.
 
 **What the cluster can do (probed 2026-10-09):**

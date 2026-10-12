@@ -1,0 +1,7 @@
+- name: solved
+- name: untouched
+  mentions: [selector, targetPort]
+- name: half
+  mentions: [targetPort]
+  script: |
+    kubectl -n shop patch service web --type=json -p '[{"op":"replace","path":"/spec/selector","value":{"app":"web"}}]'

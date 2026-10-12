@@ -206,14 +206,46 @@ start, so the GKE lab image should bake it in.
 
 Afterwards, ask whether to update EventCatalog (new service `mcp`, new flow).
 
+## Evals: `make eval`
+
+`check.sh` is the ground truth, so the reviewer can be scored, not just read. `make eval` (needs `make dev` and Claude
+logged in once in the panel; `TASK=<id>` for one task) runs `apps/platform/cmd/eval`. For each attempt in a task's
+`catalog/<id>/evals.yaml` it:
+
+1. starts the task through the platform, as the dev seed account;
+2. plays the attempt on the lab: `solved` runs `solution.sh`, `untouched` does nothing, any other runs its `script`;
+3. asks the platform's `/check` for the truth. An attempt that isn't what it says (a `solved` that doesn't earn
+   everything, a partial one that earns all or nothing) is reported as invalid, not scored;
+4. connects the assistant like the panel does, then runs `claude -p --json-schema …` as `candidate` on the base host,
+   so the review goes through the same managed settings, `apps/mcp` and platform as a real one;
+5. scores the review and tidies the task.
+
+| Mark | Passes when |
+|---|---|
+| verdict | the review's `passed` matches `earned == total` |
+| checked | it called `run_check` instead of guessing |
+| no-spoiler | it never called `explain` (nobody asked for the answer) |
+| named | every word in the attempt's `mentions` is in its mistakes, hint or summary; `-` without mentions |
+
+The table prints the score, and `apps/platform/eval-results/<time>.json` (gitignored) keeps each review's verdict and
+tool calls for comparing runs. A review whose `cka-sim` MCP server didn't connect is asked once more, then reported as
+an error and left out of the score: it measures the environment, not the reviewer.
+
+First run (3 tasks, 7 attempts): 25/25. What the marks don't catch yet:
+
+- **Hints that give it away.** On `wl-scale/untouched` the hint named `kubectl scale --replicas`. no-spoiler only
+  watches the `explain` tool; an LLM judge against `explain.md` is the next mark.
+- **Flaky MCP connects.** Locally, 2 of 7 reviews once timed out connecting to `host.docker.internal:7373`, and
+  150 straight probes later didn't. The retry covers it; the cause is still open.
+
 ## What we learn (resume angle)
 
 - **MCP:** a standalone server, tool schemas, Streamable HTTP, bearer auth for MCP clients.
 - **Provider abstraction:** one assistant panel over subscription CLIs and API-driven chat, designed around what
   each vendor's terms allow.
 - **Tool design for LLMs:** small, structured, read-only tools.
-- **Evals (next):** `check.sh` is ground truth. Record attempts (correct, half-done, wrong) and score the reviews
-  against it.
+- **Evals:** `make eval` records attempts (solved, untouched, half-done) and scores the reviews against `check.sh`,
+  the ground truth.
 - **Prompt-injection defense:** treating user-controlled cluster state as untrusted.
 
 Resume bullet: *"Built a standalone MCP server exposing a live Kubernetes lab to LLM clients behind a

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/eval"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
 )
@@ -58,6 +59,26 @@ func TestEveryImageIsPreloaded(t *testing.T) {
 			if image := m[1]; !strings.HasPrefix(image, "registry.k8s.io/") && !slices.Contains(preloaded, image) {
 				t.Errorf("%s runs %s, which images.txt doesn't preload", script, image)
 			}
+		}
+	}
+}
+
+func TestEveryEvalSetLoads(t *testing.T) {
+	all, err := tasks.Load(FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, err := eval.Load(FS, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(set) == 0 {
+		t.Error("no task has an evals.yaml")
+	}
+	sets, _ := fs.Glob(FS, "*/evals.yaml")
+	for _, file := range sets {
+		if _, ok := tasks.Find(all, path.Dir(file)); !ok {
+			t.Errorf("%s belongs to no task", file)
 		}
 	}
 }

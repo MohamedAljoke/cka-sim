@@ -104,13 +104,17 @@ func Selftest(ctx context.Context, fsys fs.FS, r Runner, t Task) error {
 	return nil
 }
 
-// run sends the catalog's lib.sh, then the script, so the helpers always come from this catalog and the
-// lab needs none of its own.
 func run(ctx context.Context, fsys fs.FS, r Runner, t Task, script string) (string, error) {
 	body, err := fs.ReadFile(fsys, path.Join(t.Dir, script))
 	if err != nil {
 		return "", err
 	}
+	return Attempt(ctx, fsys, r, t, body)
+}
+
+// Attempt sends the catalog's lib.sh, then the script, so the helpers always come from this catalog and the
+// lab needs none of its own.
+func Attempt(ctx context.Context, fsys fs.FS, r Runner, t Task, body []byte) (string, error) {
 	lib, err := fs.ReadFile(fsys, "lib.sh")
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return "", err

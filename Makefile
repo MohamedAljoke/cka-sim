@@ -11,7 +11,7 @@ TOKEN := CKA_SIM_AGENT_TOKEN="$$(cat $(HOME)/.config/cka-sim/agent-token)"
 AUTH_SECRET := $(HOME)/.config/cka-sim/auth-secret
 AUTH_ENV := CKA_SIM_AUTH_SECRET="$$(cat $(AUTH_SECRET))"
 
-.PHONY: help doctor up down shell serve web dev db auth mcp test boundaries selftest
+.PHONY: help doctor up down shell serve web dev db auth mcp test boundaries selftest eval
 
 help:
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
@@ -70,6 +70,9 @@ boundaries: ## fail if an app imports another app (only apps/go-shared is shared
 
 selftest: ## prove tasks are graded fairly (needs the lab); one task: make selftest TASK=<id>
 	cd $(PLATFORM) && $(TOKEN) go test ./catalog -run 'TestSelftest$(if $(TASK),/^$(TASK)$$)' -selftest -count=1 -v -timeout 30m
+
+eval: ## score the Assistant's reviews (needs make dev and Claude logged in once); one task: make eval TASK=<id>
+	cd $(PLATFORM) && $(TOKEN) go run ./cmd/eval $(if $(TASK),-task $(TASK))
 
 $(AUTH_SECRET):
 	@mkdir -p $(dir $@)

@@ -12,10 +12,12 @@ import (
 var baseDockerfile string
 
 // Prepare gives the cluster its exam layout: a base host to work from, and ssh access from it
-// to every node as candidate. An existing base is left alone, so open terminals stay open.
+// to every node as candidate. An existing base is kept, so open terminals stay open; one a Docker
+// restart stopped is started again, since unlike the kind nodes it has no restart policy.
 func (c *Cluster) Prepare(ctx context.Context) error {
 	if baseExists() {
-		return nil
+		_, err := docker(ctx, "", "start", Base)
+		return err
 	}
 	if err := buildImage(ctx, BaseImage, baseDockerfile); err != nil {
 		return err

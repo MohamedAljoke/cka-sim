@@ -24,6 +24,7 @@ type Desk struct {
 	now        func() time.Time
 	mu         sync.Mutex
 	touched    time.Time
+	practicing string
 	assistants map[*assistantShell]struct{}
 }
 
@@ -166,6 +167,26 @@ type typing struct {
 func (t typing) Write(keys []byte) (int, error) {
 	t.desk.touch(t.desk.now())
 	return t.Shell.Write(keys)
+}
+
+func (d *Desk) Practice(taskID string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.practicing = taskID
+}
+
+func (d *Desk) Leave(taskID string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.practicing == taskID {
+		d.practicing = ""
+	}
+}
+
+func (d *Desk) Practicing() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.practicing
 }
 
 func (d *Desk) touch(now time.Time) {

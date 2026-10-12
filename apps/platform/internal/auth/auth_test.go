@@ -73,6 +73,32 @@ func TestRequireLetsAValidSessionThroughWithItsClaims(t *testing.T) {
 	}
 }
 
+func TestABearerTokenIsReadWithItsScope(t *testing.T) {
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": "id-1", "email": "dev@cka-sim.local", "scope": ScopeAssistant, "exp": start.Add(time.Hour).Unix(),
+	}).SignedString(secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/tasks", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	claims, err := verifierAt(start).FromRequest(req)
+
+	if err != nil || claims.AccountID != "id-1" || claims.Scope != ScopeAssistant {
+		t.Errorf("claims = %+v, %v", claims, err)
+	}
+}
+
+func TestAnEmptyBearerIsNotLoggedIn(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/tasks", nil)
+	req.Header.Set("Authorization", "Bearer ")
+
+	if _, err := verifierAt(start).FromRequest(req); !errors.Is(err, ErrNotLoggedIn) {
+		t.Errorf("err = %v, want ErrNotLoggedIn", err)
+	}
+}
+
 var (
 	start  = time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
 	secret = []byte("test secret")

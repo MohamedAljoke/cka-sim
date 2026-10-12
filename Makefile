@@ -4,13 +4,14 @@ PLATFORM := apps/platform
 LAB := apps/lab
 WEB := apps/web
 AUTH := apps/auth
+MCP := apps/mcp
 # make up creates it; the lab and the server both get it.
 TOKEN := CKA_SIM_AGENT_TOKEN="$$(cat $(HOME)/.config/cka-sim/agent-token)"
 # Signs login sessions; the platform reads the same file to check them.
 AUTH_SECRET := $(HOME)/.config/cka-sim/auth-secret
 AUTH_ENV := CKA_SIM_AUTH_SECRET="$$(cat $(AUTH_SECRET))"
 
-.PHONY: help doctor up down shell serve web dev db auth test boundaries selftest
+.PHONY: help doctor up down shell serve web dev db auth mcp test boundaries selftest
 
 help:
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
@@ -34,11 +35,13 @@ web: $(WEB)/node_modules ## serve the page with hot reload on http://localhost:5
 	cd $(WEB) && npm run dev
 
 # The binaries run directly, not via go run, so Ctrl-C reaches them and the trap can wait for them.
-dev: up db $(WEB)/node_modules $(AUTH_SECRET) ## lab and Postgres up, then auth, the backend and the page together
+dev: up db $(WEB)/node_modules $(AUTH_SECRET) ## lab and Postgres up, then auth, the backend, MCP and the page together
 	@cd $(PLATFORM) && go build -o bin/server ./cmd/server
 	@cd $(AUTH) && go build -o bin/server ./cmd/server
+	@cd $(MCP) && go build -o bin/server ./cmd/server
 	@$(TOKEN) $(AUTH_ENV) $(PLATFORM)/bin/server & server=$$!; $(AUTH_ENV) $(AUTH)/bin/server & auth=$$!; \
-	  trap 'kill $$server $$auth 2>/dev/null; wait $$server $$auth' INT TERM EXIT; cd $(WEB) && npm run dev
+	  $(MCP)/bin/server & mcp=$$!; \
+	  trap 'kill $$server $$auth $$mcp 2>/dev/null; wait $$server $$auth $$mcp' INT TERM EXIT; cd $(WEB) && npm run dev
 
 db: ## start Postgres, then apply migrations and seeds
 	docker compose up -d --wait postgres
@@ -47,11 +50,15 @@ db: ## start Postgres, then apply migrations and seeds
 auth: $(AUTH_SECRET) ## run the auth server on 127.0.0.1:7272 (make db first)
 	cd $(AUTH) && $(AUTH_ENV) go run ./cmd/server
 
+mcp: ## run the MCP server for the Assistant on 127.0.0.1:7373 (the lab reaches it as host.docker.internal)
+	cd $(MCP) && go run ./cmd/server
+
 test: boundaries ## vet and test the Go code
 	cd apps/go-shared && go vet ./... && go test ./...
 	cd $(LAB) && go vet ./... && go test ./...
 	cd $(PLATFORM) && go vet ./... && go test ./...
 	cd $(AUTH) && go vet ./... && go test ./...
+	cd $(MCP) && go vet ./... && go test ./...
 
 boundaries: ## fail if an app imports another app (only apps/go-shared is shared)
 	@bad=0; for mod in apps/*/go.mod; do \

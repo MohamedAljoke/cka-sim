@@ -38,6 +38,8 @@ type settings struct {
 	LabURL     string        `key:"CKA_SIM_LAB_URL" default:"http://127.0.0.1:7171"`
 	Pool       string        `key:"CKA_SIM_POOL" default:"labs"`
 	LabIdle    time.Duration `key:"CKA_SIM_LAB_IDLE" default:"30m"`
+	AuthURL    string        `key:"CKA_SIM_AUTH_URL" default:"http://127.0.0.1:7272"`
+	MCPURL     string        `key:"CKA_SIM_MCP_URL" default:"http://host.docker.internal:7373/mcp"`
 }
 
 func main() {
@@ -78,6 +80,8 @@ func run(ctx context.Context) error {
 		Files:      catalog.FS,
 		Exams:      true,
 		Assistants: []assistant.Provider{assistant.Claude{}},
+		Tokens:     assistant.AuthTokens{URL: cfg.AuthURL},
+		MCPURL:     cfg.MCPURL,
 	}
 
 	sessions := auth.Verifier{Secret: []byte(cfg.AuthSecret), Now: time.Now}

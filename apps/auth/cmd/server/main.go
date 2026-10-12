@@ -24,6 +24,7 @@ const (
 	accessTTL    = 15 * time.Minute
 	refreshTTL   = 30 * 24 * time.Hour
 	refreshGrace = 30 * time.Second
+	assistantTTL = 2 * time.Hour
 )
 
 type settings struct {
@@ -61,7 +62,7 @@ func run(ctx context.Context) error {
 	signer := session.Signer{Secret: secret, TTL: accessTTL, Now: time.Now}
 	sessions := session.Verifier{Secret: secret, Now: time.Now}
 	tokens := refresh.Postgres{Pool: pool, TTL: refreshTTL, Grace: refreshGrace, Now: time.Now}
-	handler := server.New(accounts.Postgres{Pool: pool}, signer, sessions, server.Refresh{Tokens: tokens, TTL: refreshTTL})
+	handler := server.New(accounts.Postgres{Pool: pool}, signer, sessions, server.Refresh{Tokens: tokens, TTL: refreshTTL}, assistantTTL)
 	srv := &http.Server{Handler: handler}
 	go func() {
 		<-ctx.Done()

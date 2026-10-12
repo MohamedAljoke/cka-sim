@@ -19,6 +19,8 @@ type Practice struct {
 	Files      fs.FS
 	Exams      bool
 	Assistants []assistant.Provider
+	Tokens     assistant.Tokens
+	MCPURL     string
 }
 
 func New(desks *desk.Desks, practice Practice) http.Handler {
@@ -27,7 +29,8 @@ func New(desks *desk.Desks, practice Practice) http.Handler {
 		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
 	}))
 	mux := http.NewServeMux()
-	handle := func(pattern string, h httpx.Handler) { mux.HandleFunc(pattern, problems.Handle(h)) }
+	handle := func(pattern string, h httpx.Handler) { mux.HandleFunc(pattern, problems.Handle(sessionOnly(h))) }
+	assist := func(pattern string, h httpx.Handler) { mux.HandleFunc(pattern, problems.Handle(a.assistantToo(h))) }
 	handle("GET /ws/terminal", func(w http.ResponseWriter, r *http.Request) error {
 		d, err := a.desk(r)
 		if err != nil {
@@ -40,14 +43,16 @@ func New(desks *desk.Desks, practice Practice) http.Handler {
 	})
 	handle("GET /ws/assistant", a.serveAssistant)
 	handle("POST /api/assistant", a.startAssistant)
+	assist("GET /api/assistant/task", a.currentTask)
+	assist("POST /api/assistant/inspect", a.inspect)
 	handle("GET /api/lab", a.getLab)
 	handle("POST /api/lab", a.startLab)
 	handle("DELETE /api/lab", a.endLab)
-	handle("GET /api/tasks", a.listTasks)
-	handle("GET /api/tasks/{id}/question", a.question)
+	assist("GET /api/tasks", a.listTasks)
+	assist("GET /api/tasks/{id}/question", a.question)
 	handle("POST /api/tasks/{id}/start", a.startTask)
-	handle("POST /api/tasks/{id}/check", a.checkTask)
-	handle("GET /api/tasks/{id}/solution", a.solution)
+	assist("POST /api/tasks/{id}/check", a.checkTask)
+	assist("GET /api/tasks/{id}/solution", a.solution)
 	handle("POST /api/tasks/{id}/tidy", a.tidyTask)
 	if practice.Exams {
 		handle("GET /api/exam", a.getExam)

@@ -7,6 +7,13 @@ RUN apt-get update \
  && userdel --remove ubuntu \
  && useradd --create-home --shell /bin/bash candidate
 
+# For the page's Assistant panel; the platform locks it down with /etc/claude-code when it connects.
+USER candidate
+WORKDIR /tmp
+RUN curl -fsSL https://claude.ai/install.sh | bash -s stable
+USER root
+WORKDIR /
+
 # The nodes are recreated by every up, so their host keys change; never stop on that.
 COPY <<'EOF' /etc/ssh/ssh_config.d/cka.conf
 Host *

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -13,7 +14,10 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 )
 
-const CookieName = "__Host-cka_sim_session"
+const (
+	CookieName     = "__Host-cka_sim_session"
+	ScopeAssistant = "assistant"
+)
 
 var (
 	ErrInvalid     = errors.New("session token is invalid or expired")
@@ -23,6 +27,7 @@ var (
 type Claims struct {
 	AccountID string
 	Email     string
+	Scope     string
 	ExpiresAt time.Time
 }
 
@@ -44,23 +49,32 @@ func (v Verifier) Verify(token string) (Claims, error) {
 	mc, _ := parsed.Claims.(jwt.MapClaims)
 	sub, _ := mc["sub"].(string)
 	email, _ := mc["email"].(string)
+	scope, _ := mc["scope"].(string)
 	exp, err := mc.GetExpirationTime()
 	if sub == "" || email == "" || err != nil {
 		return Claims{}, fmt.Errorf("%w: missing claims", ErrInvalid)
 	}
-	return Claims{AccountID: sub, Email: email, ExpiresAt: exp.Time}, nil
+	return Claims{AccountID: sub, Email: email, Scope: scope, ExpiresAt: exp.Time}, nil
 }
 
 func (v Verifier) FromRequest(r *http.Request) (Claims, error) {
-	cookie, err := r.Cookie(CookieName)
-	if err != nil {
+	token, ok := bearer(r)
+	if cookie, err := r.Cookie(CookieName); err == nil {
+		token, ok = cookie.Value, true
+	}
+	if !ok {
 		return Claims{}, ErrNotLoggedIn
 	}
-	claims, err := v.Verify(cookie.Value)
+	claims, err := v.Verify(token)
 	if err != nil {
 		return Claims{}, ErrNotLoggedIn
 	}
 	return claims, nil
+}
+
+func bearer(r *http.Request) (string, bool) {
+	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	return token, ok && token != ""
 }
 
 func Require(v Verifier, next http.Handler) http.Handler {

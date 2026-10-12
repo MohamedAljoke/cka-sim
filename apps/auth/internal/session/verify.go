@@ -22,6 +22,7 @@ var (
 type Claims struct {
 	AccountID string
 	Email     string
+	Scope     string
 	ExpiresAt time.Time
 }
 
@@ -43,11 +44,12 @@ func (v Verifier) Verify(token string) (Claims, error) {
 	mc, _ := parsed.Claims.(jwt.MapClaims)
 	sub, _ := mc["sub"].(string)
 	email, _ := mc["email"].(string)
+	scope, _ := mc["scope"].(string)
 	exp, err := mc.GetExpirationTime()
 	if sub == "" || email == "" || err != nil {
 		return Claims{}, fmt.Errorf("%w: missing claims", ErrInvalid)
 	}
-	return Claims{AccountID: sub, Email: email, ExpiresAt: exp.Time}, nil
+	return Claims{AccountID: sub, Email: email, Scope: scope, ExpiresAt: exp.Time}, nil
 }
 
 func (v Verifier) FromRequest(r *http.Request) (Claims, error) {

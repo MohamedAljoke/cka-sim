@@ -61,6 +61,7 @@ func (a *api) startTask(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	defer d.Unlock()
+	d.Practice(t.ID)
 	// A cancelled request stops the script; setup is idempotent, so the next start rebuilds it.
 	ctx := r.Context()
 	if err := tasks.Heal(ctx, a.Files, d.Lab, a.Tasks); err != nil {
@@ -117,6 +118,7 @@ func (a *api) tidyTask(w http.ResponseWriter, r *http.Request) error {
 	if err := notDuringExam(d); err != nil {
 		return err
 	}
+	d.Leave(t.ID)
 	if d.Lab.Status().State != sandbox.Ready {
 		w.WriteHeader(http.StatusNoContent)
 		return nil

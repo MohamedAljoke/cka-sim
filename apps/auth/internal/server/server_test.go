@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -69,7 +70,7 @@ func TestLoginRejectsABodyThatIsNotJSON(t *testing.T) {
 }
 
 func TestLoginFailsWhenTheStoreFails(t *testing.T) {
-	srv := New(fakeAccounts{err: errors.New("db down")}, signer(), verifier(), Refresh{Tokens: newFakeRefresh(), TTL: refreshTTL})
+	srv := New(fakeAccounts{err: errors.New("db down")}, signer(), verifier(), Refresh{Tokens: newFakeRefresh(), TTL: refreshTTL}, time.Hour)
 
 	res, body := call(t, srv, http.MethodPost, "/api/auth/login", `{"email":"dev@cka-sim.local","password":"cka-sim-dev"}`, nil)
 
@@ -100,6 +101,58 @@ func TestMeNeedsAValidCookie(t *testing.T) {
 		if res.StatusCode != http.StatusUnauthorized {
 			t.Errorf("%s: status %d, want 401", name, res.StatusCode)
 		}
+	}
+}
+
+func TestAssistantTokenIsScopedToTheSameAccount(t *testing.T) {
+	srv, _ := newServer(t)
+	login := logIn(t, srv)
+
+	res, body := call(t, srv, http.MethodPost, "/api/auth/assistant-token", "", cookieFrom(t, login, session.CookieName))
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d: %s", res.StatusCode, body)
+	}
+	var reply struct {
+		Token     string
+		ExpiresAt time.Time
+	}
+	if err := json.Unmarshal([]byte(body), &reply); err != nil {
+		t.Fatal(err)
+	}
+	claims, err := verifier().Verify(reply.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims.AccountID != "id-1" || claims.Scope != ScopeAssistant || reply.ExpiresAt.IsZero() {
+		t.Errorf("claims = %+v, expires %v", claims, reply.ExpiresAt)
+	}
+	if len(res.Cookies()) != 0 {
+		t.Error("issuing an assistant token changed the session cookies")
+	}
+}
+
+func TestAssistantTokenNeedsASession(t *testing.T) {
+	srv, _ := newServer(t)
+
+	res, _ := call(t, srv, http.MethodPost, "/api/auth/assistant-token", "", nil)
+
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("status %d, want 401", res.StatusCode)
+	}
+}
+
+func TestAnAssistantTokenCannotIssueAnother(t *testing.T) {
+	srv, _ := newServer(t)
+	scoped, err := signer().IssueScoped(accounts.Account{ID: "id-1", Email: "dev@cka-sim.local"}, ScopeAssistant, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, body := call(t, srv, http.MethodPost, "/api/auth/assistant-token", "", &http.Cookie{Name: session.CookieName, Value: scoped})
+
+	if res.StatusCode != http.StatusForbidden || !strings.Contains(body, "scoped_token") {
+		t.Errorf("status %d: %s", res.StatusCode, body)
 	}
 }
 
@@ -141,7 +194,7 @@ func TestRefreshWithoutAValidTokenClearsTheSession(t *testing.T) {
 func TestRefreshFailsWhenTheStoreFails(t *testing.T) {
 	tokens := newFakeRefresh()
 	tokens.err = errors.New("db down")
-	srv := New(fakeAccounts{}, signer(), verifier(), Refresh{Tokens: tokens, TTL: refreshTTL})
+	srv := New(fakeAccounts{}, signer(), verifier(), Refresh{Tokens: tokens, TTL: refreshTTL}, time.Hour)
 
 	res, body := call(t, srv, http.MethodPost, "/api/auth/refresh", "", &http.Cookie{Name: refreshCookieName, Value: "r"})
 
@@ -243,7 +296,7 @@ func newServer(t *testing.T) (http.Handler, *fakeRefresh) {
 	}
 	dev := accounts.Account{ID: "id-1", Email: "dev@cka-sim.local", PasswordHash: hash}
 	tokens := newFakeRefresh()
-	srv := New(fakeAccounts{byEmail: map[string]accounts.Account{dev.Email: dev}}, signer(), verifier(), Refresh{Tokens: tokens, TTL: refreshTTL})
+	srv := New(fakeAccounts{byEmail: map[string]accounts.Account{dev.Email: dev}}, signer(), verifier(), Refresh{Tokens: tokens, TTL: refreshTTL}, time.Hour)
 	return srv, tokens
 }
 

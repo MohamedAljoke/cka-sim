@@ -330,7 +330,10 @@ func newAPIWithShells(t *testing.T, r *fakeRunner, shells func() *fakeOpener) (*
 		}
 		return &desk.Desk{Lab: lab, Exam: session}, nil
 	}, time.Now)
-	return serve(t, desks, Practice{Tasks: all, Files: files, Exams: true, Assistants: []assistant.Provider{fakeAssistant{}}}), desks
+	return serve(t, desks, Practice{Tasks: all, Files: files, Exams: true, Assistants: []assistant.Provider{fakeAssistant{}},
+		Tokens: fakeTokens{},
+		MCPURL: testMCPURL,
+	}), desks
 }
 
 func readyDesks(t *testing.T, r *fakeRunner, shells *fakeOpener) *desk.Desks {
@@ -353,7 +356,10 @@ func serve(t *testing.T, desks *desk.Desks, practice Practice) *httptest.Server 
 	return srv
 }
 
-const accountHeader = "X-Test-Account"
+const (
+	accountHeader = "X-Test-Account"
+	scopeHeader   = "X-Test-Scope"
+)
 
 func asAccount(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -361,7 +367,8 @@ func asAccount(next http.Handler) http.Handler {
 		if id == "" {
 			id = "a"
 		}
-		next.ServeHTTP(w, r.WithContext(auth.WithClaims(r.Context(), auth.Claims{AccountID: id})))
+		claims := auth.Claims{AccountID: id, Scope: r.Header.Get(scopeHeader)}
+		next.ServeHTTP(w, r.WithContext(auth.WithClaims(r.Context(), claims)))
 	})
 }
 

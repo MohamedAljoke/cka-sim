@@ -34,14 +34,15 @@ type Refresh struct {
 const refreshCookieName = "__Secure-cka_sim_refresh"
 
 type handlers struct {
-	accounts accountFinder
-	signer   session.Signer
-	sessions session.Verifier
-	refresh  Refresh
+	accounts     accountFinder
+	signer       session.Signer
+	sessions     session.Verifier
+	refresh      Refresh
+	assistantTTL time.Duration
 }
 
-func New(accounts accountFinder, signer session.Signer, sessions session.Verifier, refresh Refresh) http.Handler {
-	a := &handlers{accounts: accounts, signer: signer, sessions: sessions, refresh: refresh}
+func New(accounts accountFinder, signer session.Signer, sessions session.Verifier, refresh Refresh, assistantTTL time.Duration) http.Handler {
+	a := &handlers{accounts: accounts, signer: signer, sessions: sessions, refresh: refresh, assistantTTL: assistantTTL}
 	problems := httpx.NewProblems(httpx.WithReporter(func(r *http.Request, err error) {
 		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
 	}))
@@ -50,6 +51,7 @@ func New(accounts accountFinder, signer session.Signer, sessions session.Verifie
 	mux.HandleFunc("POST /api/auth/refresh", problems.Handle(a.renew))
 	mux.HandleFunc("GET /api/auth/me", problems.Handle(a.me))
 	mux.HandleFunc("POST /api/auth/logout", problems.Handle(a.logout))
+	mux.HandleFunc("POST /api/auth/assistant-token", problems.Handle(a.assistantToken))
 	return http.NewCrossOriginProtection().Handler(noStore(mux))
 }
 
@@ -128,6 +130,30 @@ func (a *handlers) me(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, user{ID: claims.AccountID, Email: claims.Email})
+}
+
+const ScopeAssistant = "assistant"
+
+var errScopedToken = domainerr.Forbidden("scoped_token", "a scoped token can't issue tokens")
+
+type scopedToken struct {
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+func (a *handlers) assistantToken(w http.ResponseWriter, r *http.Request) error {
+	claims, err := a.sessions.FromRequest(r)
+	if err != nil {
+		return err
+	}
+	if claims.Scope != "" {
+		return errScopedToken
+	}
+	token, err := a.signer.IssueScoped(accounts.Account{ID: claims.AccountID, Email: claims.Email}, ScopeAssistant, a.assistantTTL)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, scopedToken{Token: token, ExpiresAt: a.signer.Now().Add(a.assistantTTL)})
 }
 
 // The access token stays valid until it expires, at most one access TTL.

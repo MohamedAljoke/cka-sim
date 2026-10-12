@@ -4,5 +4,6 @@ use (
 	./apps/auth
 	./apps/go-shared
 	./apps/lab
+	./apps/mcp
 	./apps/platform
 )

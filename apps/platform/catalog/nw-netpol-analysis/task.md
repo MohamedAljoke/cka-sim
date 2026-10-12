@@ -9,8 +9,8 @@ weight: 4
 ## Context
 
 Namespace `nw-netpol-analysis` runs Pods labelled `app=web`, `app=api` and `app=db`, and
-NetworkPolicies `default-deny`, `api-from-web` and `db-from-api`. Read them carefully. This
-cluster's CNI doesn't enforce them, so testing won't help: reason it out.
+NetworkPolicies `default-deny`, `api-from-web` and `db-from-api`. Read them carefully and reason it out, as
+you would on paper. The Pods run no servers, so testing won't help.
 
 ## Task
 

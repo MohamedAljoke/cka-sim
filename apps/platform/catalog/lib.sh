@@ -26,6 +26,12 @@ wait_for() {
   done
 }
 
+# connects <namespace> <pod> <host> <port>: whether the Pod opens a TCP connection within 2 seconds.
+connects() { kubectl -n "$1" exec "$2" -- nc -z -w 2 "$3" "$4"; }
+
+# pod_ip <namespace> <pod>
+pod_ip() { kubectl -n "$1" get pod "$2" -o jsonpath='{.status.podIP}'; }
+
 # A pod on a node whose kubelet another task broke never confirms termination and would hold
 # the namespace in Terminating forever, so pods are force-deleted first. Their controllers go
 # before them, or they would recreate pods while the namespace empties (halves the wait).

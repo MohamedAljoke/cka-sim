@@ -19,10 +19,15 @@ const (
 	helmImage          = "alpine/helm:3.22.0"
 	metricsServerImage = "registry.k8s.io/metrics-server/metrics-server:v0.9.0"
 	metricsServerPath  = "/etc/cka-sim/addons/metrics-server.yaml"
+	kubeRouterImage    = "cloudnativelabs/kube-router:v2.11.1"
+	kubeRouterPath     = "/etc/cka-sim/addons/kube-router.yaml"
 )
 
 //go:embed metrics-server.yaml
 var metricsServerManifest string
+
+//go:embed kube-router.yaml
+var kubeRouterManifest string
 
 //go:embed registry.Dockerfile
 var registryDockerfile string
@@ -43,21 +48,22 @@ const registryHosts = `server = "http://` + Registry + `:5000"
 
 func (c *Cluster) InstallAddons(ctx context.Context) error {
 	return errors.Join(
-		c.installMetricsServer(ctx),
+		c.applyAddon(ctx, metricsServerImage, metricsServerManifest, metricsServerPath),
+		c.applyAddon(ctx, kubeRouterImage, kubeRouterManifest, kubeRouterPath),
 		installHelm(ctx),
 		startRegistry(ctx),
 		startAddon(ctx, Charts, chartsImage, chartsDockerfile),
 	)
 }
 
-func (c *Cluster) installMetricsServer(ctx context.Context) error {
-	if err := c.LoadImages(ctx, []string{metricsServerImage}); err != nil {
+func (c *Cluster) applyAddon(ctx context.Context, image, manifest, path string) error {
+	if err := c.LoadImages(ctx, []string{image}); err != nil {
 		return err
 	}
-	if _, err := docker(ctx, metricsServerManifest, "exec", "-i", ControlPlaneNode, "install", "-D", "-m", "644", "/dev/stdin", metricsServerPath); err != nil {
+	if _, err := docker(ctx, manifest, "exec", "-i", ControlPlaneNode, "install", "-D", "-m", "644", "/dev/stdin", path); err != nil {
 		return err
 	}
-	_, err := docker(ctx, "", "exec", ControlPlaneNode, "kubectl", "--kubeconfig", "/etc/kubernetes/admin.conf", "apply", "-f", metricsServerPath)
+	_, err := docker(ctx, "", "exec", ControlPlaneNode, "kubectl", "--kubeconfig", "/etc/kubernetes/admin.conf", "apply", "-f", path)
 	return err
 }
 

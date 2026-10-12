@@ -255,13 +255,13 @@ Things the exam environment does that our tasks should copy:
 
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
-| N3 | Allow ingress to `app=api` only from one label in the same namespace and from any Pod in another namespace, on one port. | ★★ | policy-enforcing CNI | v1 `nw-netpol` · later: kindnet does not enforce NetworkPolicy |
-| N4 | Default-deny all ingress and egress in a namespace, then allow egress to DNS (UDP/TCP 53) only. | ★★ | policy-enforcing CNI | |
-| N5 | Allow egress from a backend to a database Pod on one port and to nothing else. | ★★ | policy-enforcing CNI | |
-| N6 | Several NetworkPolicies are given. Pick the one that meets the requirement with least privilege and apply it. | ★★ | policy-enforcing CNI | |
-| N7 | Fix a policy whose `namespaceSelector` and `podSelector` are in separate list items (OR) when they should be one item (AND). | ★★ | policy-enforcing CNI | |
-| N51 | Allow ingress only from an IP range with `ipBlock` and `except`. | ★★ | policy-enforcing CNI | |
-| N52 | Allow a range of ports with `endPort`, and a container port by its name. | ★★ | policy-enforcing CNI | |
+| N3 | Allow ingress to `app=api` only from one label in the same namespace and from any Pod in another namespace, on one port. | ★★ | policy-enforcing CNI || main `nw-netpol-ingress` |
+| N4 | Default-deny all ingress and egress in a namespace, then allow egress to DNS (UDP/TCP 53) only. | ★★ | policy-enforcing CNI || main `nw-netpol-lockdown` |
+| N5 | Allow egress from a backend to a database Pod on one port and to nothing else. | ★★ | policy-enforcing CNI || main `nw-netpol-egress` |
+| N6 | Several NetworkPolicies are given. Pick the one that meets the requirement with least privilege and apply it. | ★★ | policy-enforcing CNI || main `nw-netpol-pick` |
+| N7 | Fix a policy whose `namespaceSelector` and `podSelector` are in separate list items (OR) when they should be one item (AND). | ★★ | policy-enforcing CNI || main `nw-netpol-and-or` |
+| N51 | Allow ingress only from an IP range with `ipBlock` and `except`. | ★★ | policy-enforcing CNI || main `nw-netpol-ipblock` |
+| N52 | Allow a range of ports with `endPort`, and a container port by its name. | ★★ | policy-enforcing CNI || main `nw-netpol-ports` |
 | N53 | Given a set of NetworkPolicies, write which of a list of connections are allowed. Policies add up: any policy that allows a connection allows it. | ★★ | || main `nw-netpol-analysis` |
 
 ### Service types and endpoints
@@ -440,7 +440,7 @@ Things the exam environment does that our tasks should copy:
 |---|---|---|---|
 | Troubleshooting | 30% | 38 | 36 (main) |
 | Cluster Architecture | 25% | 53 | 45 (main) |
-| Services & Networking | 20% | 53 | 29 (main) |
+| Services & Networking | 20% | 53 | 36 (main) |
 | Workloads & Scheduling | 15% | 46 | 45 (main) |
 | Storage | 10% | 25 | 22 (main) |
 
@@ -457,11 +457,12 @@ The work of turning these questions into catalog tasks, kept here so it survives
 **What the cluster can do (probed 2026-10-09):**
 - kind v1.37 with 1 control plane and 2 workers, kindnet, CoreDNS, kube-proxy, and the `standard` local-path StorageClass (`WaitForFirstConsumer`, no expansion).
 - Root on every node, workers included, has an admin kubeconfig, so a task can be hosted on a worker.
-- kindnet does **not** enforce NetworkPolicy, so N3–N7 wait.
+- kindnet's own NetworkPolicy engine needs `CONFIG_NFT_QUEUE`, which the WSL2 kernel lacks (its log says "initial nftables sync failed"). The lab adds kube-router in firewall-only mode instead, and that enforces NetworkPolicy (probed 2026-10-12: ingress, egress, AND/OR selectors, named ports, `endPort`, `ipBlock` with `except`, across nodes).
 - The nodes have no `etcdctl`/`etcdutl`. `etcd_tools` in `catalog/lib.sh` copies them out of the etcd image.
 - `catalog/lib.sh` gives answer files `COURSE=/opt/course/<task id>`, and `fresh_course` resets that folder.
 - Lab add-ons (`apps/lab/internal/cluster/addons.go`, installed by every `lab up`):
   - metrics-server, with `--kubelet-insecure-tls`. Its manifest is at `/etc/cka-sim/addons/metrics-server.yaml` on the control plane.
+  - kube-router v2.11 as a DaemonSet in `kube-system`, with only its firewall on (`/etc/cka-sim/addons/kube-router.yaml`). Tasks test policies with `connects` and `pod_ip` from `lib.sh`.
   - helm 3 on every node.
   - Chart repo `http://cka-sim-charts`: chart `web` 1.0.0 (nginx:1.26-alpine) and 1.1.0 (nginx:1.27-alpine, `replicaCount: 2`).
   - Registry `cka-sim-registry:5000`, login `candidate`/`cka-registry`, with `team/web:1.0` and `team/web:1.1`.
@@ -504,6 +505,7 @@ The work of turning these questions into catalog tasks, kept here so it survives
 | 29 | RBAC in depth and the API | A44–A51 | Done. |
 | 30 | CRDs and Pod security | A52, A53, W44, W45, W46, N53 | Done; W44 after the lab registry. |
 | 31 | Private registry | T27 | Done. |
+| 32 | NetworkPolicy | N3–N7, N51, N52 | Done (after kube-router). |
 
 **Rewrites so the answer can be checked:**
 - T10 becomes `component: static-pod|deployment|daemonset|systemd` lines.
@@ -516,7 +518,6 @@ The work of turning these questions into catalog tasks, kept here so it survives
 | Questions | Waiting for |
 |---|---|
 | W12 | the VPA CRDs |
-| N3–N7, N51, N52 | a CNI that enforces NetworkPolicy |
 | N13–N18, N41–N50, T24 | Gateway API or an ingress controller |
 | A7, A8, A13, A14 | a spare node, kubeadm packages, or an HA control plane |
 | A6, A22, T3 | a safe way to do them; they would damage the shared kind/docker host |
@@ -530,7 +531,7 @@ These are grouped by how many questions each one unblocks:
 
 1. ~~**2+ worker nodes**~~: done; the cluster has 2 workers.
 2. ~~**metrics-server**~~: done; `lab up` installs it.
-3. **NetworkPolicy-enforcing CNI** (Calico or Cilium instead of kindnet): N3–N7, N51, N52.
+3. ~~**NetworkPolicy enforcement**~~: done; `lab up` installs kube-router (firewall only) next to kindnet.
 4. **Gateway API CRDs + a controller** (e.g. Envoy Gateway or NGINX Gateway Fabric): N13–N16, N46–N50, T24.
 5. **Ingress controller:** N17, N18, N41–N45.
 6. ~~**helm and a local chart repo**~~: done; every node has helm, and `http://cka-sim-charts` serves chart `web`.

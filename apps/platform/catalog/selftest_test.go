@@ -29,9 +29,10 @@ func TestSelftest(t *testing.T) {
 
 	for _, task := range all {
 		t.Run(task.ID, func(t *testing.T) {
-			// A failed selftest would otherwise leave a broken node behind for the next task.
+			// A failed selftest would otherwise leave a broken node behind for the next task, and every
+			// task's leftover Pods together would fill the workers' Pod limit.
 			t.Cleanup(func() {
-				if err := tasks.Heal(context.Background(), FS, lab, []tasks.Task{task}); err != nil {
+				if err := tasks.Tidy(context.Background(), FS, lab, []tasks.Task{task}); err != nil {
 					t.Error(err)
 				}
 			})

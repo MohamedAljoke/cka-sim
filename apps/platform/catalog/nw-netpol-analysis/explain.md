@@ -19,4 +19,5 @@ NetworkPolicies follow a few rules, and every question here hangs on one of them
 | 6 | api → db:3306 | rule 4: only 5432 is listed |
 
 Egress isn't restricted here: no policy lists `Egress` in `policyTypes`. Remember that policies are
-only as real as the CNI. kindnet ignores them, while Calico and Cilium enforce them.
+only as real as the network plugin. This lab enforces them with kube-router, and Calico and Cilium
+do too, but a plugin that ignores them (like plain flannel) lets everything through.

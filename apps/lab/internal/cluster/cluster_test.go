@@ -65,6 +65,14 @@ func TestMetricsServerRunsThePreloadedImageWithoutKubeletCerts(t *testing.T) {
 	}
 }
 
+func TestKubeRouterOnlyEnforcesNetworkPolicy(t *testing.T) {
+	for _, want := range []string{"image: " + kubeRouterImage + "\n", "- --run-firewall=true\n", "- --run-router=false\n", "- --run-service-proxy=false\n"} {
+		if !strings.Contains(kubeRouterManifest, want) {
+			t.Errorf("kube-router.yaml lacks %q", want)
+		}
+	}
+}
+
 func parse(t *testing.T, raw string) v1alpha4.Cluster {
 	t.Helper()
 	var config v1alpha4.Cluster

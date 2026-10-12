@@ -1,4 +1,4 @@
-import { endExam, flagTask, getExam, listTasks, taskQuestion, taskSolution, type ExamState, type ExamTask, type Task } from './api'
+import { endExam, flagTask, getExam, listTasks, taskQuestion, taskSolution, type ExamState, type ExamTask, type Stage, type Task } from './api'
 import type { App } from './app'
 import { checkList, chips, el, hostLine, markdown, message } from './ui'
 
@@ -20,24 +20,35 @@ export async function showExam(app: App) {
   else showRunning(app, state, catalog)
 }
 
-const settingUp = (exam: ExamState['exam']) => exam.tasks.some((t) => t.setup === 'preparing')
+const stageNames: [Stage, string][] = [
+  ['lab', 'Starting the lab'],
+  ['heal', 'Cleaning up the cluster'],
+  ['setup', 'Setting up the tasks'],
+  ['cluster', 'Setting up the cluster-wide task'],
+]
 
 function showPreparing(app: App, state: ExamState, catalog: Map<string, Task>) {
   app.split(true)
+  const stages = el('ol', 'stage-list')
   const status = el('p', 'status')
   const list = el('ol', 'setup-list')
-  app.pane.replaceChildren(el('h2', '', 'Preparing your exam'), status, list)
+  app.pane.replaceChildren(el('h2', '', 'Preparing your exam'), stages, status, list)
   let poll: number | undefined
   app.onLeave(() => clearTimeout(poll))
 
   const draw = (state: ExamState) => {
     const tasks = state.exam.tasks
+    const clusterWide = (t: ExamTask) => catalog.get(t.id)!.order === 'last'
+    const shown = stageNames.filter(([stage]) => stage !== 'cluster' || tasks.some(clusterWide))
+    const at = Math.max(0, shown.findIndex(([stage]) => stage === state.exam.stage))
+    stages.replaceChildren(...shown.map(([, name], i) => el('li', `stage ${i < at ? 'done' : i === at ? 'current' : ''}`, name)))
     const done = tasks.filter((t) => t.setup !== 'preparing').length
-    status.textContent = `${done} of ${tasks.length} tasks set up. The clock starts once the quick ones are ready; the slow ones finish while you read.`
+    status.textContent = `${done} of ${tasks.length} tasks set up. The clock starts when every task is ready.`
     list.replaceChildren(
       ...tasks.map((t, i) => {
         const row = el('li', `setup-row ${t.setup}`)
-        const label = { preparing: 'setting up…', ready: 'ready', failed: 'failed' }[t.setup]
+        const waiting = t.setup === 'preparing' && clusterWide(t) && state.exam.stage !== 'cluster'
+        const label = waiting ? 'waits for the others' : { preparing: 'setting up…', ready: 'ready', failed: 'failed' }[t.setup]
         row.append(el('span', 'number', number(i)), el('span', 'row-title', catalog.get(t.id)!.title), el('span', 'setup-state', label))
         return row
       }),
@@ -69,8 +80,8 @@ function showRunning(app: App, state: ExamState, catalog: Map<string, Task>) {
   const question = el('div', 'exam-question')
   app.pane.replaceChildren(bar, pills, question)
 
-  let offset = Date.parse(state.now) - Date.now()
-  let deadline = Date.parse(exam.deadline!)
+  const offset = Date.parse(state.now) - Date.now()
+  const deadline = Date.parse(exam.deadline!)
   const tick = () => {
     const left = deadline - (Date.now() + offset)
     timer.textContent = left >= 0 ? clock(left) : `Time's up +${clock(-left)}`
@@ -78,27 +89,16 @@ function showRunning(app: App, state: ExamState, catalog: Map<string, Task>) {
   }
   tick()
   const ticker = window.setInterval(tick, 1000)
-  let poll: number | undefined
-  app.onLeave(() => {
-    clearInterval(ticker)
-    clearTimeout(poll)
-  })
+  app.onLeave(() => clearInterval(ticker))
 
-  const syncEnd = () => {
-    end.disabled = settingUp(exam)
-    end.title = end.disabled ? 'Available once every task is set up' : ''
-  }
   let current = 0
   const drawPills = () => {
     pills.replaceChildren(
       ...exam.tasks.map((t, i) => {
-        const preparing = t.setup === 'preparing'
-        const pill = el('button', 'pill', `${number(i)}${preparing ? ' …' : ''}${t.flagged ? ' ⚑' : ''}`)
+        const pill = el('button', 'pill', `${number(i)}${t.flagged ? ' ⚑' : ''}`)
         pill.classList.toggle('current', i === current)
         pill.classList.toggle('flagged', t.flagged)
-        pill.classList.toggle('preparing', preparing)
         pill.classList.toggle('failed', t.setup === 'failed')
-        pill.title = preparing ? 'Still being set up' : ''
         pill.onclick = () => open(i)
         return pill
       }),
@@ -110,28 +110,6 @@ function showRunning(app: App, state: ExamState, catalog: Map<string, Task>) {
     showQuestion(question, exam.tasks[i], catalog.get(exam.tasks[i].id)!, i, drawPills)
   }
   open(0)
-  syncEnd()
-
-  // The slow tasks finish setting up after the clock starts; their time is added to the deadline.
-  // Only setup fields are taken from the poll, so a flag set meanwhile isn't undone.
-  const refresh = async () => {
-    try {
-      const next = await getExam()
-      if (!next || next.exam.ended) return app.exam()
-      const was = exam.tasks[current].setup
-      next.exam.tasks.forEach((t, i) => Object.assign(exam.tasks[i], { setup: t.setup, setupError: t.setupError }))
-      offset = Date.parse(next.now) - Date.now()
-      deadline = Date.parse(next.exam.deadline!)
-      tick()
-      drawPills()
-      syncEnd()
-      if (exam.tasks[current].setup !== was) open(current)
-    } catch {
-      // The next poll tries again.
-    }
-    if (settingUp(exam)) poll = window.setTimeout(refresh, 2000)
-  }
-  if (settingUp(exam)) poll = window.setTimeout(refresh, 2000)
 
   end.onclick = async () => {
     if (!confirm('End the exam? Every task is scored in the background.')) return
@@ -139,7 +117,7 @@ function showRunning(app: App, state: ExamState, catalog: Map<string, Task>) {
     try {
       showResults(app, await endExam(), catalog)
     } catch (err) {
-      syncEnd()
+      end.disabled = false
       question.prepend(el('p', 'error', `Cannot end the exam: ${message(err)}`))
     }
   }
@@ -163,11 +141,9 @@ function showQuestion(target: HTMLElement, entry: ExamTask, task: Task, index: n
   const head = el('div', 'exam-question-head')
   head.append(el('h2', '', `${number(index)}. ${task.title}`), flag)
   const body = el('div', 'question-text')
-  target.replaceChildren(head, chips(task), hostLine(task))
-  if (entry.setup === 'preparing') {
-    target.append(el('p', 'status', 'This task is still being set up; it opens in a moment.'))
-    return
-  }
+  const tags = chips(task)
+  if (task.order === 'last') tags.append(el('span', 'chip cluster', 'Affects the whole cluster'))
+  target.replaceChildren(head, tags, hostLine(task))
   if (entry.setup === 'failed') target.append(el('p', 'status error', `Setup failed: ${entry.setupError}`))
   target.append(body)
   taskQuestion(task.id).then(

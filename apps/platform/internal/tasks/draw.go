@@ -10,10 +10,14 @@ import (
 // Draw picks n tasks whose domain mix follows the CKA weights, then shuffles them, since the
 // exam doesn't group questions by domain. Quotas use largest remainders, so they add up to n;
 // a domain without enough tasks hands its share to the heaviest domains that have some left.
+// The exam shares one cluster, so it gets at most one task marked last, and that task comes first:
+// an etcd restore would undo work done on other tasks, and a broken scheduler or kubelet would
+// keep their Pods Pending.
 func Draw(all []Task, n int, rng *rand.Rand) []Task {
 	if len(all) == 0 {
 		return nil
 	}
+	all = oneLast(all, rng)
 	n = max(1, min(n, len(all)))
 
 	pools := map[Domain][]Task{}
@@ -56,7 +60,30 @@ func Draw(all []Task, n int, rng *rand.Rand) []Task {
 		drawn = append(drawn, pool[:quota[d]]...)
 	}
 	rng.Shuffle(len(drawn), func(i, j int) { drawn[i], drawn[j] = drawn[j], drawn[i] })
+	if i := slices.IndexFunc(drawn, func(t Task) bool { return t.Order == Last }); i > 0 {
+		drawn[0], drawn[i] = drawn[i], drawn[0]
+	}
 	return drawn
+}
+
+func oneLast(all []Task, rng *rand.Rand) []Task {
+	var lasts []int
+	for i, t := range all {
+		if t.Order == Last {
+			lasts = append(lasts, i)
+		}
+	}
+	if len(lasts) < 2 {
+		return all
+	}
+	keep := lasts[rng.IntN(len(lasts))]
+	var kept []Task
+	for i, t := range all {
+		if t.Order != Last || i == keep {
+			kept = append(kept, t)
+		}
+	}
+	return kept
 }
 
 // Filter keeps the tasks in one of domains and with one of topics; an empty list keeps everything.

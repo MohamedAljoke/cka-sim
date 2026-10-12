@@ -170,10 +170,9 @@ func (s *Session) Discard() error {
 
 // setUp runs with s.mu held; its goroutines take the lock again to record each result.
 // It first heals what earlier tasks left broken, except tasks this exam has already set up.
-// Tasks marked last run after the rest: an etcd snapshot taken in setup would lose objects other
-// setups create later, and a broken scheduler or kubelet can stall setups beside it. They run one
-// by one per host, and hosts side by side: a worker's broken kubelet doesn't touch the control plane.
-// The clock starts before them, so the user reads while they run, and their time is given back.
+// Tasks marked last run one by one after the rest: an etcd snapshot taken in setup would lose
+// objects other setups create later, and a broken scheduler or kubelet can stall setups beside it.
+// The clock starts once every task is set up, so setup time is never exam time.
 func (s *Session) setUp(e *Exam, release func()) {
 	var done, together, last []string
 	for _, t := range e.Tasks {
@@ -188,49 +187,43 @@ func (s *Session) setUp(e *Exam, release func()) {
 			together = append(together, t.ID)
 		}
 	}
+	e.Stage = StageLab
 	go func() {
-		err := s.ready()
-		if err != nil {
+		if err := s.ready(); err != nil {
 			s.fail(e, append(together, last...), err)
 		} else {
+			s.enter(e, StageHeal)
 			s.heal(context.Background(), func(t tasks.Task) bool { return !slices.Contains(done, t.ID) })
+			s.enter(e, StageSetup)
 			var wg sync.WaitGroup
 			for _, id := range together {
 				wg.Go(func() { s.start(e, id) })
 			}
 			wg.Wait()
-		}
-		s.update(e, func() {
-			if !e.Prepared() {
-				e.Started = s.cfg.Now()
-				e.Deadline = e.Started.Add(time.Duration(e.Minutes) * time.Minute)
+			if len(last) > 0 {
+				s.enter(e, StageCluster)
 			}
-		})
-		began := s.cfg.Now()
-		if err == nil {
-			queues := map[string][]string{}
 			for _, id := range last {
-				host := s.task(id).Host
-				queues[host] = append(queues[host], id)
+				s.start(e, id)
 			}
-			var wg sync.WaitGroup
-			for _, ids := range queues {
-				wg.Go(func() {
-					for _, id := range ids {
-						s.start(e, id)
-					}
-				})
-			}
-			wg.Wait()
 		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		release()
-		if s.exam == e && len(last) > 0 && err == nil {
-			e.Deadline = e.Deadline.Add(s.cfg.Now().Sub(began))
-			s.saveInBackground(e)
+		if s.exam != e {
+			return
 		}
+		e.Stage = ""
+		if !e.Prepared() {
+			e.Started = s.cfg.Now()
+			e.Deadline = e.Started.Add(time.Duration(e.Minutes) * time.Minute)
+		}
+		s.saveInBackground(e)
 	}()
+}
+
+func (s *Session) enter(e *Exam, stage Stage) {
+	s.update(e, func() { e.Stage = stage })
 }
 
 // grade runs with s.mu held, like setUp. Every ungraded task's check.sh runs at once and each

@@ -71,6 +71,27 @@ func TestDrawIsRepeatableAndHasNoDuplicates(t *testing.T) {
 	}
 }
 
+func TestDrawTakesAtMostOneLastTaskAndPutsItFirst(t *testing.T) {
+	all := catalogOf(map[Domain]int{Troubleshooting: 4, Architecture: 4, Networking: 4, Workloads: 4, Storage: 4})
+	for i := range all {
+		if all[i].ID == "architecture-0" || all[i].ID == "troubleshooting-0" || all[i].ID == "troubleshooting-1" {
+			all[i].Order = Last
+		}
+	}
+
+	for seed := range uint64(50) {
+		drawn := Draw(all, 16, rand.New(rand.NewPCG(seed, 2)))
+
+		if len(drawn) != 16 {
+			t.Fatalf("seed %d: drew %d tasks, want 16", seed, len(drawn))
+		}
+		lasts := slices.IndexFunc(drawn, func(t Task) bool { return t.Order == Last })
+		if n := len(slices.DeleteFunc(slices.Clone(drawn), func(t Task) bool { return t.Order != Last })); n > 1 || lasts > 0 {
+			t.Fatalf("seed %d: %d last tasks, first at %d in %v; want at most one, at 0", seed, n, lasts, ids(drawn))
+		}
+	}
+}
+
 func TestFilterByDomainAndTopic(t *testing.T) {
 	all := []Task{
 		{ID: "rbac", Domain: Architecture, Topics: []string{"rbac", "serviceaccounts"}},

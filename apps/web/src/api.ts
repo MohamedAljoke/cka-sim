@@ -6,6 +6,7 @@ export type Task = {
   topics: string[]
   weight: number
   host: string
+  order?: 'last'
 }
 
 export async function listTasks(): Promise<Task[]> {
@@ -56,9 +57,12 @@ export type ExamTask = {
   checkError?: string
 }
 
+export type Stage = 'lab' | 'heal' | 'setup' | 'cluster'
+
 export type Exam = {
   tasks: ExamTask[]
   minutes: number
+  stage?: Stage
   started?: string
   deadline?: string
   ended?: string

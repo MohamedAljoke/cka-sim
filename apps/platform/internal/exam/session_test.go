@@ -82,7 +82,7 @@ func TestBeginSetsUpLastTasksAfterTheRest(t *testing.T) {
 	}
 }
 
-func TestTheClockStartsBeforeTheLastTasks(t *testing.T) {
+func TestTheClockStartsAfterTheLastTasks(t *testing.T) {
 	s, _, r := openSession(t, withLast(), nil)
 	r.holdLast()
 	released := make(chan struct{})
@@ -90,10 +90,12 @@ func TestTheClockStartsBeforeTheLastTasks(t *testing.T) {
 	if err := s.Begin(s.cfg.Catalog, 3, 30, func() { close(released) }); err != nil {
 		t.Fatal(err)
 	}
-	e := waitStarted(t, s)
+	for !slices.Contains(r.ran("setup.sh"), "ar-etcd") {
+		time.Sleep(time.Millisecond)
+	}
 
-	if i := slices.IndexFunc(e.Tasks, func(t Task) bool { return t.ID == "ar-etcd" }); e.Tasks[i].Setup != Preparing {
-		t.Errorf("ar-etcd is %q when the clock starts, want it still preparing", e.Tasks[i].Setup)
+	if e, _ := s.Current(); e.Prepared() {
+		t.Error("the clock started while ar-etcd is still setting up")
 	}
 	select {
 	case <-released:
@@ -102,35 +104,12 @@ func TestTheClockStartsBeforeTheLastTasks(t *testing.T) {
 	}
 	r.releaseLast()
 	<-released
-	if e := waitSetUp(t, s); e.SettingUp() {
-		t.Errorf("got %+v, want every task set up", e)
+	if e := waitStarted(t, s); e.SettingUp() {
+		t.Errorf("got %+v, want every task set up when the clock starts", e)
 	}
 }
 
-func TestLastTasksOnOtherHostsRunSideBySide(t *testing.T) {
-	fsys := withLast()
-	fsys["tr-kubelet/task.md"] = &fstest.MapFile{Data: []byte("---\nid: tr-kubelet\ntitle: Kubelet\nhost: node-2\ndomain: troubleshooting\nweight: 7\norder: last\n---\nFix it.\n")}
-	for _, name := range []string{"setup.sh", "check.sh", "solution.sh", "explain.md"} {
-		fsys["tr-kubelet/"+name] = files["wl-scale/"+name]
-	}
-	s, _, r := openSession(t, fsys, nil)
-	r.holdLast()
-	defer r.releaseLast()
-
-	if err := s.Begin(s.cfg.Catalog, 4, 30, func() {}); err != nil {
-		t.Fatal(err)
-	}
-
-	for range 500 {
-		if got := r.ran("setup.sh"); slices.Contains(got, "ar-etcd") && slices.Contains(got, "tr-kubelet") {
-			return
-		}
-		time.Sleep(time.Millisecond)
-	}
-	t.Fatalf("set up %v, want ar-etcd on node-1 and tr-kubelet on node-2 at the same time", r.ran("setup.sh"))
-}
-
-func TestTheLastTasksTimeIsGivenBack(t *testing.T) {
+func TestSetupTimeIsNotExamTime(t *testing.T) {
 	s, _, r := openSession(t, withLast(), nil)
 	clock := struct {
 		sync.Mutex
@@ -142,7 +121,6 @@ func TestTheLastTasksTimeIsGivenBack(t *testing.T) {
 	if err := s.Begin(s.cfg.Catalog, 3, 30, func() {}); err != nil {
 		t.Fatal(err)
 	}
-	waitStarted(t, s)
 	for !slices.Contains(r.ran("setup.sh"), "ar-etcd") {
 		time.Sleep(time.Millisecond)
 	}
@@ -150,10 +128,37 @@ func TestTheLastTasksTimeIsGivenBack(t *testing.T) {
 	clock.now = now.Add(5 * time.Minute)
 	clock.Unlock()
 	r.releaseLast()
-	e := waitSetUp(t, s)
+	e := waitStarted(t, s)
 
-	if !e.Started.Equal(now) || !e.Deadline.Equal(now.Add(35*time.Minute)) {
-		t.Errorf("started %v deadline %v, want %v and 30+5 minutes later", e.Started, e.Deadline, now)
+	if started := now.Add(5 * time.Minute); !e.Started.Equal(started) || !e.Deadline.Equal(started.Add(30*time.Minute)) {
+		t.Errorf("started %v deadline %v, want %v and 30 minutes later", e.Started, e.Deadline, started)
+	}
+}
+
+func TestBeginReportsEachStage(t *testing.T) {
+	fsys := withLast()
+	fsys["tr-svc/reset.sh"] = &fstest.MapFile{Data: []byte("reset.sh\n")}
+	s, _, r := openSession(t, fsys, nil)
+	lab := make(chan struct{})
+	s.cfg.Ready = func(context.Context) error { <-lab; return nil }
+	r.holdResets()
+	r.hold = make(chan struct{})
+	r.holdLast()
+
+	if err := s.Begin(s.cfg.Catalog, 3, 30, func() {}); err != nil {
+		t.Fatal(err)
+	}
+
+	waitStage(t, s, StageLab)
+	close(lab)
+	waitStage(t, s, StageHeal)
+	r.releaseResets()
+	waitStage(t, s, StageSetup)
+	close(r.hold)
+	waitStage(t, s, StageCluster)
+	r.releaseLast()
+	if e := waitStarted(t, s); e.Stage != "" {
+		t.Errorf("stage %q once started, want none", e.Stage)
 	}
 }
 
@@ -199,6 +204,9 @@ func TestBeginFailsEveryTaskWhenTheLabFails(t *testing.T) {
 	}
 	if got := r.order(); len(got) != 0 {
 		t.Errorf("ran %v without a lab", got)
+	}
+	if e.Stage != "" {
+		t.Errorf("stage %q after the lab failed, want none", e.Stage)
 	}
 }
 
@@ -549,6 +557,17 @@ func waitStarted(t *testing.T, s *Session) Exam {
 	return Exam{}
 }
 
+func waitStage(t *testing.T, s *Session, want Stage) {
+	for range 500 {
+		if e, _ := s.Current(); e.Stage == want {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	e, _ := s.Current()
+	t.Fatalf("stage %q, want %q", e.Stage, want)
+}
+
 func waitSetUp(t *testing.T, s *Session) Exam {
 	for range 500 {
 		if e, _ := s.Current(); e.Prepared() && !e.SettingUp() {
@@ -616,12 +635,13 @@ func (m *memStore) Clear() error {
 type call struct{ taskID, script string }
 
 // fakeRunner answers by script name: each fake script's body is its own name, and tasks.TidyScript
-// is "tidy". Setups of the last tasks (ar-etcd, tr-kubelet) wait until lastHold is closed, the
-// others until hold is, and checks until checkHold is.
+// is "tidy". The setup of the last task, ar-etcd, waits until lastHold is closed, the others until
+// hold is, resets until resetHold is, and checks until checkHold is.
 type fakeRunner struct {
 	mu        sync.Mutex
 	hold      chan struct{}
 	lastHold  chan struct{}
+	resetHold chan struct{}
 	checkHold chan struct{}
 	calls     []call
 	setupErr  map[string]error
@@ -636,14 +656,17 @@ func (r *fakeRunner) Run(_ context.Context, _, taskID string, script []byte) (st
 	}
 	r.mu.Lock()
 	r.calls = append(r.calls, call{taskID, name})
-	hold, lastHold, checkHold := r.hold, r.lastHold, r.checkHold
+	hold, lastHold, resetHold, checkHold := r.hold, r.lastHold, r.resetHold, r.checkHold
 	r.mu.Unlock()
-	last := taskID == "ar-etcd" || taskID == "tr-kubelet"
+	last := taskID == "ar-etcd"
 	if hold != nil && name == "setup.sh" && !last {
 		<-hold
 	}
 	if lastHold != nil && name == "setup.sh" && last {
 		<-lastHold
+	}
+	if resetHold != nil && name == "reset.sh" {
+		<-resetHold
 	}
 	if checkHold != nil && name == "check.sh" {
 		<-checkHold
@@ -666,6 +689,14 @@ func (r *fakeRunner) holdChecks() {
 }
 
 func (r *fakeRunner) releaseChecks() { close(r.checkHold) }
+
+func (r *fakeRunner) holdResets() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.resetHold = make(chan struct{})
+}
+
+func (r *fakeRunner) releaseResets() { close(r.resetHold) }
 
 func (r *fakeRunner) holdLast() {
 	r.mu.Lock()

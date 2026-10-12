@@ -413,7 +413,8 @@ Pull each deliverable in when a task needs it, not before.
 - **Watch out:** an etcd snapshot-and-restore task rewinds every object created after its
   snapshot, so it must be set up **after** all the others. The same goes for tasks that break the
   scheduler or a kubelet. They carry `order: last` in their frontmatter, and the exam sets them up
-  one by one after the rest. *(learned in v1)*
+  one by one after the rest. *(learned in v1)* Their restore or breakage also spoils the learner's
+  work on other tasks, so `Draw` takes at most one and makes it question 01.
 - **Done when:** `go test ./internal/tasks -run Draw` passes.
 - [x] done
 

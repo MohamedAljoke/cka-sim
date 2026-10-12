@@ -16,6 +16,15 @@ const (
 	Failed    Status = "failed"
 )
 
+type Stage string
+
+const (
+	StageLab     Stage = "lab"
+	StageHeal    Stage = "heal"
+	StageSetup   Stage = "setup"
+	StageCluster Stage = "cluster"
+)
+
 // The CKA's pass mark, in percent.
 const PassPercent = 66
 
@@ -31,6 +40,7 @@ type Task struct {
 type Exam struct {
 	Tasks    []Task    `json:"tasks"`
 	Minutes  int       `json:"minutes"`
+	Stage    Stage     `json:"stage,omitempty"`
 	Started  time.Time `json:"started,omitzero"`
 	Deadline time.Time `json:"deadline,omitzero"`
 	Ended    time.Time `json:"ended,omitzero"`
@@ -40,7 +50,6 @@ type Exam struct {
 
 func (e Exam) Prepared() bool { return !e.Started.IsZero() }
 
-// SettingUp is true until every task's setup is done; the clock can start before that.
 func (e Exam) SettingUp() bool {
 	return slices.ContainsFunc(e.Tasks, func(t Task) bool { return t.Setup == Preparing })
 }

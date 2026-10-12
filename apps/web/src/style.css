@@ -327,6 +327,13 @@ a {
   border-radius: 999px;
 }
 
+.chip.cluster {
+  font-weight: 600;
+  color: var(--color-warning);
+  background: var(--amber-wash);
+  border-color: color-mix(in srgb, var(--color-warning) 50%, transparent);
+}
+
 .chip.domain {
   font-weight: 600;
   color: var(--p1);
@@ -768,11 +775,6 @@ a {
   border-color: color-mix(in srgb, var(--color-danger) 50%, transparent);
 }
 
-.pill.preparing {
-  color: var(--color-foreground-subtle);
-  border-style: dashed;
-}
-
 .pill.current {
   color: var(--color-on-primary);
   background: var(--color-primary);
@@ -1101,6 +1103,42 @@ a {
 
 .result-row > .action {
   margin-top: 0.5rem;
+}
+
+.stage-list {
+  display: grid;
+  gap: 0.25rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-foreground-subtle);
+}
+
+.stage::before {
+  content: '○';
+  display: inline-block;
+  width: 1.5rem;
+  font-family: var(--font-mono);
+}
+
+.stage.done {
+  color: var(--color-foreground-muted);
+}
+
+.stage.done::before {
+  content: '✓';
+  color: var(--color-success);
+}
+
+.stage.current {
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.stage.current::before {
+  content: '●';
+  color: var(--color-primary);
+  animation: pulse 1.2s ease-in-out infinite;
 }
 
 .setup-list {

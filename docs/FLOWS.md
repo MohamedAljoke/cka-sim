@@ -156,39 +156,49 @@ narrows the catalog with `tasks.Filter` (`internal/tasks/draw.go`): a task must 
 and have one of the topics, where an empty list means any. No match gives 422. It takes the script lock,
 so a running practice setup gets 409, and starts the lab if there is none. Then it calls
 `exam.Session.Begin` (`internal/exam/session.go`) with that pool. A finished, scored exam is replaced; one
-still being scored gives 409 "the last exam is still being scored". `tasks.Draw` picks the tasks:
-each domain gets its share of the count by the CKA weights, with any shortfall moved to the heaviest domains,
-and the result is shuffled. The exam is saved with every task `preparing` to
-`~/.local/state/cka-sim/exam.json`, and the request answers 202 right away. In the background, setup first waits for the lab (`Config.Ready`,
-which is `Lab.Ensure`); if the lab fails, every task is marked `failed` with its error. Then `tasks.Heal`
-first runs every `reset.sh` (on a restart, not those of tasks this exam already set up). Then every
-`setup.sh` runs at once through `tasks.Start`. When those are done, the clock starts (`started`, and
-`deadline` = started + minutes). Tasks marked `order: last` then run in the background, because an etcd
-snapshot or a broken scheduler or kubelet would spoil the setups beside it: one by one per host, and hosts
-side by side, so `tr-kubelet` on a worker doesn't wait for `ar-etcd` and `tr-scheduler` on the control
-plane. You read and work meanwhile. When the last one is done, the lock is released and `deadline` moves out by the time they took,
-so setup time is never exam time. Each task turns `ready` or `failed`, and the file is saved after each.
-The server log shows how long each setup, the heal, each check and the tidy took.
+still being scored gives 409 "the last exam is still being scored". `tasks.Draw` picks the tasks. Each
+domain gets its share of the count by the CKA weights, with any shortfall moved to the heaviest domains,
+and the result is shuffled. The exam shares one cluster, so `Draw` takes at most one task marked
+`order: last` (`ar-etcd`, `tr-scheduler`, `tr-kubelet`) and makes it question 01. An etcd restore would
+undo work done on other tasks, and a broken scheduler or kubelet would keep their Pods Pending, so you fix
+the cluster first. The exam is saved with every task `preparing` to `~/.local/state/cka-sim/exam.json`,
+and the request answers 202 right away.
+
+In the background, setup goes through stages, and each is saved as `stage` so the page can show it:
+- `lab`: wait for the lab (`Config.Ready`, which is `Lab.Ensure`). If the lab fails, every task is marked
+  `failed` with its error.
+- `heal`: `tasks.Heal` runs every `reset.sh` in the catalog. On a restart it skips the tasks this exam
+  already set up.
+- `setup`: every other `setup.sh` runs at once through `tasks.Start`.
+- `cluster`: the `last` task's setup runs on its own after the rest, because an etcd snapshot or a broken
+  scheduler or kubelet would spoil the setups beside it.
+
+Each task turns `ready` or `failed`, and the file is saved after each. When every task is done, the
+stage clears, the clock starts (`started`, and `deadline` = started + minutes) and the lock is released, so
+setup time is never exam time. The server log shows how long each setup, the heal, each check and the tidy
+took.
 
 **Taking it.** The page loads through `showExam` (`apps/web/src/exam.ts`), which asks `GET /api/exam`
-first. A 404 means no exam, so it shows Home. The exam is split screen, with the terminal on the right. While the exam is preparing, the page lists
-each task as "setting up…", "ready" or "failed" and asks `GET /api/exam` again every 2 seconds (the catalog
-is loaded once). Then you see:
+first. A 404 means no exam, so it shows Home. The exam is split screen, with the terminal on the right.
+While the exam is preparing, the page shows one screen and asks `GET /api/exam` again every 2 seconds (the
+catalog is loaded once). The screen has the stages as a checklist (done ✓, current, waiting) and each task
+as "setting up…", "ready", "failed" or, for the `last` task, "waits for the others". Once the clock starts
+you see:
 - A countdown. It is timed against the `now` the server sends, so a wrong browser clock doesn't matter. It
   turns red under 10 minutes, and after 0:00 it shows "Time's up +…", but nothing ends on its own.
-- Question pills numbered 01, 02, 03. A flagged question shows ⚑, and a failed setup shows in red with its error on the question.
-  A task still setting up has a dashed "05 …" pill and shows "still being set up" instead of its question.
-  While any is, the page keeps polling and picks up each task as it turns ready, and the moved deadline.
+- Question pills numbered 01, 02, 03, every one readable. A flagged question shows ⚑, and a failed setup
+  shows in red with its error on the question. The `last` task, always 01, carries an "Affects the whole
+  cluster" chip.
 - **Flag for later**, which sends `PUT` or `DELETE /api/exam/flags/{id}`.
-- **End exam**, disabled until every task is set up (`Session.End` refuses too).
+- **End exam**.
 
 You work in the same terminal (`ssh <host>`, then `k …`). While the exam runs, practice start, check and
 solution answer 409 "not during an exam". Questions stay readable.
 
 **Restart.** `cmd/server/main.go` opens the session from `exam.json`. If the file names a task the catalog
 no longer has, the server refuses to start and says which file to delete. Any task still `preparing` is set
-up again, with the lock held (`resumeExam`), and that setup starts the lab itself; a clock that already
-started keeps its start. An exam that ended but
+up again, going through the stages, with the lock held (`resumeExam`), and that setup starts the lab
+itself; a clock that already started keeps its start. An exam that ended but
 wasn't fully scored has its missing checks run again the same way. A reload finds the same exam, with the
 same deadline and flags.
 

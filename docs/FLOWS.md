@@ -224,7 +224,7 @@ CLI and the agent (`cmd/agent`). The pool's template (`apps/lab/deploy/gke/lab-p
 The SandboxWarmPool `labs` (`lab-pool.yaml`, agent-sandbox) keeps one lab pod warm, alone on a node of the
 tainted `labs` pool. That node is a VM, and the pod is privileged so kind can run.
 
-**The app image.** `apps/platform/deploy/gke/app.Dockerfile` contains the page, the server and Caddy, but no Docker. It runs as the
+**The app image.** `apps/platform/deploy/app.Dockerfile` contains the page, the server and Caddy, but no Docker. It runs as the
 Deployment `app` on the shared system pool, behind a LoadBalancer on a static IP. Caddy asks for the password,
 gets an HTTPS certificate for `<ip>.sslip.io`, serves the page, and passes `/api` and `/ws` to the server on
 `127.0.0.1:7070`. The server starts with `CKA_SIM_PROVIDER=gke`, so `cmd/server/main.go` makes a `gke.Provider`

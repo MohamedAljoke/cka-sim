@@ -11,10 +11,10 @@ TOKEN := CKA_SIM_AGENT_TOKEN="$$(cat $(HOME)/.config/cka-sim/agent-token)"
 AUTH_SECRET := $(HOME)/.config/cka-sim/auth-secret
 AUTH_ENV := CKA_SIM_AUTH_SECRET="$$(cat $(AUTH_SECRET))"
 
-.PHONY: help doctor up down shell serve web dev db auth mcp test boundaries selftest eval
+.PHONY: help doctor up down shell serve web dev db auth mcp test boundaries selftest eval try try-down
 
 help:
-	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
 
 doctor: ## check this machine can run a lab
 	@$(MAKE) --no-print-directory -C $(LAB) doctor
@@ -73,6 +73,13 @@ selftest: ## prove tasks are graded fairly (needs the lab); one task: make selft
 
 eval: ## score the Assistant's reviews (needs make dev and Claude logged in once); one task: make eval TASK=<id>
 	cd $(PLATFORM) && $(TOKEN) go run ./cmd/eval $(if $(TASK),-task $(TASK))
+
+try: ## build from source and run cka-sim the way users do, Docker only, on http://localhost:7080
+	docker compose -f infra/local/compose.yml up -d --build --wait --wait-timeout 1800
+	@echo "ready on http://localhost:$${CKA_SIM_PORT:-7080}; log in as dev@cka-sim.local, password cka-sim-dev"
+
+try-down: ## stop make try; keeps its accounts, exams and images
+	docker compose -f infra/local/compose.yml down
 
 $(AUTH_SECRET):
 	@mkdir -p $(dir $@)

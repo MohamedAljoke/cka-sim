@@ -88,7 +88,7 @@ db: ## Cloud SQL Postgres for auth (smallest tier) and the identity its pod uses
 site: image ## the app and auth on the platform pool, a warm lab in the pool, HTTPS + login; `make url` prints the link
 	$(GC) compute addresses describe cka-sim-site --region $(REGION) >/dev/null 2>&1 || \
 	  $(GC) compute addresses create cka-sim-site --region $(REGION)
-	docker build -f $(PLATFORM)/deploy/gke/app.Dockerfile -t $(APP_IMAGE) $(APPS)
+	docker build -f $(PLATFORM)/deploy/app.Dockerfile -t $(APP_IMAGE) $(APPS)
 	docker push $(APP_IMAGE)
 	docker build -f $(AUTH)/deploy/auth.Dockerfile -t $(AUTH_IMAGE) $(APPS)
 	docker push $(AUTH_IMAGE)

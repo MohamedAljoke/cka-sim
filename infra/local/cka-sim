@@ -1,0 +1,74 @@
+#!/bin/sh
+set -eu
+
+self=$0
+[ -L "$self" ] && self=$(readlink "$self")
+dir=$(cd "$(dirname "$self")" && pwd -P)
+installer=https://raw.githubusercontent.com/${CKA_SIM_REPO:-MohamedAljoke/cka-sim}/${CKA_SIM_REF:-main}/infra/local/install.sh
+
+compose() { docker compose -f "$dir/compose.yml" "$@"; }
+
+fail() {
+  echo "cka-sim: $*" >&2
+  exit 1
+}
+
+check_docker() {
+  command -v docker >/dev/null 2>&1 || fail "Docker is not installed: https://docs.docker.com/get-started/get-docker/"
+  docker info >/dev/null 2>&1 || fail "Docker is not running; start it (or Docker Desktop) and try again"
+  docker compose version >/dev/null 2>&1 || fail "this Docker has no 'docker compose'; update Docker"
+  [ "$(docker info --format '{{.OSType}}')" = linux ] || fail "switch Docker to Linux containers"
+}
+
+usage() {
+  cat <<EOF
+usage: cka-sim <command>
+
+  up         start cka-sim and open it on http://localhost:${CKA_SIM_PORT:-7080}
+  down       stop it; keeps your accounts, exams and downloaded images
+  status     show what is running
+  logs       follow the logs (cka-sim logs lab for one part)
+  shell      a shell on the base host, where the exam starts
+  update     get the latest cka-sim and restart it
+  uninstall  delete cka-sim and everything it stored
+EOF
+}
+
+case "${1:-}" in
+up)
+  check_docker
+  echo "starting cka-sim; the first start downloads the images and builds a 3-node cluster (5 to 10 minutes)"
+  compose up -d --wait --wait-timeout 1800
+  echo
+  echo "cka-sim is ready on http://localhost:${CKA_SIM_PORT:-7080}"
+  echo "log in as dev@cka-sim.local, password cka-sim-dev"
+  ;;
+down) compose down ;;
+status) compose ps ;;
+logs)
+  shift
+  compose logs -f "$@"
+  ;;
+shell) compose exec lab lab shell ;;
+update)
+  check_docker
+  curl -fsSL "$installer" | CKA_SIM_HOME="$dir" CKA_SIM_INSTALL_ONLY=1 sh
+  compose pull app auth lab mcp
+  exec "$dir/cka-sim" up
+  ;;
+uninstall)
+  compose down --volumes
+  for part in app auth lab mcp; do
+    docker image rm "ghcr.io/mohamedaljoke/cka-sim-$part:${CKA_SIM_VERSION:-latest}" >/dev/null 2>&1 || true
+  done
+  link=$(command -v cka-sim || true)
+  [ -L "$link" ] && rm -f "$link"
+  rm -rf "$dir"
+  echo "cka-sim is gone"
+  ;;
+-h | --help | help | "") usage ;;
+*)
+  usage >&2
+  exit 2
+  ;;
+esac

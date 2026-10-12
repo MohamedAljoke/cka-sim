@@ -1,0 +1,12 @@
+table ip cka-sim
+delete table ip cka-sim
+table ip cka-sim {
+	chain forward {
+		type filter hook forward priority -10; policy accept;
+		ip daddr 10.96.0.0/16 ct state new reject with icmp port-unreachable
+	}
+	chain output {
+		type filter hook output priority -10; policy accept;
+		ip daddr 10.96.0.0/16 ct state new reject with icmp port-unreachable
+	}
+}

@@ -27,8 +27,10 @@ const usage = `lab — the cka-sim lab: a Kubernetes cluster in Docker, like the
   lab version    print the version
 
   lab up preloads the images in CKA_SIM_IMAGES (comma-separated) into every node, and installs
-  metrics-server, kube-router (NetworkPolicy only), helm, a registry (cka-sim-registry:5000) and a
-  chart repo (http://cka-sim-charts).
+  metrics-server, kube-router (NetworkPolicy only), Traefik (IngressClass nginx, GatewayClass traefik,
+  NodePorts 31080/31443), the VPA recommender, helm, a registry (cka-sim-registry:5000) and a chart
+  repo (http://cka-sim-charts). It also preloads cka-sim/web-operator:1.0 and leaves its install
+  manifest, unapplied, at /etc/cka-sim/addons/web-operator.yaml.
 `
 
 func run(ctx context.Context, args []string, stdout io.Writer) error {
@@ -135,7 +137,7 @@ func runUp(ctx context.Context, stdout io.Writer) error {
 }
 
 func installAddons(ctx context.Context, stdout io.Writer, c *cluster.Cluster) {
-	fmt.Fprintln(stdout, "installing the add-ons: metrics-server, kube-router, helm, a registry and a chart repo")
+	fmt.Fprintln(stdout, "installing the add-ons: metrics-server, kube-router, Traefik, VPA, the web operator image, helm, a registry and a chart repo")
 	if err := c.InstallAddons(ctx); err != nil {
 		fmt.Fprintf(stdout, "warning: tasks that need an add-on will fail: %v\n", err)
 	}

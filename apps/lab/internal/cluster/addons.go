@@ -21,6 +21,13 @@ const (
 	metricsServerPath  = "/etc/cka-sim/addons/metrics-server.yaml"
 	kubeRouterImage    = "cloudnativelabs/kube-router:v2.11.1"
 	kubeRouterPath     = "/etc/cka-sim/addons/kube-router.yaml"
+	gatewayAPIPath     = "/etc/cka-sim/addons/gateway-api.yaml"
+	traefikImage       = "traefik:v3.7.13"
+	traefikPath        = "/etc/cka-sim/addons/traefik.yaml"
+	vpaImage           = "registry.k8s.io/autoscaling/vpa-recommender:1.8.0"
+	vpaPath            = "/etc/cka-sim/addons/vpa.yaml"
+	webOperatorImage   = "cka-sim/web-operator:1.0"
+	webOperatorPath    = "/etc/cka-sim/addons/web-operator.yaml"
 )
 
 //go:embed metrics-server.yaml
@@ -28,6 +35,24 @@ var metricsServerManifest string
 
 //go:embed kube-router.yaml
 var kubeRouterManifest string
+
+//go:embed gateway-api.yaml
+var gatewayAPIManifest string
+
+//go:embed traefik.yaml
+var traefikManifest string
+
+//go:embed service-reject.nft
+var serviceRejectRules string
+
+//go:embed vpa.yaml
+var vpaManifest string
+
+//go:embed web-operator.Dockerfile
+var webOperatorDockerfile string
+
+//go:embed web-operator.yaml
+var webOperatorManifest string
 
 //go:embed registry.Dockerfile
 var registryDockerfile string
@@ -47,24 +72,78 @@ const registryHosts = `server = "http://` + Registry + `:5000"
 `
 
 func (c *Cluster) InstallAddons(ctx context.Context) error {
+	if err := waitForAPIServer(ctx); err != nil {
+		return err
+	}
 	return errors.Join(
-		c.applyAddon(ctx, metricsServerImage, metricsServerManifest, metricsServerPath),
-		c.applyAddon(ctx, kubeRouterImage, kubeRouterManifest, kubeRouterPath),
+		c.applyAddon(ctx, metricsServerManifest, metricsServerPath, metricsServerImage),
+		c.applyAddon(ctx, kubeRouterManifest, kubeRouterPath, kubeRouterImage),
+		rejectServicesWithoutEndpoints(ctx),
+		c.installTraefik(ctx),
+		c.applyAddon(ctx, vpaManifest, vpaPath, vpaImage),
+		c.stageWebOperator(ctx),
 		installHelm(ctx),
 		startRegistry(ctx),
 		startAddon(ctx, Charts, chartsImage, chartsDockerfile),
 	)
 }
 
-func (c *Cluster) applyAddon(ctx context.Context, image, manifest, path string) error {
-	if err := c.LoadImages(ctx, []string{image}); err != nil {
+// kube-router's FORWARD and OUTPUT chains accept Pod traffic before kube-proxy's REJECT for a Service
+// with no endpoints runs, so that traffic would leave the node instead of being refused.
+func rejectServicesWithoutEndpoints(ctx context.Context) error {
+	return eachAtOnce(Nodes, func(node string) error {
+		_, err := docker(ctx, serviceRejectRules, "exec", "-i", node, "nft", "-f", "-")
 		return err
+	})
+}
+
+func (c *Cluster) installTraefik(ctx context.Context) error {
+	if err := c.applyAddon(ctx, gatewayAPIManifest, gatewayAPIPath); err != nil {
+		return err
+	}
+	if _, err := kubectl(ctx, "wait", "--for=condition=Established", "--timeout=60s", "crd/gatewayclasses.gateway.networking.k8s.io"); err != nil {
+		return err
+	}
+	return c.applyAddon(ctx, traefikManifest, traefikPath, traefikImage)
+}
+
+func (c *Cluster) stageWebOperator(ctx context.Context) error {
+	if err := buildImage(ctx, webOperatorImage, webOperatorDockerfile); err != nil {
+		return err
+	}
+	if err := c.LoadImages(ctx, []string{webOperatorImage}); err != nil {
+		return err
+	}
+	_, err := docker(ctx, webOperatorManifest, "exec", "-i", ControlPlaneNode, "install", "-D", "-m", "644", "/dev/stdin", webOperatorPath)
+	return err
+}
+
+func (c *Cluster) applyAddon(ctx context.Context, manifest, path string, images ...string) error {
+	if len(images) > 0 {
+		if err := c.LoadImages(ctx, images); err != nil {
+			return err
+		}
 	}
 	if _, err := docker(ctx, manifest, "exec", "-i", ControlPlaneNode, "install", "-D", "-m", "644", "/dev/stdin", path); err != nil {
 		return err
 	}
-	_, err := docker(ctx, "", "exec", ControlPlaneNode, "kubectl", "--kubeconfig", "/etc/kubernetes/admin.conf", "apply", "-f", path)
+	_, err := kubectl(ctx, "apply", "--server-side", "--force-conflicts", "-f", path)
 	return err
+}
+
+func waitForAPIServer(ctx context.Context) error {
+	var err error
+	for range 60 {
+		if _, err = kubectl(ctx, "get", "--raw", "/readyz"); err == nil {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return err
+}
+
+func kubectl(ctx context.Context, args ...string) (string, error) {
+	return docker(ctx, "", append([]string{"exec", ControlPlaneNode, "kubectl", "--kubeconfig", "/etc/kubernetes/admin.conf"}, args...)...)
 }
 
 func installHelm(ctx context.Context) error {

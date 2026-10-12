@@ -73,6 +73,42 @@ func TestKubeRouterOnlyEnforcesNetworkPolicy(t *testing.T) {
 	}
 }
 
+func TestTraefikServesNginxIngressesAndGateways(t *testing.T) {
+	for _, want := range []string{
+		"image: " + traefikImage + "\n",
+		"- --providers.kubernetesIngressNGINX=true\n",
+		"- --providers.kubernetesGateway=true\n",
+		"controller: k8s.io/ingress-nginx\n",
+		"controllerName: traefik.io/gateway-controller\n",
+	} {
+		if !strings.Contains(traefikManifest, want) {
+			t.Errorf("traefik.yaml lacks %q", want)
+		}
+	}
+}
+
+func TestWebOperatorCopiesKubectlFromTheNodeImage(t *testing.T) {
+	if want := "FROM " + NodeImage + " AS node\n"; !strings.HasPrefix(webOperatorDockerfile, want) {
+		t.Errorf("web-operator.Dockerfile must start with %q", want)
+	}
+	if want := "image: " + webOperatorImage + "\n"; !strings.Contains(webOperatorManifest, want) {
+		t.Errorf("web-operator.yaml lacks %q", want)
+	}
+}
+
+func TestVPARunsThePreloadedRecommender(t *testing.T) {
+	if want := "image: " + vpaImage + "\n"; !strings.Contains(vpaManifest, want) {
+		t.Errorf("vpa.yaml lacks %q", want)
+	}
+}
+
+func TestServicesWithoutEndpointsAreRefusedLikeKubeProxyDoes(t *testing.T) {
+	rule := "ip daddr 10.96.0.0/16 ct state new reject with icmp port-unreachable\n"
+	if got := strings.Count(serviceRejectRules, rule); got != 2 {
+		t.Errorf("service-reject.nft has %d forward/output reject rules, want 2", got)
+	}
+}
+
 func parse(t *testing.T, raw string) v1alpha4.Cluster {
 	t.Helper()
 	var config v1alpha4.Cluster

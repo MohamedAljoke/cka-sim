@@ -116,7 +116,7 @@ Things the exam environment does that our tasks should copy:
 | T21 | DNS lookups fail inside Pods. CoreDNS is scaled to 0, its ConfigMap is broken, or kube-dns has no endpoints. Fix it. | ★★ | || main `tr-coredns` |
 | T22 | Pods on one node cannot reach Pods on another. The CNI config is missing or broken on that node. Fix it. | ★★★ | CNI on node || main `tr-cni` |
 | T23 | kube-proxy is not running, or uses the wrong mode, so ClusterIPs don't route. Fix it. | ★★ | || main `tr-kube-proxy` |
-| T24 | An Ingress or HTTPRoute returns 404/503. Find the wrong backend name, port or path and fix it. | ★★ | ingress/gateway controller | |
+| T24 | An Ingress or HTTPRoute returns 404/503. Find the wrong backend name, port or path and fix it. | ★★ | ingress/gateway controller || main `tr-ingress-backend` |
 
 ### Workload failures
 
@@ -223,7 +223,7 @@ Things the exam environment does that our tasks should copy:
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
 | A24 | Install a CRD from a manifest and create a custom resource of that kind. Write its `kubectl explain` fields to a file. | ★★ | || main `ar-crd` |
-| A25 | Install an operator (manifest or Helm), then create its custom resource so the operator builds the workload. | ★★★ | operator image | |
+| A25 | Install an operator (manifest or Helm), then create its custom resource so the operator builds the workload. | ★★★ | operator image || main `ar-operator` |
 | A26 | List the CRDs of a group (e.g. `*.cert-manager.io`) and the custom resources that exist for one of them. | ★ | CRDs installed || main `ar-crd-list` |
 | A52 | Write a CRD from scratch with a schema (a required field and an `enum`), a short name and `additionalPrinterColumns`, and show that an invalid custom resource is rejected. | ★★★ | || main `ar-crd-schema` |
 | A53 | Serve a CRD in two versions (`v1alpha1` served, `v1` stored), and find the stored versions in `status.storedVersions`. | ★★ | || main `ar-crd-versions` |
@@ -285,27 +285,27 @@ Things the exam environment does that our tasks should copy:
 
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
-| N13 | Create a Gateway (with a given GatewayClass) and an HTTPRoute that sends `/api` to one Service and `/` to another. | ★★ | Gateway API CRDs + controller | |
-| N14 | Split traffic between two backends with weights (canary 80/20) in an HTTPRoute. | ★★ | Gateway API | |
-| N15 | Migrate an existing Ingress (host, paths, TLS) to a Gateway plus HTTPRoute, keeping the same behaviour. | ★★★ | Gateway API | |
-| N16 | Add a header-based route match, or a request header modifier filter, to an HTTPRoute. | ★★ | Gateway API | |
-| N46 | An HTTPRoute in another namespace is not attached to a Gateway whose listener allows only `Same` namespace routes. Fix `allowedRoutes`. | ★★ | Gateway API | |
-| N47 | Let an HTTPRoute send traffic to a Service in another namespace with a `ReferenceGrant`. | ★★ | Gateway API | |
-| N48 | Add an HTTPS listener with a TLS Secret (`certificateRefs`) to a Gateway, and a `RequestRedirect` filter that sends HTTP to HTTPS. | ★★★ | Gateway API | |
-| N49 | Traffic doesn't reach a backend. Read the Gateway and HTTPRoute status conditions (`Accepted`, `ResolvedRefs`, `Programmed`) and write the failing reason to a file. | ★★ | Gateway API | |
-| N50 | Add a `URLRewrite` filter that strips a path prefix before the request reaches the backend. | ★★ | Gateway API | |
+| N13 | Create a Gateway (with a given GatewayClass) and an HTTPRoute that sends `/api` to one Service and `/` to another. | ★★ | Gateway API CRDs + controller || main `nw-gateway-routes` |
+| N14 | Split traffic between two backends with weights (canary 80/20) in an HTTPRoute. | ★★ | Gateway API || main `nw-gateway-canary` |
+| N15 | Migrate an existing Ingress (host, paths, TLS) to a Gateway plus HTTPRoute, keeping the same behaviour. | ★★★ | Gateway API || main `nw-gateway-migrate` |
+| N16 | Add a header-based route match, or a request header modifier filter, to an HTTPRoute. | ★★ | Gateway API || main `nw-gateway-header` |
+| N46 | An HTTPRoute in another namespace is not attached to a Gateway whose listener allows only `Same` namespace routes. Fix `allowedRoutes`. | ★★ | Gateway API || main `nw-gateway-allowed` |
+| N47 | Let an HTTPRoute send traffic to a Service in another namespace with a `ReferenceGrant`. | ★★ | Gateway API || main `nw-gateway-refgrant` |
+| N48 | Add an HTTPS listener with a TLS Secret (`certificateRefs`) to a Gateway, and a `RequestRedirect` filter that sends HTTP to HTTPS. | ★★★ | Gateway API || main `nw-gateway-https` |
+| N49 | Traffic doesn't reach a backend. Read the Gateway and HTTPRoute status conditions (`Accepted`, `ResolvedRefs`, `Programmed`) and write the failing reason to a file. | ★★ | Gateway API || main `nw-gateway-status` |
+| N50 | Add a `URLRewrite` filter that strips a path prefix before the request reaches the backend. | ★★ | Gateway API || main `nw-gateway-rewrite` |
 
 ### Ingress
 
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
-| N17 | Create an Ingress with two host or path rules to two Services and a given `ingressClassName`, and test it with `curl`. | ★★ | ingress controller | |
-| N18 | Add TLS to an Ingress using a Secret made from a given cert and key. | ★★ | ingress controller | |
-| N41 | Use the `nginx.ingress.kubernetes.io/rewrite-target` annotation so `/app` reaches the backend as `/`. | ★★ | ingress controller | |
-| N42 | Add a `spec.defaultBackend` to an Ingress for requests that match no rule. | ★ | ingress controller | |
-| N43 | An Ingress path doesn't match because of its `pathType` (`Exact` vs `Prefix`). Fix it. | ★★ | ingress controller | |
-| N44 | An Ingress can't route to a Service in another namespace. Fix it by creating an Ingress in each Service's namespace. | ★★ | ingress controller | |
-| N45 | An Ingress without `ingressClassName` is served by nobody. Mark one IngressClass as the default (`ingressclass.kubernetes.io/is-default-class`). | ★ | ingress controller | |
+| N17 | Create an Ingress with two host or path rules to two Services and a given `ingressClassName`, and test it with `curl`. | ★★ | ingress controller || main `nw-ingress-rules` |
+| N18 | Add TLS to an Ingress using a Secret made from a given cert and key. | ★★ | ingress controller || main `nw-ingress-tls` |
+| N41 | Use the `nginx.ingress.kubernetes.io/rewrite-target` annotation so `/app` reaches the backend as `/`. | ★★ | ingress controller || main `nw-ingress-rewrite` |
+| N42 | Add a `spec.defaultBackend` to an Ingress for requests that match no rule. | ★ | ingress controller || main `nw-ingress-default` |
+| N43 | An Ingress path doesn't match because of its `pathType` (`Exact` vs `Prefix`). Fix it. | ★★ | ingress controller || main `nw-ingress-pathtype` |
+| N44 | An Ingress can't route to a Service in another namespace. Fix it by creating an Ingress in each Service's namespace. | ★★ | ingress controller || main `nw-ingress-cross` |
+| N45 | An Ingress without `ingressClassName` is served by nobody. Mark one IngressClass as the default (`ingressclass.kubernetes.io/is-default-class`). | ★ | ingress controller || main `nw-ingress-class` |
 
 ### CoreDNS
 
@@ -360,7 +360,7 @@ Things the exam environment does that our tasks should copy:
 | W9 | Create an HPA (`autoscaling/v2`) for a Deployment: min/max replicas and a CPU utilization target. | ★★ | metrics-server || main `wl-hpa` |
 | W10 | Add a scale-down stabilization window or behaviour policy to an HPA. | ★★ | metrics-server || main `wl-hpa-behavior` |
 | W11 | An HPA shows `<unknown>` targets. Find out why (missing resource requests or metrics-server) and fix it. | ★★ | metrics-server || main `wl-hpa-unknown` |
-| W12 | Explain or set a VPA in recommendation-only mode, if the CRD exists. | ★★ | VPA CRDs | |
+| W12 | Explain or set a VPA in recommendation-only mode, if the CRD exists. | ★★ | VPA CRDs || main `wl-vpa` |
 | W38 | Resize a running Pod's CPU in place (`kubectl patch --subresource resize`, `resizePolicy`), without restarting it. | ★★ | || main `wl-resize` |
 | W39 | Create an HPA on memory (`averageValue`) and CPU together, and explain which metric decides the replica count. | ★★ | metrics-server || main `wl-hpa-multi` |
 | W40 | An HPA and a manifest that sets `replicas: 3` keep fighting. Find the cause and fix it so only the HPA scales. | ★★ | metrics-server || main `wl-hpa-fight` |
@@ -438,10 +438,10 @@ Things the exam environment does that our tasks should copy:
 
 | Domain | Weight | Questions | Covered |
 |---|---|---|---|
-| Troubleshooting | 30% | 38 | 36 (main) |
-| Cluster Architecture | 25% | 53 | 45 (main) |
-| Services & Networking | 20% | 53 | 36 (main) |
-| Workloads & Scheduling | 15% | 46 | 45 (main) |
+| Troubleshooting | 30% | 38 | 37 (main) |
+| Cluster Architecture | 25% | 53 | 46 (main) |
+| Services & Networking | 20% | 53 | 52 (main) |
+| Workloads & Scheduling | 15% | 46 | 46 (main) |
 | Storage | 10% | 25 | 22 (main) |
 
 ## Build progress
@@ -463,6 +463,10 @@ The work of turning these questions into catalog tasks, kept here so it survives
 - Lab add-ons (`apps/lab/internal/cluster/addons.go`, installed by every `lab up`):
   - metrics-server, with `--kubelet-insecure-tls`. Its manifest is at `/etc/cka-sim/addons/metrics-server.yaml` on the control plane.
   - kube-router v2.11 as a DaemonSet in `kube-system`, with only its firewall on (`/etc/cka-sim/addons/kube-router.yaml`). Tasks test policies with `connects` and `pod_ip` from `lib.sh`.
+  - nftables table `ip cka-sim` on every node rejects new packets that are still addressed to the service CIDR `10.96.0.0/16` (`icmp port-unreachable`). kube-router's FORWARD/OUTPUT ACCEPT otherwise runs before kube-proxy's REJECT, so traffic to a Service with no endpoints would leave the node. On this machine Docker Desktop even answered DNS for `10.96.0.10`. Now it's refused as on a real cluster.
+  - Gateway API v1.6.2 standard CRDs, and Traefik v3.7 in Namespace `traefik` (`/etc/cka-sim/addons/traefik.yaml`). Its ingress-nginx provider serves IngressClass `nginx` (controller `k8s.io/ingress-nginx`, not the default class) and honours `nginx.ingress.kubernetes.io/*` annotations such as `rewrite-target`. Its Gateway provider serves GatewayClass `traefik`. Traffic enters at Service `traefik` on ClusterIP `10.96.80.80` (ports 80 and 443) or on NodePorts `31080` and `31443`, with the host in a `Host:` header or `curl --resolve`. Gateway listeners use ports 80 and 443. Probed 2026-10-12: Prefix/Exact paths, rewrite-target, `defaultBackend`, TLS from a Secret, and the default-class annotation (it only fills `ingressClassName` on Ingresses created afterwards). On the Gateway side: weights, header matches, `URLRewrite`, `RequestRedirect`, HTTPS listeners, `allowedRoutes` (`NotAllowedByListeners`), ReferenceGrant (`RefNotPermitted` without it), and `BackendNotFound`.
+  - VPA 1.8.0: the CRDs and the recommender only (`/etc/cka-sim/addons/vpa.yaml`). There's no updater or admission controller, so only `updateMode: "Off"` does anything. Probed 2026-10-12: a recommendation appears in about 20 s.
+  - Operator image `cka-sim/web-operator:1.0`, preloaded on every node. It's a shell loop over `kubectl` that turns each `WebApp` (`cka-sim.io/v1`, `spec.image`/`replicas`/`port`) into an owned Deployment plus Service, and writes `status.readyReplicas`. Its install manifest (the CRD, Namespace `web-operator`, RBAC and the Deployment) sits **unapplied** at `/etc/cka-sim/addons/web-operator.yaml`. Probed: create, scale through the CR, a manual scale is undone, and deleting the WebApp garbage-collects its objects.
   - helm 3 on every node.
   - Chart repo `http://cka-sim-charts`: chart `web` 1.0.0 (nginx:1.26-alpine) and 1.1.0 (nginx:1.27-alpine, `replicaCount: 2`).
   - Registry `cka-sim-registry:5000`, login `candidate`/`cka-registry`, with `team/web:1.0` and `team/web:1.1`.
@@ -506,6 +510,9 @@ The work of turning these questions into catalog tasks, kept here so it survives
 | 30 | CRDs and Pod security | A52, A53, W44, W45, W46, N53 | Done; W44 after the lab registry. |
 | 31 | Private registry | T27 | Done. |
 | 32 | NetworkPolicy | N3–N7, N51, N52 | Done (after kube-router). |
+| 33 | Ingress | N17, N18, N41–N45, T24 | Done (after Traefik). |
+| 34 | Gateway API | N13–N16, N46–N50 | Done (after Traefik). |
+| 35 | VPA and operators | W12, A25 | Done (after the VPA recommender and the web-operator image). |
 
 **Rewrites so the answer can be checked:**
 - T10 becomes `component: static-pod|deployment|daemonset|systemd` lines.
@@ -517,13 +524,10 @@ The work of turning these questions into catalog tasks, kept here so it survives
 
 | Questions | Waiting for |
 |---|---|
-| W12 | the VPA CRDs |
-| N13–N18, N41–N50, T24 | Gateway API or an ingress controller |
 | A7, A8, A13, A14 | a spare node, kubeadm packages, or an HA control plane |
 | A6, A22, T3 | a safe way to do them; they would damage the shared kind/docker host |
 | A23, S5, S13, S14 | a CSI driver; local-path can't expand volumes |
 | N35 | a lab kernel with the iptables `recent` match (WSL2's lacks it) |
-| A25 | an operator image |
 
 ## What the cluster still needs
 
@@ -532,8 +536,8 @@ These are grouped by how many questions each one unblocks:
 1. ~~**2+ worker nodes**~~: done; the cluster has 2 workers.
 2. ~~**metrics-server**~~: done; `lab up` installs it.
 3. ~~**NetworkPolicy enforcement**~~: done; `lab up` installs kube-router (firewall only) next to kindnet.
-4. **Gateway API CRDs + a controller** (e.g. Envoy Gateway or NGINX Gateway Fabric): N13–N16, N46–N50, T24.
-5. **Ingress controller:** N17, N18, N41–N45.
+4. ~~**Gateway API CRDs + a controller**~~: done (Traefik, GatewayClass `traefik`).
+5. ~~**Ingress controller**~~: done (Traefik, IngressClass `nginx`).
 6. ~~**helm and a local chart repo**~~: done; every node has helm, and `http://cka-sim-charts` serves chart `web`.
 7. **Dynamic provisioner** (kind's `local-path` already does this; check its expansion support for S5).
 8. **Spare unjoined node, and versioned kubeadm packages:** A7, A8. These are the hardest in kind;

@@ -19,10 +19,19 @@ const (
 	setFile   = "evals.yaml"
 )
 
+type Outcome string
+
+const (
+	EarnsAll  Outcome = "pass"
+	EarnsSome Outcome = "partial"
+	EarnsNone Outcome = "fail"
+)
+
 type Attempt struct {
 	Task     tasks.Task `json:"-"`
 	Name     string     `json:"name"`
 	Script   string     `json:"script,omitempty"`
+	Expect   Outcome    `json:"expect,omitempty"`
 	Mentions []string   `json:"mentions,omitempty"`
 }
 
@@ -58,6 +67,19 @@ func Only(set []Attempt, task string) []Attempt {
 	return slices.DeleteFunc(slices.Clone(set), func(a Attempt) bool { return a.Task.ID != task })
 }
 
+func (a Attempt) want() Outcome {
+	switch a.Name {
+	case Solved:
+		return EarnsAll
+	case Untouched:
+		return EarnsNone
+	}
+	if a.Expect == "" {
+		return EarnsSome
+	}
+	return a.Expect
+}
+
 func (a Attempt) validate(seen []string) error {
 	builtIn := a.Name == Solved || a.Name == Untouched
 	switch {
@@ -69,6 +91,10 @@ func (a Attempt) validate(seen []string) error {
 		return fmt.Errorf("attempt %q is built in and takes no script", a.Name)
 	case !builtIn && a.Script == "":
 		return fmt.Errorf("attempt %q needs a script", a.Name)
+	case builtIn && a.Expect != "":
+		return fmt.Errorf("attempt %q is built in, so its outcome is known", a.Name)
+	case !slices.Contains([]Outcome{"", EarnsAll, EarnsSome, EarnsNone}, a.Expect):
+		return fmt.Errorf("attempt %q expects %q, want pass, partial or fail", a.Name, a.Expect)
 	}
 	return nil
 }

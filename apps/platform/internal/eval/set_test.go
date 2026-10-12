@@ -32,7 +32,9 @@ func TestLoadRefusesABadSet(t *testing.T) {
 		{"built in with a script", "- name: solved\n  script: echo\n", "takes no script"},
 		{"listed twice", "- name: solved\n- name: solved\n", "listed twice"},
 		{"no name", "- mentions: [x]\n", "no name"},
-		{"unknown field", "- name: solved\n  expect: pass\n", "unknown field"},
+		{"unknown field", "- name: solved\n  verdict: pass\n", "unknown field"},
+		{"built in with an outcome", "- name: solved\n  expect: pass\n", "outcome is known"},
+		{"unknown outcome", "- name: half\n  script: echo\n  expect: maybe\n", "want pass, partial or fail"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -44,6 +46,16 @@ func TestLoadRefusesABadSet(t *testing.T) {
 				t.Errorf("err = %v, want one containing %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestACustomAttemptCanExpectNothingEarned(t *testing.T) {
+	fsys := fstest.MapFS{"x/evals.yaml": {Data: []byte("- name: trap\n  script: echo\n  expect: fail\n")}}
+
+	set, err := Load(fsys, []tasks.Task{{ID: "x", Dir: "x"}})
+
+	if err != nil || set[0].want() != EarnsNone {
+		t.Errorf("set = %+v, %v; want a trap that earns nothing", set, err)
 	}
 }
 

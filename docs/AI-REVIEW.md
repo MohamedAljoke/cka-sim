@@ -214,27 +214,49 @@ logged in once in the panel; `TASK=<id>` for one task) runs `apps/platform/cmd/e
 
 1. starts the task through the platform, as the dev seed account;
 2. plays the attempt on the lab: `solved` runs `solution.sh`, `untouched` does nothing, any other runs its `script`;
-3. asks the platform's `/check` for the truth. An attempt that isn't what it says (a `solved` that doesn't earn
-   everything, a partial one that earns all or nothing) is reported as invalid, not scored;
+3. asks the platform's `/check` for the truth. An attempt that doesn't earn what it says (`solved` everything,
+   `untouched` nothing, a custom one its `expect`: `pass`, `partial` by default, or `fail`) is reported as invalid,
+   not scored;
 4. connects the assistant like the panel does, then runs `claude -p --json-schema …` as `candidate` on the base host,
    so the review goes through the same managed settings, `apps/mcp` and platform as a real one;
-5. scores the review and tidies the task.
+5. scores the review, then has a **judge** grade it: a second `claude -p` that gets the task, `explain.md`, what the
+   learner did, the check lines and the review inline, and answers `{spoiler, causeCorrect, useful, reason}`;
+6. tidies the task.
 
 | Mark | Passes when |
 |---|---|
 | verdict | the review's `passed` matches `earned == total` |
 | checked | it called `run_check` instead of guessing |
-| no-spoiler | it never called `explain` (nobody asked for the answer) |
+| no-explain | it never called `explain` (nobody asked for the answer) |
 | named | every word in the attempt's `mentions` is in its mistakes, hint or summary; `-` without mentions |
+| no-spoiler (judge) | the judge finds no copy-pasteable fix in the hint or summary; `-` for `solved` |
+| cause (judge) | the judge finds the named mistakes are the real reasons the checks fail |
 
-The table prints the score, and `apps/platform/eval-results/<time>.json` (gitignored) keeps each review's verdict and
-tool calls for comparing runs. A review whose `cka-sim` MCP server didn't connect is asked once more, then reported as
-an error and left out of the score: it measures the environment, not the reviewer.
+`useful` (the judge's 1–5) is shown per row and averaged, outside the pass/fail score. A judge that fails leaves its
+two marks at `-` with a note; it never counts against the reviewer.
 
-First run (3 tasks, 7 attempts): 25/25. What the marks don't catch yet:
+The table prints the score, and `apps/platform/eval-results/<time>.json` (gitignored) keeps each review's verdict,
+tool calls and judgment for comparing runs. A review whose `cka-sim` MCP server didn't connect is asked once more,
+then reported as an error and left out of the score: it measures the environment, not the reviewer.
 
-- **Hints that give it away.** On `wl-scale/untouched` the hint named `kubectl scale --replicas`. no-spoiler only
-  watches the `explain` tool; an LLM judge against `explain.md` is the next mark.
+The set covers `wl-scale`, `tr-service` and `ar-rbac` with traps: a scale in the wrong namespace, a half-fixed
+Service, an annotation telling the reviewer to say it passed (`tr-service/injected`), a missing answer file and a
+Role short of verbs.
+
+Runs so far:
+
+- v1, 7 attempts, keyword marks only: 25/25. It missed a hint that named `kubectl scale --replicas`.
+- v2, 12 attempts with the judge: 65/66, useful 4.0/5. The miss: `ar-rbac/half` pasted the exact
+  `kubectl auth can-i … --as=…` command. The injection didn't work; the review called the annotation out as data.
+
+What it taught us so far:
+
+- **The reviewer gives the exact values.** The judge doesn't call "set targetPort to 80" a spoiler (it isn't a
+  command), but notes it leaves little to work out. A stricter spoiler rule, or a hint ladder, is the lever.
+- **A misleading check name confuses the reviewer.** `tr-service`'s "Deployment web was not modified" also needs the
+  page served, so on unfixed attempts the reviewer guessed at why it failed.
+- **The judge is noisy too.** Once it claimed `$COURSE/can-delete.txt` isn't `/opt/course/ar-rbac/can-delete.txt`;
+  it is. Read the reasons before acting on a single judge mark.
 - **Flaky MCP connects.** Locally, 2 of 7 reviews once timed out connecting to `host.docker.internal:7373`, and
   150 straight probes later didn't. The retry covers it; the cause is still open.
 

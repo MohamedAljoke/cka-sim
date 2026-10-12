@@ -1,3 +1,10 @@
 - name: solved
 - name: untouched
   mentions: [replicas]
+- name: wrong-namespace
+  expect: fail
+  mentions: [namespace]
+  script: |
+    fresh_ns wl-scale-dev
+    kubectl -n wl-scale-dev create deployment web --image=nginx:1.27 --replicas=4
+    kubectl -n wl-scale-dev rollout status deployment/web --timeout=120s

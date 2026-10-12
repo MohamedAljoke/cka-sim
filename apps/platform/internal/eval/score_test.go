@@ -16,22 +16,22 @@ var (
 
 func TestScoreAGoodReview(t *testing.T) {
 	a := Attempt{Name: "half", Mentions: []string{"targetPort"}}
-	r := Review{Tools: []string{"current_task", "run_check"}, Verdict: &Verdict{Passed: false, Mistakes: []string{"the TargetPort is 8080"}}}
+	r := Review{Session: Session{Tools: []string{"current_task", "run_check"}}, Verdict: &Verdict{Passed: false, Mistakes: []string{"the TargetPort is 8080"}}}
 
 	got := Score(a, partial, r)
 
-	if want := (Marks{Verdict: Pass, Checked: Pass, NoSpoiler: Pass, Named: Pass}); got != want {
+	if want := (Marks{Verdict: Pass, Checked: Pass, NoExplain: Pass, Named: Pass, NoSpoiler: None, Cause: None}); got != want {
 		t.Errorf("marks = %+v, want %+v", got, want)
 	}
 }
 
 func TestScoreABadReview(t *testing.T) {
 	a := Attempt{Name: "half", Mentions: []string{"targetPort"}}
-	r := Review{Tools: []string{"explain"}, Verdict: &Verdict{Passed: true, Summary: "All good, the selector is right."}}
+	r := Review{Session: Session{Tools: []string{"explain"}}, Verdict: &Verdict{Passed: true, Summary: "All good, the selector is right."}}
 
 	got := Score(a, partial, r)
 
-	if want := (Marks{Verdict: Fail, Checked: Fail, NoSpoiler: Fail, Named: Fail}); got != want {
+	if want := (Marks{Verdict: Fail, Checked: Fail, NoExplain: Fail, Named: Fail, NoSpoiler: None, Cause: None}); got != want {
 		t.Errorf("marks = %+v, want %+v", got, want)
 	}
 }
@@ -46,7 +46,7 @@ func TestScoreNeedsEveryMention(t *testing.T) {
 }
 
 func TestScoreSkipsNamedWithoutMentions(t *testing.T) {
-	r := Review{Tools: []string{"run_check"}, Verdict: &Verdict{Passed: true}}
+	r := Review{Session: Session{Tools: []string{"run_check"}}, Verdict: &Verdict{Passed: true}}
 
 	marks := Score(Attempt{Name: Solved}, full, r)
 	row := Row{Marks: marks}
@@ -60,7 +60,7 @@ func TestScoreSkipsNamedWithoutMentions(t *testing.T) {
 }
 
 func TestScoreAReviewWithNoVerdict(t *testing.T) {
-	marks := Score(Attempt{Name: Solved}, full, Review{Tools: []string{"run_check"}, Failure: "error_max_turns"})
+	marks := Score(Attempt{Name: Solved}, full, Review{Session: Session{Tools: []string{"run_check"}, Failure: "error_max_turns"}})
 
 	if marks.Verdict != Fail || marks.Checked != Pass {
 		t.Errorf("marks = %+v, want the verdict failed", marks)
@@ -78,6 +78,7 @@ func TestAnAttemptMustBeWhatItSays(t *testing.T) {
 		{Untouched, nothing, true},
 		{Untouched, partial, false},
 		{"half", partial, true},
+		{"trap", nothing, false},
 		{"half", full, false},
 		{"half", nothing, false},
 		{Solved, grader.Result{}, false},
@@ -89,9 +90,20 @@ func TestAnAttemptMustBeWhatItSays(t *testing.T) {
 	}
 }
 
+func TestAnAttemptCanExpectToEarnNothing(t *testing.T) {
+	trap := Attempt{Name: "trap", Expect: EarnsNone}
+
+	if why := invalid(trap, nothing); why != "" {
+		t.Errorf("a trap earning 0 is invalid: %s", why)
+	}
+	if why := invalid(trap, partial); why == "" {
+		t.Error("a trap expecting nothing earned points and still counted as valid")
+	}
+}
+
 func TestTableTotalsOnlyScoredMarks(t *testing.T) {
 	rows := []Row{
-		{Task: "wl-scale", Attempt: Solved, Truth: full, Marks: Marks{Verdict: Pass, Checked: Pass, NoSpoiler: Pass, Named: None}},
+		{Task: "wl-scale", Attempt: Solved, Truth: full, Marks: Marks{Verdict: Pass, Checked: Pass, NoExplain: Pass, Named: None, NoSpoiler: None, Cause: None}},
 		{Task: "wl-scale", Attempt: "half", Truth: full, Marks: unscored, Invalid: "a partial attempt must earn some points"},
 	}
 	var out bytes.Buffer

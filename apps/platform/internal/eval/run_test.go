@@ -25,12 +25,30 @@ func TestRunGoesThroughEachStepInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"start wl-scale", "lab cka-sim-control-plane", "check wl-scale", "connect", "lab " + labagent.BaseHost, "tidy wl-scale"}
+	want := []string{"start wl-scale", "lab cka-sim-control-plane", "check wl-scale", "connect", "review", "judge", "tidy wl-scale"}
 	if !slices.Equal(steps.done, want) {
 		t.Errorf("steps = %q\nwant    %q", steps.done, want)
 	}
 	if rows[0].Marks.Verdict != Pass || rows[0].Truth.Earned != partial.Earned || rows[0].Error != "" {
 		t.Errorf("row = %+v", rows[0])
+	}
+	if rows[0].Judgment == nil || rows[0].Judgment.Useful != 4 || rows[0].Marks.NoSpoiler != Fail || rows[0].Marks.Cause != Pass {
+		t.Errorf("row = %+v, want the judgment merged in", rows[0])
+	}
+}
+
+func TestAFailedJudgeStillLeavesTheReviewScored(t *testing.T) {
+	steps := &steps{}
+	h := harness(steps, &fakePlatform{steps: steps, truth: partial}, reviewed)
+	h.Lab.(*fakeLab).judgment = connected + `{"type":"result","subtype":"error_max_turns","is_error":true}` + "\n"
+
+	rows, err := h.Run(context.Background(), []Attempt{{Task: task, Name: "half", Script: "kubectl scale"}}, func(Row) {})
+
+	if err != nil || rows[0].Marks.Verdict != Pass || rows[0].Error != "" {
+		t.Errorf("row = %+v, %v; want the review still scored", rows[0], err)
+	}
+	if rows[0].Marks.NoSpoiler != None || rows[0].Marks.Cause != None || rows[0].JudgeNote != "error_max_turns" {
+		t.Errorf("row = %+v, want the judge marks left out with a note", rows[0])
 	}
 }
 
@@ -54,7 +72,7 @@ func TestRunDoesNotReviewAnInvalidAttempt(t *testing.T) {
 
 	rows, _ := h.Run(context.Background(), []Attempt{{Task: task, Name: Untouched}}, func(Row) {})
 
-	if slices.Contains(steps.done, "connect") {
+	if slices.Contains(steps.done, "connect") || slices.Contains(steps.done, "judge") {
 		t.Errorf("steps = %q, want no review", steps.done)
 	}
 	if rows[0].Invalid == "" {
@@ -128,16 +146,24 @@ func (p *fakePlatform) Tidy(_ context.Context, task string) error {
 	return nil
 }
 
+const judged = connected + `{"type":"result","subtype":"success","is_error":false,"structured_output":{"spoiler":true,"causeCorrect":true,"useful":4,"reason":"Names the port, then pastes the patch."}}` + "\n"
+
 type fakeLab struct {
-	steps   *steps
-	reviews []string
+	steps    *steps
+	reviews  []string
+	judgment string
 }
 
 func (l *fakeLab) Run(_ context.Context, host, _ string, script []byte) (string, error) {
-	l.steps.add("lab " + host)
-	if !strings.Contains(string(script), "claude") {
+	switch {
+	case host != labagent.BaseHost:
+		l.steps.add("lab " + host)
 		return "", nil
+	case strings.Contains(string(script), "You grade an AI reviewer"):
+		l.steps.add("judge")
+		return l.judgment, nil
 	}
+	l.steps.add("review")
 	review := l.reviews[0]
 	if len(l.reviews) > 1 {
 		l.reviews = l.reviews[1:]
@@ -147,5 +173,5 @@ func (l *fakeLab) Run(_ context.Context, host, _ string, script []byte) (string,
 
 func harness(s *steps, p *fakePlatform, review string) Harness {
 	files := fstest.MapFS{"wl-scale/solution.sh": {Data: []byte("kubectl scale\n")}}
-	return Harness{Files: files, Platform: p, Lab: &fakeLab{steps: s, reviews: []string{review}}, Timeout: time.Minute}
+	return Harness{Files: files, Platform: p, Lab: &fakeLab{steps: s, reviews: []string{review}, judgment: judged}, Timeout: time.Minute}
 }

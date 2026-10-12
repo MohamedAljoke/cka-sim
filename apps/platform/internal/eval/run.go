@@ -39,7 +39,7 @@ func (h Harness) Run(ctx context.Context, set []Attempt, done func(Row)) ([]Row,
 }
 
 func (h Harness) one(ctx context.Context, a Attempt) (row Row, err error) {
-	row = Row{Task: a.Task.ID, Attempt: a.Name, Marks: unscored, Review: Review{Tools: []string{}}}
+	row = Row{Task: a.Task.ID, Attempt: a.Name, Marks: unscored, Review: Review{Session: Session{Tools: []string{}}}}
 	defer func() {
 		if err != nil {
 			row.Error = err.Error()
@@ -66,31 +66,73 @@ func (h Harness) one(ctx context.Context, a Attempt) (row Row, err error) {
 		return row, err
 	}
 	row.Marks = Score(a, row.Truth, row.Review)
+	if row.Review.Verdict == nil {
+		return row, nil
+	}
+	j, err := h.judge(ctx, a, row.Truth, *row.Review.Verdict)
+	if errors.Is(err, ErrNotLoggedIn) {
+		return row, err
+	}
+	if err != nil {
+		row.JudgeNote = err.Error()
+		return row, nil
+	}
+	row.Judgment, row.Marks = &j, j.marks(a, row.Marks)
 	return row, nil
 }
 
 func (h Harness) review(ctx context.Context) (Review, error) {
+	empty := Review{Session: Session{Tools: []string{}}}
 	if err := h.Platform.Connect(ctx); err != nil {
-		return Review{Tools: []string{}}, err
+		return empty, err
 	}
-	script, err := reviewScript()
+	script, err := claudeScript(prompt, verdictSchema)
 	if err != nil {
-		return Review{Tools: []string{}}, err
+		return empty, err
 	}
-	r, err := h.ask(ctx, script)
+	r, err := h.askReview(ctx, script)
 	if errors.Is(err, ErrNoMCP) {
-		r, err = h.ask(ctx, script)
+		r, err = h.askReview(ctx, script)
 	}
 	return r, err
 }
 
-func (h Harness) ask(ctx context.Context, script string) (Review, error) {
+func (h Harness) askReview(ctx context.Context, script string) (Review, error) {
+	out, runErr := h.claude(ctx, script)
+	r, err := ParseReview(out)
+	return r, cause(err, runErr)
+}
+
+func (h Harness) judge(ctx context.Context, a Attempt, truth grader.Result, v Verdict) (Judgment, error) {
+	var j Judgment
+	question, err := judgePrompt(a, truth, v)
+	if err != nil {
+		return j, err
+	}
+	script, err := claudeScript(question, judgeSchema)
+	if err != nil {
+		return j, err
+	}
+	out, runErr := h.claude(ctx, script)
+	s, err := Parse(out, &j)
+	if err := cause(err, runErr); err != nil {
+		return j, err
+	}
+	if s.Failure != "" {
+		return j, errors.New(s.Failure)
+	}
+	return j, nil
+}
+
+func (h Harness) claude(ctx context.Context, script string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, h.Timeout)
 	defer cancel()
-	out, runErr := h.Lab.Run(ctx, labagent.BaseHost, "eval", []byte(script))
-	r, err := Parse(out)
-	if err != nil && runErr != nil && !errors.Is(err, ErrNotLoggedIn) && !errors.Is(err, ErrNoMCP) {
-		return r, runErr
+	return h.Lab.Run(ctx, labagent.BaseHost, "eval", []byte(script))
+}
+
+func cause(parseErr, runErr error) error {
+	if parseErr != nil && runErr != nil && !errors.Is(parseErr, ErrNotLoggedIn) && !errors.Is(parseErr, ErrNoMCP) {
+		return runErr
 	}
-	return r, err
+	return parseErr
 }

@@ -42,15 +42,20 @@ var verdictSchema = map[string]any{
 	"additionalProperties": false,
 }
 
-type Review struct {
-	Verdict  *Verdict      `json:"verdict,omitempty"`
+type Session struct {
 	Tools    []string      `json:"tools"`
 	Turns    int           `json:"turns"`
 	Duration time.Duration `json:"duration"`
 	Failure  string        `json:"failure,omitempty"`
+	MCP      string        `json:"-"`
 }
 
-func (r Review) Called(tool string) bool { return slices.Contains(r.Tools, tool) }
+type Review struct {
+	Verdict *Verdict `json:"verdict,omitempty"`
+	Session
+}
+
+func (s Session) Called(tool string) bool { return slices.Contains(s.Tools, tool) }
 
 type event struct {
 	Type             string          `json:"type"`
@@ -60,7 +65,7 @@ type event struct {
 	Result           string          `json:"result"`
 	NumTurns         int             `json:"num_turns"`
 	DurationMS       int64           `json:"duration_ms"`
-	StructuredOutput *Verdict        `json:"structured_output"`
+	StructuredOutput json.RawMessage `json:"structured_output"`
 	MCPServers       []struct {
 		Name   string `json:"name"`
 		Status string `json:"status"`
@@ -74,11 +79,23 @@ type message struct {
 	} `json:"content"`
 }
 
-func Parse(stream string) (Review, error) {
-	r := Review{Tools: []string{}}
+func ParseReview(stream string) (Review, error) {
+	var v Verdict
+	s, err := Parse(stream, &v)
+	r := Review{Session: s}
+	if s.Failure == "" {
+		r.Verdict = &v
+	}
+	if err == nil && s.MCP != "connected" {
+		err = fmt.Errorf("%w: %s", ErrNoMCP, s.MCP)
+	}
+	return r, err
+}
+
+func Parse(stream string, answer any) (Session, error) {
+	s := Session{Tools: []string{}, MCP: "not listed"}
 	var other []string
 	finished := false
-	mcp := "not listed"
 	scanner := bufio.NewScanner(strings.NewReader(stream))
 	scanner.Buffer(make([]byte, 0, 64<<10), 16<<20)
 	for scanner.Scan() {
@@ -94,7 +111,7 @@ func Parse(stream string) (Review, error) {
 		case "system":
 			for _, server := range e.MCPServers {
 				if server.Name == mcpServer {
-					mcp = server.Status
+					s.MCP = server.Status
 				}
 			}
 		case "assistant":
@@ -102,36 +119,36 @@ func Parse(stream string) (Review, error) {
 			if json.Unmarshal(e.Message, &m) == nil {
 				for _, c := range m.Content {
 					if tool, ours := strings.CutPrefix(c.Name, mcpPrefix); c.Type == "tool_use" && ours {
-						r.Tools = append(r.Tools, tool)
+						s.Tools = append(s.Tools, tool)
 					}
 				}
 			}
 		case "result":
 			finished = true
-			r.Turns, r.Duration = e.NumTurns, time.Duration(e.DurationMS)*time.Millisecond
-			r.Verdict = e.StructuredOutput
+			s.Turns, s.Duration = e.NumTurns, time.Duration(e.DurationMS)*time.Millisecond
 			switch {
 			case e.IsError:
-				r.Failure = cmp.Or(e.Result, e.Subtype, "the review failed")
-			case r.Verdict == nil:
-				r.Failure = "the review gave no verdict"
+				s.Failure = cmp.Or(e.Result, e.Subtype, "it failed")
+			case len(e.StructuredOutput) == 0 || string(e.StructuredOutput) == "null":
+				s.Failure = "it gave no answer in the schema"
+			default:
+				if err := json.Unmarshal(e.StructuredOutput, answer); err != nil {
+					s.Failure = "its answer doesn't fit the schema: " + err.Error()
+				}
 			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return r, err
+		return s, err
 	}
 	text := strings.Join(other, "\n")
-	if loggedOut(r.Failure) || loggedOut(text) {
-		return r, ErrNotLoggedIn
+	if loggedOut(s.Failure) || loggedOut(text) {
+		return s, ErrNotLoggedIn
 	}
 	if !finished {
-		return r, fmt.Errorf("the review ended without a result: %s", cmp.Or(text, "no output"))
+		return s, fmt.Errorf("claude ended without a result: %s", cmp.Or(text, "no output"))
 	}
-	if mcp != "connected" {
-		return r, fmt.Errorf("%w: %s", ErrNoMCP, mcp)
-	}
-	return r, nil
+	return s, nil
 }
 
 func loggedOut(text string) bool {
@@ -139,13 +156,13 @@ func loggedOut(text string) bool {
 	return strings.Contains(text, "/login") || strings.Contains(text, "not logged in") || strings.Contains(text, "invalid api key")
 }
 
-func reviewScript() (string, error) {
-	schema, err := json.Marshal(verdictSchema)
+func claudeScript(question string, schema any) (string, error) {
+	encoded, err := json.Marshal(schema)
 	if err != nil {
 		return "", err
 	}
 	claude := quoteAll("claude", "-p", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
-		"--max-turns", maxTurns, "--json-schema", string(schema), prompt)
+		"--max-turns", maxTurns, "--json-schema", string(encoded), question)
 	return "cd / && su -l candidate -c " + quote(claude) + " 2>&1\n", nil
 }
 

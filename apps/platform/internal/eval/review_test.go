@@ -19,7 +19,7 @@ const reviewed = connected + `{"type":"assistant","message":{"content":[{"type":
 `
 
 func TestParseReadsOurToolsAndVerdict(t *testing.T) {
-	r, err := Parse(reviewed)
+	r, err := ParseReview(reviewed)
 
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestParseReadsOurToolsAndVerdict(t *testing.T) {
 }
 
 func TestParseKeepsAFailedReview(t *testing.T) {
-	r, err := Parse(connected + `{"type":"result","subtype":"error_max_turns","is_error":true,"num_turns":25}` + "\n")
+	r, err := ParseReview(connected + `{"type":"result","subtype":"error_max_turns","is_error":true,"num_turns":25}` + "\n")
 
 	if err != nil {
 		t.Fatal(err)
@@ -47,9 +47,9 @@ func TestParseKeepsAFailedReview(t *testing.T) {
 }
 
 func TestParseNeedsAVerdict(t *testing.T) {
-	r, err := Parse(connected + `{"type":"result","subtype":"success","is_error":false,"result":"Looks fine."}` + "\n")
+	r, err := ParseReview(connected + `{"type":"result","subtype":"success","is_error":false,"result":"Looks fine."}` + "\n")
 
-	if err != nil || r.Failure != "the review gave no verdict" {
+	if err != nil || r.Failure != "it gave no answer in the schema" {
 		t.Errorf("review = %+v, %v", r, err)
 	}
 }
@@ -59,8 +59,8 @@ func TestParseSaysWhenClaudeIsLoggedOut(t *testing.T) {
 		`{"type":"result","subtype":"success","is_error":true,"result":"Not logged in · Please run /login"}` + "\n",
 		"Invalid API key · Please run /login\n",
 	} {
-		if _, err := Parse(stream); !errors.Is(err, ErrNotLoggedIn) {
-			t.Errorf("Parse(%q) err = %v, want ErrNotLoggedIn", stream, err)
+		if _, err := ParseReview(stream); !errors.Is(err, ErrNotLoggedIn) {
+			t.Errorf("ParseReview(%q) err = %v, want ErrNotLoggedIn", stream, err)
 		}
 	}
 }
@@ -68,13 +68,13 @@ func TestParseSaysWhenClaudeIsLoggedOut(t *testing.T) {
 func TestParseSaysWhenOurMCPServerDidNotConnect(t *testing.T) {
 	stream := strings.Replace(reviewed, `"status":"connected"`, `"status":"failed"`, 1)
 
-	if _, err := Parse(stream); !errors.Is(err, ErrNoMCP) || !strings.Contains(err.Error(), "failed") {
+	if _, err := ParseReview(stream); !errors.Is(err, ErrNoMCP) || !strings.Contains(err.Error(), "failed") {
 		t.Errorf("err = %v, want ErrNoMCP with the status", err)
 	}
 }
 
 func TestParseWithoutAResultIsAnError(t *testing.T) {
-	_, err := Parse("su: user candidate does not exist\n")
+	_, err := ParseReview("su: user candidate does not exist\n")
 
 	if err == nil || !strings.Contains(err.Error(), "does not exist") {
 		t.Errorf("err = %v, want the output in it", err)
@@ -82,7 +82,7 @@ func TestParseWithoutAResultIsAnError(t *testing.T) {
 }
 
 func TestReviewScriptQuotesForBothShells(t *testing.T) {
-	script, err := reviewScript()
+	script, err := claudeScript(prompt, verdictSchema)
 	if err != nil {
 		t.Fatal(err)
 	}

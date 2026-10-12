@@ -12,16 +12,20 @@ import (
 // the first exam doesn't wait on Docker Hub on every node, and a cluster made again after lab down doesn't
 // download them again.
 func (c *Cluster) LoadImages(ctx context.Context, images []string) error {
-	if err := eachAtOnce(images, func(image string) error {
+	if err := pullMissing(ctx, images); err != nil {
+		return err
+	}
+	return eachAtOnce(Nodes, func(node string) error { return importImages(ctx, node, images) })
+}
+
+func pullMissing(ctx context.Context, images []string) error {
+	return eachAtOnce(images, func(image string) error {
 		if _, err := docker(ctx, "", "image", "inspect", image); err == nil {
 			return nil
 		}
 		_, err := docker(ctx, "", "pull", "--quiet", image)
 		return err
-	}); err != nil {
-		return err
-	}
-	return eachAtOnce(Nodes, func(node string) error { return importImages(ctx, node, images) })
+	})
 }
 
 func eachAtOnce(items []string, do func(string) error) error {

@@ -1,0 +1,1 @@
+kubectl -n wl-hpa-behavior patch hpa worker --type merge -p '{"spec":{"behavior":{"scaleDown":{"stabilizationWindowSeconds":600,"policies":[{"type":"Pods","value":1,"periodSeconds":60}]}}}}' >/dev/null

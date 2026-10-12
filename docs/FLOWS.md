@@ -25,7 +25,11 @@ resolve from it. Base has no kubectl. `Prepare` gives base's `candidate` an ssh 
 installs that key and the cluster's admin kubeconfig for both `candidate` and `root`. Then `LoadImages`
 (`internal/cluster/images.go`) pulls the images in `CKA_SIM_IMAGES` and imports them into each node's
 containerd. The Compose file sets that variable to the list in the platform's `catalog/images.txt`, because the
-lab knows nothing about tasks. Last, `lab-start.sh` execs the agent on `:7171`. `make up` waits for Compose's
+lab knows nothing about tasks. Then `InstallAddons` (`internal/cluster/addons.go`) runs, on every `lab up` so
+an older cluster catches up. It applies metrics-server, copies helm onto every node, and starts two more
+containers on the `kind` network: the registry `cka-sim-registry:5000` (with a login, and `team/web` pushed
+into it) and the chart repo `http://cka-sim-charts`. A failed add-on only prints a warning. Last,
+`lab-start.sh` execs the agent on `:7171`. `make up` waits for Compose's
 health check on its `/healthz`: about 4 minutes the first time, seconds when the cluster is already built.
 
 Next, `make dev` builds `bin/server` and starts it in the background with the token, then starts Vite on 5173.

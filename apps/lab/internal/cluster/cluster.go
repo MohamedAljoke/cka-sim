@@ -88,7 +88,7 @@ func RequireUp() error {
 	if !exists {
 		return fmt.Errorf("cluster %s is not up; run cka-sim up first", Name)
 	}
-	if !baseExists() {
+	if !containerExists(Base) {
 		return fmt.Errorf("the base host %s is missing; run cka-sim up", Base)
 	}
 	return nil
@@ -135,7 +135,7 @@ func buildImage(ctx context.Context, tag, dockerfile string) error {
 }
 
 func (c *Cluster) Delete(ctx context.Context) error {
-	if err := removeBase(ctx); err != nil {
+	if err := removeLabContainers(ctx); err != nil {
 		return err
 	}
 	return c.provider.Delete(Name, c.KubeconfigPath)

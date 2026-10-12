@@ -26,7 +26,8 @@ const usage = `lab — the cka-sim lab: a Kubernetes cluster in Docker, like the
   lab shell      open a shell on the base host, where the exam starts
   lab version    print the version
 
-  lab up preloads the images in CKA_SIM_IMAGES (comma-separated) into every node.
+  lab up preloads the images in CKA_SIM_IMAGES (comma-separated) into every node, and installs
+  metrics-server, helm, a registry (cka-sim-registry:5000) and a chart repo (http://cka-sim-charts).
 `
 
 func run(ctx context.Context, args []string, stdout io.Writer) error {
@@ -102,6 +103,7 @@ func runUp(ctx context.Context, stdout io.Writer) error {
 		if err := c.Prepare(ctx); err != nil {
 			return err
 		}
+		installAddons(ctx, stdout, c)
 		fmt.Fprintf(stdout, "cluster %s is already up\n", cluster.Name)
 		printHowToConnect(stdout, c)
 		return nil
@@ -125,9 +127,17 @@ func runUp(ctx context.Context, stdout io.Writer) error {
 			fmt.Fprintf(stdout, "warning: the first exam will pull the task images itself: %v\n", err)
 		}
 	}
+	installAddons(ctx, stdout, c)
 	fmt.Fprintf(stdout, "\ncluster %s is up\n", cluster.Name)
 	printHowToConnect(stdout, c)
 	return nil
+}
+
+func installAddons(ctx context.Context, stdout io.Writer, c *cluster.Cluster) {
+	fmt.Fprintln(stdout, "installing the add-ons: metrics-server, helm, a registry and a chart repo")
+	if err := c.InstallAddons(ctx); err != nil {
+		fmt.Fprintf(stdout, "warning: tasks that need an add-on will fail: %v\n", err)
+	}
 }
 
 func imagesToPreload(list string) []string {

@@ -57,6 +57,14 @@ func TestNodeImageTagMatchesItsKindestBase(t *testing.T) {
 	}
 }
 
+func TestMetricsServerRunsThePreloadedImageWithoutKubeletCerts(t *testing.T) {
+	for _, want := range []string{"image: " + metricsServerImage + "\n", "- --kubelet-insecure-tls\n"} {
+		if !strings.Contains(metricsServerManifest, want) {
+			t.Errorf("metrics-server.yaml lacks %q", want)
+		}
+	}
+}
+
 func parse(t *testing.T, raw string) v1alpha4.Cluster {
 	t.Helper()
 	var config v1alpha4.Cluster

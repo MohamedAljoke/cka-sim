@@ -84,14 +84,14 @@ Things the exam environment does that our tasks should copy:
 
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
-| T12 | Find the Pod using the most CPU (or memory) in a namespace or across the cluster, and write its name to a file. | ★ | metrics-server | |
-| T13 | Write a script or command that shows node resource usage sorted by memory. | ★ | metrics-server | |
+| T12 | Find the Pod using the most CPU (or memory) in a namespace or across the cluster, and write its name to a file. | ★ | metrics-server || main `tr-top-pod` |
+| T13 | Write a script or command that shows node resource usage sorted by memory. | ★ | metrics-server || main `tr-top-nodes` |
 | T14 | Write all Pods sorted by creation time or by restart count to a file (`--sort-by`, `custom-columns`). | ★ | | main `tr-sort-by` |
-| T33 | Install metrics-server from a manifest and get `kubectl top` working on a lab cluster (`--kubelet-insecure-tls`). | ★★ | metrics-server image preloaded | |
+| T33 | Install metrics-server from a manifest and get `kubectl top` working on a lab cluster (`--kubelet-insecure-tls`). | ★★ | metrics-server image preloaded || main `tr-metrics-server` |
 | T34 | Without metrics-server, find the node with the most *requested* CPU from `kubectl describe node` ("Allocated resources"), and explain how requests differ from actual usage. | ★ | || main `tr-requested-cpu` |
 | T35 | Write every Pod in the cluster that has no resource requests (BestEffort QoS) to a file, using custom-columns or jsonpath. | ★ | || main `tr-besteffort` |
 | T36 | Change a Pod so its QoS class becomes `Guaranteed`, and write the QoS class of three given Pods to a file. | ★ | || main `tr-qos` |
-| T38 | Find which container in a multi-container Pod uses the most memory (`kubectl top pod --containers`). | ★ | metrics-server | |
+| T38 | Find which container in a multi-container Pod uses the most memory (`kubectl top pod --containers`). | ★ | metrics-server || main `tr-top-containers` |
 
 ### Container output streams (logs)
 
@@ -124,7 +124,7 @@ Things the exam environment does that our tasks should copy:
 |---|---|---|---|---|
 | T25 | A container keeps restarting with `Last State: OOMKilled` (exit code 137). Tell it apart from an app crash and raise the memory limit just enough for it to run. | ★★ | || main `tr-oomkilled` |
 | T26 | Inspect a distroless Pod with no shell by attaching an ephemeral container (`kubectl debug -it --target`), and read a node's files with `kubectl debug node/<name>` instead of ssh. | ★★ | || main `tr-debug` |
-| T27 | Pods are in `ImagePullBackOff` because the image is in a private registry. Create a `docker-registry` Secret and attach it via `imagePullSecrets` on the ServiceAccount so every Pod gets it. | ★★ | local registry with auth | |
+| T27 | Pods are in `ImagePullBackOff` because the image is in a private registry. Create a `docker-registry` Secret and attach it via `imagePullSecrets` on the ServiceAccount so every Pod gets it. | ★★ | local registry with auth || main `tr-private-registry` |
 
 ---
 
@@ -198,16 +198,16 @@ Things the exam environment does that our tasks should copy:
 
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
-| A15 | Add a Helm repo and install a chart in a namespace with overridden values (`--set` or a values file). Then upgrade it, then roll it back. | ★★ | helm + local chart/repo | |
-| A16 | Find a broken Helm release (`helm ls -a`, `pending-install`/`failed`) and delete it. Write the chart's default values to a file. | ★★ | helm | |
-| A17 | Render a chart with `helm template` and install only the manifests it creates, without Helm managing them. | ★★ | helm | |
+| A15 | Add a Helm repo and install a chart in a namespace with overridden values (`--set` or a values file). Then upgrade it, then roll it back. | ★★ | helm + local chart/repo || main `ar-helm-install` |
+| A16 | Find a broken Helm release (`helm ls -a`, `pending-install`/`failed`) and delete it. Write the chart's default values to a file. | ★★ | helm || main `ar-helm-broken` |
+| A17 | Render a chart with `helm template` and install only the manifests it creates, without Helm managing them. | ★★ | helm || main `ar-helm-template` |
 | A18 | Use a Kustomize overlay to change the replicas, image tag and a label on a base, and apply it with `kubectl apply -k`. | ★★ | || main `ar-kustomize` |
 | A19 | Create a ConfigMap and a Secret from files with a Kustomize generator, and roll them into a Deployment. | ★★ | || main `ar-kustomize-gen` |
-| A30 | Find which chart version and values a release was installed with (`helm history`, `helm get values --all`), and write them to a file. | ★ | helm | |
-| A31 | An upgrade lost a custom value because `--reset-values` was the default. Restore it with `--reuse-values` or a values file. | ★★ | helm | |
-| A32 | `helm pull --untar` a chart, change one default in `values.yaml`, and install it from the local folder with `--create-namespace`. | ★★ | helm + local chart/repo | |
-| A33 | Find the Helm release that owns a given Deployment from the `meta.helm.sh/release-name` annotation, and list all releases with `helm ls -A`. | ★ | helm | |
-| A34 | A release is stuck in `pending-upgrade`, so every new upgrade fails. Roll it back to the last deployed revision. | ★★ | helm | |
+| A30 | Find which chart version and values a release was installed with (`helm history`, `helm get values --all`), and write them to a file. | ★ | helm || main `ar-helm-history` |
+| A31 | An upgrade lost a custom value because `--reset-values` was the default. Restore it with `--reuse-values` or a values file. | ★★ | helm || main `ar-helm-reuse` |
+| A32 | `helm pull --untar` a chart, change one default in `values.yaml`, and install it from the local folder with `--create-namespace`. | ★★ | helm + local chart/repo || main `ar-helm-pull` |
+| A33 | Find the Helm release that owns a given Deployment from the `meta.helm.sh/release-name` annotation, and list all releases with `helm ls -A`. | ★ | helm || main `ar-helm-owner` |
+| A34 | A release is stuck in `pending-upgrade`, so every new upgrade fails. Roll it back to the last deployed revision. | ★★ | helm || main `ar-helm-stuck` |
 
 ### Extension interfaces (CNI, CSI, CRI)
 
@@ -357,16 +357,16 @@ Things the exam environment does that our tasks should copy:
 
 | # | Question | Level | Needs | Covered |
 |---|---|---|---|---|
-| W9 | Create an HPA (`autoscaling/v2`) for a Deployment: min/max replicas and a CPU utilization target. | ★★ | metrics-server | |
-| W10 | Add a scale-down stabilization window or behaviour policy to an HPA. | ★★ | metrics-server | |
-| W11 | An HPA shows `<unknown>` targets. Find out why (missing resource requests or metrics-server) and fix it. | ★★ | metrics-server | |
+| W9 | Create an HPA (`autoscaling/v2`) for a Deployment: min/max replicas and a CPU utilization target. | ★★ | metrics-server || main `wl-hpa` |
+| W10 | Add a scale-down stabilization window or behaviour policy to an HPA. | ★★ | metrics-server || main `wl-hpa-behavior` |
+| W11 | An HPA shows `<unknown>` targets. Find out why (missing resource requests or metrics-server) and fix it. | ★★ | metrics-server || main `wl-hpa-unknown` |
 | W12 | Explain or set a VPA in recommendation-only mode, if the CRD exists. | ★★ | VPA CRDs | |
 | W38 | Resize a running Pod's CPU in place (`kubectl patch --subresource resize`, `resizePolicy`), without restarting it. | ★★ | || main `wl-resize` |
-| W39 | Create an HPA on memory (`averageValue`) and CPU together, and explain which metric decides the replica count. | ★★ | metrics-server | |
-| W40 | An HPA and a manifest that sets `replicas: 3` keep fighting. Find the cause and fix it so only the HPA scales. | ★★ | metrics-server | |
-| W41 | An HPA shows `FailedGetScale` because `scaleTargetRef` has the wrong kind or name. Fix it. | ★ | metrics-server | |
-| W42 | Generate load with a busybox `wget` loop, watch the HPA scale up, then watch the stabilization window delay the scale-down. | ★★★ | metrics-server | |
-| W43 | Scale a StatefulSet with an HPA, and explain how scaling down affects its Pods and PVCs. | ★★ | metrics-server | |
+| W39 | Create an HPA on memory (`averageValue`) and CPU together, and explain which metric decides the replica count. | ★★ | metrics-server || main `wl-hpa-multi` |
+| W40 | An HPA and a manifest that sets `replicas: 3` keep fighting. Find the cause and fix it so only the HPA scales. | ★★ | metrics-server || main `wl-hpa-fight` |
+| W41 | An HPA shows `FailedGetScale` because `scaleTargetRef` has the wrong kind or name. Fix it. | ★ | metrics-server || main `wl-hpa-target` |
+| W42 | Generate load with a busybox `wget` loop, watch the HPA scale up, then watch the stabilization window delay the scale-down. | ★★★ | metrics-server || main `wl-hpa-load` |
+| W43 | Scale a StatefulSet with an HPA, and explain how scaling down affects its Pods and PVCs. | ★★ | metrics-server || main `wl-hpa-sts` |
 
 ### Self-healing primitives
 
@@ -396,7 +396,7 @@ Things the exam environment does that our tasks should copy:
 | W25 | Create a PriorityClass and use it so a critical Pod evicts lower-priority Pods. | ★★ | || main `wl-priority` |
 | W26 | Set a Pod `securityContext`: `runAsUser`, `readOnlyRootFilesystem` and dropped capabilities. | ★★ | || main `wl-security-context` |
 | W30 | Enforce Pod Security Admission `restricted` on a namespace with a label, then fix a Deployment whose Pods are rejected (`runAsNonRoot`, `seccompProfile`, `allowPrivilegeEscalation: false`, drop `ALL`). | ★★ | || main `wl-psa` |
-| W44 | Pin a Deployment's image by digest (`image@sha256:…`) instead of a tag, and set `imagePullPolicy` so a moved tag can't change what runs. | ★ | || later: the lab preloads images with `ctr import`, so Pods report no registry digest and a digest reference can't be pulled offline |
+| W44 | Pin a Deployment's image by digest (`image@sha256:…`) instead of a tag, and set `imagePullPolicy` so a moved tag can't change what runs. | ★ | || main `wl-image-digest` |
 | W45 | Set `runAsUser` at Pod level and a different one on one container, and write the effective UID of each container (`id`). | ★ | || main `wl-runas-precedence` |
 | W46 | Find a container's process on the node (`crictl inspect` → PID, `ps`) and write which UID it runs as on the host. | ★★ | || main `wl-host-process` |
 
@@ -438,10 +438,10 @@ Things the exam environment does that our tasks should copy:
 
 | Domain | Weight | Questions | Covered |
 |---|---|---|---|
-| Troubleshooting | 30% | 38 | 31 (main) |
-| Cluster Architecture | 25% | 53 | 37 (main) |
+| Troubleshooting | 30% | 38 | 36 (main) |
+| Cluster Architecture | 25% | 53 | 45 (main) |
 | Services & Networking | 20% | 53 | 29 (main) |
-| Workloads & Scheduling | 15% | 46 | 36 (main) |
+| Workloads & Scheduling | 15% | 46 | 45 (main) |
 | Storage | 10% | 25 | 22 (main) |
 
 ## Build progress
@@ -460,9 +460,14 @@ The work of turning these questions into catalog tasks, kept here so it survives
 - kindnet does **not** enforce NetworkPolicy, so N3–N7 wait.
 - The nodes have no `etcdctl`/`etcdutl`. `etcd_tools` in `catalog/lib.sh` copies them out of the etcd image.
 - `catalog/lib.sh` gives answer files `COURSE=/opt/course/<task id>`, and `fresh_course` resets that folder.
+- Lab add-ons (`apps/lab/internal/cluster/addons.go`, installed by every `lab up`):
+  - metrics-server, with `--kubelet-insecure-tls`. Its manifest is at `/etc/cka-sim/addons/metrics-server.yaml` on the control plane.
+  - helm 3 on every node.
+  - Chart repo `http://cka-sim-charts`: chart `web` 1.0.0 (nginx:1.26-alpine) and 1.1.0 (nginx:1.27-alpine, `replicaCount: 2`).
+  - Registry `cka-sim-registry:5000`, login `candidate`/`cka-registry`, with `team/web:1.0` and `team/web:1.1`.
 - Node convention, so tasks don't fight in one exam: taints go only on `cka-sim-worker` (`tr-kubelet` already breaks it), node labels only on `cka-sim-worker2`. A task that taints a node needs a `reset.sh` that removes the taint (see `wl-taints`).
 
-**Pending (2026-10-12):** every built task passes its selftest. Every question the current cluster can host is built. What's left needs the add-ons in "What the cluster still needs".
+**Pending (2026-10-12):** every built task passes its selftest. Every question the current cluster can host is built. What's left needs the add-ons still open in "What the cluster still needs".
 
 **Waves (the build order):**
 
@@ -487,8 +492,8 @@ The work of turning these questions into catalog tasks, kept here so it survives
 | 17 | Logs on the node | T28, T29, T30, T31, T32 | Done. |
 | 18 | Resources and health | T34, T35, T36, T37 | Done. |
 | 19 | Application lifecycle | W32–W38 | Done. |
-| 20 | Monitoring and HPA (after metrics-server) | T33, T38, W39–W43 | |
-| 21 | Helm (after helm) | A30–A34 | |
+| 20 | Monitoring and HPA | T12, T13, T33, T38, W9–W11, W39–W43 | Done (after the lab add-ons). |
+| 21 | Helm | A15–A17, A30–A34 | Done (after the lab add-ons). |
 | 22 | Volumes and node storage | S10, S11, S12, S15, S16, S17, S25 | Done. |
 | 23 | Binding PVs and PVCs | S18–S22 | Done. |
 | 24 | StorageClass behaviour | S23, S24 | Done. |
@@ -497,7 +502,8 @@ The work of turning these questions into catalog tasks, kept here so it survives
 | 27 | DNS in depth | N36–N40 | Done. |
 | 28 | TLS and kubeconfig | A35–A43 | Done. |
 | 29 | RBAC in depth and the API | A44–A51 | Done. |
-| 30 | CRDs and Pod security | A52, A53, W44, W45, W46, N53 | Done; W44 left for later (offline images). |
+| 30 | CRDs and Pod security | A52, A53, W44, W45, W46, N53 | Done; W44 after the lab registry. |
+| 31 | Private registry | T27 | Done. |
 
 **Rewrites so the answer can be checked:**
 - T10 becomes `component: static-pod|deployment|daemonset|systemd` lines.
@@ -509,36 +515,30 @@ The work of turning these questions into catalog tasks, kept here so it survives
 
 | Questions | Waiting for |
 |---|---|
-| T12, T13, T38, W9–W11, W39–W43 | metrics-server (T33 installs it, so it only needs its image in `images.txt`) |
 | W12 | the VPA CRDs |
 | N3–N7, N51, N52 | a CNI that enforces NetworkPolicy |
 | N13–N18, N41–N50, T24 | Gateway API or an ingress controller |
-| A15–A17, A30–A34 | helm |
 | A7, A8, A13, A14 | a spare node, kubeadm packages, or an HA control plane |
 | A6, A22, T3 | a safe way to do them; they would damage the shared kind/docker host |
 | A23, S5, S13, S14 | a CSI driver; local-path can't expand volumes |
 | N35 | a lab kernel with the iptables `recent` match (WSL2's lacks it) |
-| W44 | a registry the lab can pull from, or images preloaded with their registry digests |
 | A25 | an operator image |
-| T27 | a local registry that requires auth |
 
 ## What the cluster still needs
 
 These are grouped by how many questions each one unblocks:
 
 1. ~~**2+ worker nodes**~~: done; the cluster has 2 workers.
-2. **metrics-server:** T12, T13, T38, W9–W11, W39–W43. T33 (install it yourself) needs only its image preloaded.
+2. ~~**metrics-server**~~: done; `lab up` installs it.
 3. **NetworkPolicy-enforcing CNI** (Calico or Cilium instead of kindnet): N3–N7, N51, N52.
 4. **Gateway API CRDs + a controller** (e.g. Envoy Gateway or NGINX Gateway Fabric): N13–N16, N46–N50, T24.
 5. **Ingress controller:** N17, N18, N41–N45.
-6. **helm binary on the control-plane node, plus a local chart/repo:** A15–A17, A30–A34. The exam has no
-   internet, so we can't rely on it either.
+6. ~~**helm and a local chart repo**~~: done; every node has helm, and `http://cka-sim-charts` serves chart `web`.
 7. **Dynamic provisioner** (kind's `local-path` already does this; check its expansion support for S5).
 8. **Spare unjoined node, and versioned kubeadm packages:** A7, A8. These are the hardest in kind;
    leave them last.
 9. **3 control-plane nodes:** A13, A14.
-10. **A private registry with auth** (e.g. a `registry:2` container with htpasswd, preloaded with one
-    image): T27.
+10. ~~**A private registry with auth**~~: done; `cka-sim-registry:5000`.
 11. **A CSI driver with expansion** (e.g. csi-driver-host-path): A23, S5, S13, S14.
 
 ## A suggested order for turning these into tasks

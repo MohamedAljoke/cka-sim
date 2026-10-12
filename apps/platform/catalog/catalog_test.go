@@ -39,8 +39,8 @@ func TestEveryShippedTaskLoads(t *testing.T) {
 	}
 }
 
-// The node image already has registry.k8s.io's images; the rest must be in images.txt, which make up and
-// the GKE pool hand to the lab to preload.
+// The node image already has registry.k8s.io's images and the lab's registry serves its own; the rest must be
+// in images.txt, which make up and the GKE pool hand to the lab to preload.
 var imageRef = regexp.MustCompile(`(?:--image=|image: )([\w./:-]+)`)
 
 func TestEveryImageIsPreloaded(t *testing.T) {
@@ -56,7 +56,7 @@ func TestEveryImageIsPreloaded(t *testing.T) {
 	for _, script := range scripts {
 		body, _ := fs.ReadFile(FS, script)
 		for _, m := range imageRef.FindAllStringSubmatch(string(body), -1) {
-			if image := m[1]; !strings.HasPrefix(image, "registry.k8s.io/") && !slices.Contains(preloaded, image) {
+			if image := m[1]; !strings.HasPrefix(image, "registry.k8s.io/") && !strings.HasPrefix(image, "cka-sim-registry:5000/") && !slices.Contains(preloaded, image) {
 				t.Errorf("%s runs %s, which images.txt doesn't preload", script, image)
 			}
 		}

@@ -15,7 +15,7 @@ var baseDockerfile string
 // to every node as candidate. An existing base is kept, so open terminals stay open; one a Docker
 // restart stopped is started again, since unlike the kind nodes it has no restart policy.
 func (c *Cluster) Prepare(ctx context.Context) error {
-	if baseExists() {
+	if containerExists(Base) {
 		_, err := docker(ctx, "", "start", Base)
 		return err
 	}
@@ -69,13 +69,13 @@ func provisionNodes(ctx context.Context, publicKey string) error {
 	return nil
 }
 
-func removeBase(ctx context.Context) error {
-	_, err := docker(ctx, "", "rm", "-f", Base)
+func removeLabContainers(ctx context.Context) error {
+	_, err := docker(ctx, "", "rm", "-f", Base, Registry, Charts)
 	return err
 }
 
-func baseExists() bool {
-	return exec.Command("docker", "inspect", Base).Run() == nil
+func containerExists(name string) bool {
+	return exec.Command("docker", "inspect", name).Run() == nil
 }
 
 func docker(ctx context.Context, stdin string, args ...string) (string, error) {

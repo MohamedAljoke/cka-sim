@@ -83,6 +83,14 @@ export function openTerminal(pane: HTMLElement, path: string, onDisconnect: () =
   }
   connect(false)
 
+  term.attachCustomKeyEventHandler((event) => {
+    const copy = event.ctrlKey && event.shiftKey && event.code === 'KeyC'
+    if (!copy) return true
+    event.preventDefault()
+    if (event.type === 'keydown' && term.hasSelection()) navigator.clipboard.writeText(term.getSelection())
+    return false
+  })
+
   term.onData((keys) => {
     if (isOpen()) socket.send(encoder.encode(keys))
   })

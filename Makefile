@@ -5,13 +5,13 @@ LAB := apps/lab
 WEB := apps/web
 AUTH := apps/auth
 MCP := apps/mcp
-# make up creates it; the lab and the server both get it.
-TOKEN := CKA_SIM_AGENT_TOKEN="$$(cat $(HOME)/.config/cka-sim/agent-token)"
-# Signs login sessions; the platform reads the same file to check them.
-AUTH_SECRET := $(HOME)/.config/cka-sim/auth-secret
-AUTH_ENV := CKA_SIM_AUTH_SECRET="$$(cat $(AUTH_SECRET))"
+# The same Compose project `cka-sim up` runs, so dev and the installed cka-sim share one lab, database and secrets.
+COMPOSE := docker compose -f $(CURDIR)/infra/local/compose.yml -f $(CURDIR)/infra/local/compose.dev.yml
+secret = "$$($(COMPOSE) run --rm --no-deps -T secrets cat /secrets/$(1))"
+TOKEN := CKA_SIM_AGENT_TOKEN=$(call secret,agent-token)
+AUTH_ENV := CKA_SIM_AUTH_SECRET=$(call secret,auth-secret)
 
-.PHONY: help doctor up down shell serve web dev db auth mcp test boundaries selftest eval try try-down
+.PHONY: help doctor secrets up down shell serve web dev db auth mcp test boundaries selftest eval try
 
 help:
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
@@ -19,23 +19,27 @@ help:
 doctor: ## check this machine can run a lab
 	@$(MAKE) --no-print-directory -C $(LAB) doctor
 
-up: ## start the lab container (does nothing if it is already up)
-	@$(MAKE) --no-print-directory -C $(LAB) up
+secrets:
+	@$(COMPOSE) run --rm secrets
 
-down: ## delete the lab
-	@$(MAKE) --no-print-directory -C $(LAB) down
+up: doctor ## build and start the lab, stopping cka-sim's own app, auth and mcp; waits until its cluster is up
+	@$(COMPOSE) stop app auth mcp
+	$(COMPOSE) up -d --build --wait --wait-timeout 1800 lab
+
+down: ## stop everything; keeps the cluster, accounts and images, like cka-sim down
+	$(COMPOSE) down
 
 shell: ## open a shell on the base host, where the exam starts
-	@$(MAKE) --no-print-directory -C $(LAB) shell
+	$(COMPOSE) exec lab lab shell
 
-serve: $(AUTH_SECRET) ## run the backend for the page on 127.0.0.1:7070
+serve: secrets ## run the backend for the page on 127.0.0.1:7070
 	cd $(PLATFORM) && $(TOKEN) $(AUTH_ENV) go run ./cmd/server
 
 web: $(WEB)/node_modules ## serve the page with hot reload on http://localhost:5173
 	cd $(WEB) && npm run dev
 
 # The binaries run directly, not via go run, so Ctrl-C reaches them and the trap can wait for them.
-dev: up db $(WEB)/node_modules $(AUTH_SECRET) ## lab and Postgres up, then auth, the backend, MCP and the page together
+dev: up db secrets $(WEB)/node_modules ## lab and Postgres up, then auth, the backend, MCP and the page together
 	@cd $(PLATFORM) && go build -o bin/server ./cmd/server
 	@cd $(AUTH) && go build -o bin/server ./cmd/server
 	@cd $(MCP) && go build -o bin/server ./cmd/server
@@ -44,10 +48,10 @@ dev: up db $(WEB)/node_modules $(AUTH_SECRET) ## lab and Postgres up, then auth,
 	  trap 'kill $$server $$auth $$mcp 2>/dev/null; wait $$server $$auth $$mcp' INT TERM EXIT; cd $(WEB) && npm run dev
 
 db: ## start Postgres, then apply migrations and seeds
-	docker compose up -d --wait postgres
+	$(COMPOSE) up -d --wait postgres
 	@$(MAKE) --no-print-directory -C $(AUTH) migrate seed
 
-auth: $(AUTH_SECRET) ## run the auth server on 127.0.0.1:7272 (make db first)
+auth: secrets ## run the auth server on 127.0.0.1:7272 (make db first)
 	cd $(AUTH) && $(AUTH_ENV) go run ./cmd/server
 
 mcp: ## run the MCP server for the Assistant on 127.0.0.1:7373 (the lab reaches it as host.docker.internal)
@@ -75,15 +79,8 @@ eval: ## score the Assistant's reviews (needs make dev and Claude logged in once
 	cd $(PLATFORM) && $(TOKEN) go run ./cmd/eval $(if $(TASK),-task $(TASK))
 
 try: ## build from source and run cka-sim the way users do, Docker only, on http://localhost:7080
-	docker compose -f infra/local/compose.yml up -d --build --wait --wait-timeout 1800
+	$(COMPOSE) up -d --build --wait --wait-timeout 1800
 	@echo "ready on http://localhost:$${CKA_SIM_PORT:-7080}; log in as dev@cka-sim.local, password cka-sim-dev"
-
-try-down: ## stop make try; keeps its accounts, exams and images
-	docker compose -f infra/local/compose.yml down
-
-$(AUTH_SECRET):
-	@mkdir -p $(dir $@)
-	@umask 077 && openssl rand -hex 32 > $@
 
 $(WEB)/node_modules: $(WEB)/package-lock.json
 	cd $(WEB) && npm ci

@@ -6,11 +6,16 @@ New flows go here in the same shape: the trigger, then each hop in order, then w
 
 ## 1. `make dev`: from the command to a ready server
 
-`make dev` first runs `make up`, which is `apps/lab/Makefile`'s `up`. It runs `lab doctor` on this machine,
-builds the lab image (`apps/lab/deploy/lab.Dockerfile`: dockerd, the `lab` CLI and the agent), and makes the
-agent token `~/.config/cka-sim/agent-token` once. Then it starts the privileged container `cka-sim-lab`, or
-reuses it if it's running. That's the same image GKE runs as a pod on its own VM; here it's a container. The
-volume `cka-sim-lab-docker` is the lab's own Docker, so the node and task images survive a `make down`.
+`make dev` first runs `make up`. It runs `lab doctor` on this machine, then uses the same Compose project
+`cka-sim up` runs (`infra/local/compose.yml`, project `cka-sim-local`) plus `infra/local/compose.dev.yml`,
+which opens the lab's agent on `127.0.0.1:7171` and Postgres on `127.0.0.1:5434` for the apps that run on the
+host. So `make dev`, `make try` and an installed cka-sim share one lab, one database and one set of secrets,
+never two clusters. It stops the project's `app`, `auth` and `mcp` containers, so only one platform drives the
+lab. Then it builds the lab image (`apps/lab/deploy/lab.Dockerfile`: dockerd, the `lab` CLI and the agent) and
+starts the privileged container `cka-sim-lab`, after the one-shot `secrets` service has written the agent
+token and the auth secret into the `secrets` volume (only the first time). The Makefile reads them from there. That's the same image GKE runs as a pod on its own
+VM; here it's a container. The volume `lab-docker` is the lab's own Docker, so the cluster and the node and
+task images survive a `make down`.
 
 Inside, `lab-start.sh` starts dockerd and runs `lab up` (`apps/lab/cmd/lab`). That creates a kind cluster of
 three containers built from `internal/cluster/node.Dockerfile`: `cka-sim-control-plane`, `cka-sim-worker` and
@@ -19,9 +24,9 @@ three containers built from `internal/cluster/node.Dockerfile`: `cka-sim-control
 resolve from it. Base has no kubectl. `Prepare` gives base's `candidate` an ssh key and, on every node,
 installs that key and the cluster's admin kubeconfig for both `candidate` and `root`. Then `LoadImages`
 (`internal/cluster/images.go`) pulls the images in `CKA_SIM_IMAGES` and imports them into each node's
-containerd. The Makefile sets that variable from the platform's `catalog/images.txt`, because the lab knows
-nothing about tasks. Last, `lab-start.sh` execs the agent on `:7171`, published on `127.0.0.1` only. `make up`
-waits for its `/healthz`: about 2 minutes the first time, seconds when the container is already up.
+containerd. The Compose file sets that variable to the list in the platform's `catalog/images.txt`, because the
+lab knows nothing about tasks. Last, `lab-start.sh` execs the agent on `:7171`. `make up` waits for Compose's
+health check on its `/healthz`: about 4 minutes the first time, seconds when the cluster is already built.
 
 Next, `make dev` builds `bin/server` and starts it in the background with the token, then starts Vite on 5173.
 `vite.config.ts` forwards `/api` and `/ws` to the Go server on `127.0.0.1:7070`. The server
@@ -33,7 +38,7 @@ a lab starts (flow 2). Then it serves.
 
 Ctrl-C reaches the server directly, because it runs as a binary and not through `go run`. The Makefile's
 trap waits for it, and on the way out the server ends the lab, which closes every page shell. The lab
-container keeps running; `make down` deletes its cluster and the container.
+container keeps running; `make down` stops it and keeps its cluster in the `lab-docker` volume.
 
 ## 2. Opening the page: home, the lab and the terminal
 

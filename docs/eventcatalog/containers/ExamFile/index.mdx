@@ -17,11 +17,11 @@ access_mode: readWrite
 `internal/exam.FileStore` keeps at most one exam at `~/.local/state/cka-sim/exam.json`
 (`$XDG_STATE_HOME/cka-sim/exam.json` when that is set).
 
-It holds the drawn task ids, each task's setup state (`preparing`, `ready` or `failed`), flags,
-the start time and deadline, and after the end each task's check result.
+It holds the drawn task ids, the setup stage, each task's setup state (`preparing`, `ready` or `failed`),
+flags, the start time and deadline, and after the end each task's check result.
 
-- Saved on every change: draw, each finished setup, flag, end.
+- Saved on every change: draw, each stage, each finished setup, flag, end.
 - Read once at server start. Tasks still `preparing` are set up again, and the deadline stays the same.
-- Deleted by **Back to practice** (`DELETE /api/exam`).
+- Replaced when the next exam begins.
 
 The hosted design keeps attempts in [Postgres](/docs/containers/Postgres/0.0.1) instead.

@@ -33,6 +33,7 @@ services:
       start_period: 5s
 
   lab:
+    container_name: cka-sim-lab
     image: ghcr.io/mohamedaljoke/cka-sim-lab:${CKA_SIM_VERSION:-latest}
     build:
       context: ../../apps

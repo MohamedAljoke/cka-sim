@@ -58,9 +58,13 @@ make up               # the lab: a container that builds a 3-node cluster inside
 make dev              # lab up, the Go backend, and the page with a terminal on http://localhost:5173
 make selftest         # prove every task scores 0 before its solution and full after (needs the lab)
 make shell            # a shell on the lab's base host, where the exam starts
-make down             # delete the lab
+make down             # stop it; the cluster, accounts and images stay
 make try              # build the images from source and run them the way `cka-sim up` does
 ```
+
+`make dev`, `make try` and `cka-sim up` all run the Compose project in `infra/local/compose.yml`, so they share
+one lab, one database and one set of secrets. `make dev` starts only the lab and Postgres from it and runs the
+rest from source on this machine.
 
 Run `make doctor` to check your machine.
 

@@ -1,0 +1,8 @@
+# make dev runs auth, the platform and MCP on this machine; they reach the lab and Postgres on these ports.
+services:
+  lab:
+    ports:
+      - "127.0.0.1:7171:7171"
+  postgres:
+    ports:
+      - "127.0.0.1:5434:5432"

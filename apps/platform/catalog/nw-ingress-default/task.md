@@ -9,8 +9,9 @@ weight: 3
 ## Context
 
 Ingress `site` in Namespace `nw-ingress-default` (IngressClass `nginx`, controller at `10.96.80.80`)
-sends host `www.nw-ingress-default.test` to Service `site`. Requests for any other host get a 404
-from the controller. Service `fallback` in the same Namespace should answer those instead.
+sends paths under `/shop` on host `www.nw-ingress-default.test` to Service `site`. Any other path on
+that host, such as `/blog`, gets a 404 from the controller. Service `fallback` in the same Namespace
+should answer those instead.
 
 ## Task
 

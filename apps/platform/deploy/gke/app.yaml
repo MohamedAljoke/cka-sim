@@ -79,6 +79,11 @@ spec:
                   key: token
             - name: SITE_HOST
               value: ${SITE_HOST}
+            - name: CKA_SIM_AUTH_URL
+              value: http://auth:7272
+            # The lab reaches no private address, so Claude Code in it comes back through the public site.
+            - name: CKA_SIM_MCP_URL
+              value: https://${SITE_HOST}/mcp
             - name: CKA_SIM_LLM
               value: vertex
             - name: CKA_SIM_VERTEX_PROJECT
@@ -98,6 +103,17 @@ spec:
             requests:
               cpu: 50m
               memory: 128Mi
+        - name: mcp
+          image: ${MCP_IMAGE}
+          env:
+            - name: CKA_SIM_MCP_ADDR
+              value: 127.0.0.1:7373
+            - name: CKA_SIM_PLATFORM_URL
+              value: http://127.0.0.1:7070
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
 ---
 apiVersion: v1
 kind: Service

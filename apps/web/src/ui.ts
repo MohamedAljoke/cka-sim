@@ -7,18 +7,27 @@ export function markdown(target: HTMLElement, text: string) {
   target.insertAdjacentHTML('beforeend', marked.parse(text, { async: false }))
 }
 
-// Model answers can repeat text from the learner's cluster, so raw HTML is shown as text and only web links stay links.
+// Model answers can repeat text from the learner's cluster, so raw HTML is shown as text, and a link only stays a link
+// to docs we know; any other URL is shown, so a link can't quietly carry cluster data away.
 const untrusted = new Marked({
   renderer: {
     html: ({ text }) => escapeHTML(text),
     image: ({ text }) => escapeHTML(text),
     link({ href, tokens }) {
       const text = this.parser.parseInline(tokens)
-      if (!/^https?:\/\//i.test(href)) return text
-      return `<a href="${escapeHTML(href)}" target="_blank" rel="noopener noreferrer">${text}</a>`
+      if (docsLink(href)) return `<a href="${escapeHTML(href)}" target="_blank" rel="noopener noreferrer">${text}</a>`
+      return text === escapeHTML(href) ? text : `${text} (${escapeHTML(href)})`
     },
   },
 })
+
+const docsHosts = ['kubernetes.io', 'helm.sh', 'github.com']
+
+function docsLink(href: string): boolean {
+  if (!URL.canParse(href)) return false
+  const { protocol, hostname } = new URL(href)
+  return protocol === 'https:' && docsHosts.some((host) => hostname === host || hostname.endsWith(`.${host}`))
+}
 
 export function untrustedMarkdown(target: HTMLElement, text: string) {
   target.insertAdjacentHTML('beforeend', untrusted.parse(text, { async: false }))

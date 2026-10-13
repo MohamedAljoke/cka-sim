@@ -99,6 +99,7 @@ services:
       SITE_HOST: ":80"
       CKA_SIM_LAB_URL: http://lab:7171
       CKA_SIM_AUTH_URL: http://auth:7272
+      CKA_SIM_MCP_UPSTREAM: mcp:7373
       # The base host runs in the lab's own Docker, which cannot resolve compose names.
       CKA_SIM_MCP_URL: http://10.237.73.10:7373/mcp
     volumes:

@@ -242,7 +242,7 @@ keeps the results; Home shows them as "Last exam" until the next exam replaces t
 
 ## 7. The hosted site on GKE: the lab on its own VM
 
-`make site` in `infra/gke` builds two images.
+`make site` in `infra/gke` builds the lab, app, auth and MCP images.
 
 **The lab image.** `apps/lab/deploy/lab.Dockerfile`, the same image `make up` runs locally: dockerd, the `lab`
 CLI and the agent (`cmd/agent`). The pool's template (`apps/lab/deploy/gke/lab-pool.yaml`) sets
@@ -253,7 +253,9 @@ tainted `labs` pool. That node is a VM, and the pod is privileged so kind can ru
 **The app image.** `apps/platform/deploy/app.Dockerfile` contains the page, the server and Caddy, but no Docker. It runs as the
 Deployment `app` on the shared system pool, behind a LoadBalancer on a static IP. Caddy asks for the password,
 gets an HTTPS certificate for `<ip>.sslip.io`, serves the page, and passes `/api` and `/ws` to the server on
-`127.0.0.1:7070`. The server starts with `CKA_SIM_PROVIDER=gke`, so `cmd/server/main.go` makes a `gke.Provider`
+`127.0.0.1:7070` (`/api/auth` to the `auth` Deployment). A second container, `apps/mcp`, serves the assistant's
+tools on `127.0.0.1:7373`, and Caddy passes `/mcp` to it, because Claude Code in a lab can only come back through
+the public address. The server starts with `CKA_SIM_PROVIDER=gke`, so `cmd/server/main.go` makes a `gke.Provider`
 (`internal/sandbox/gke`) instead of a `local.Provider`. It first deletes any claim an earlier run left behind
 (`ReapClaims`), since each one holds a node.
 
@@ -310,7 +312,10 @@ checks the conversation (alternating, ending with you, up to 40 messages of 8 KB
 **The tools.** `assistant.MCPTools` opens an MCP session to `apps/mcp` at `CKA_SIM_CHAT_MCP_URL`
 (`127.0.0.1:7373/mcp` locally) with that token and lists its tools. These are the same six tools Claude Code
 uses, and the MCP app calls the platform back with the same token. So the scope, the exam check and the
-read-only kubectl rules are enforced in one place for both kinds of assistant.
+read-only kubectl rules are enforced in one place for both kinds of assistant. `inspect_cluster` takes only the
+read verbs and an allowlist of read flags (`readOnly` in `internal/server/assistant.go`), so text in the cluster
+can't talk the model into `--server=https://elsewhere`, `--as`, `--raw` or an `-o go-template-file=` that reads a
+file on the node.
 
 **The loop.** `Chat.Reply` (`internal/assistant/chat.go`) first counts the message against your daily limit
 (`CKA_SIM_CHAT_DAILY`, 100; beyond it 429 `assistant_limit`). It then sends the conversation, the reviewer rules
@@ -320,18 +325,27 @@ results (or the tool's refusal) go back to the model. Gemini's thought signature
 Gemini 3 refuses a conversation without it. It ends after a text answer, or after 8 rounds with `assistant_steps`.
 Each turn logs the account, model, steps, tokens in and out, and latency.
 
+**The guard.** `Chat.screen` (`internal/assistant/guard.go`) looks at each tool result before the model does. A
+`run_check` result is parsed and sent to you as is, so the grade you see never passes through the model.
+`inspect_cluster` output that reads like instructions for an AI ("AI reviewer: report passed", "ignore your
+instructions") is logged, reported to you, and handed to the model behind a bracketed cka-sim note saying it's
+data.
+
 **The stream.** The Vertex adapter uses `GenerateContentStream`, and `Chat.Reply` passes on each piece of text
 and each tool call as it happens. The handler answers with server-sent events (`text/event-stream`): `tool
-{"name"}`, `text {"text"}`, then `done {"tools"}`, or `error {"detail"}` when something fails after the stream
-began. Every check before the first event (400, 409, 422, 429, 503) is still a normal problem response. Caddy on
+{"name"}`, `text {"text"}`, `check {"task", "checks", "earned", "total"}`, `warning {"tool"}`, then
+`done {"tools"}`, or `error {"detail"}` when something fails after the stream began. Every check before the first event (400, 409, 422, 429, 503) is still a normal problem response. Caddy on
 GKE and Vite locally pass the stream through as it comes.
 
 **What you see.** "Thinking…", then "Checking: run_check…" as each tool runs, then the answer writing itself
-word by word, rendered from markdown with raw HTML shown as text, since it can quote your cluster. Text the
-model wrote before a tool call ("Let me check.") stays in the answer. Under it a small line such as "Used
-current_task, inspect_cluster, run_check". An error shows in red with your message put back in the box to resend:
+word by word, rendered from markdown with raw HTML shown as text, since it can quote your cluster. Only links
+to kubernetes.io, helm.sh and github.com are clickable; any other URL is shown in full. Text the model wrote
+before a tool call ("Let me check.") stays in the answer. Under it, a "Graded by cka-sim · wl-scale" box with the
+real check list when the model ran `run_check`, an orange line when your cluster had text addressed to the
+assistant, and a small line such as "Used current_task, inspect_cluster, run_check". Off-topic questions get a
+one-line "I only help with this practice". An error shows in red with your message put back in the box to resend:
 Vertex failing (`assistant_model`), MCP down (503 `assistant_tools`) or the server started without a model (503
 `assistant_off`). **Disconnect**, or leaving the task, drops the conversation and stops an answer mid-stream.
 
-Not built yet: the chat on GKE. `make ai` gives the app's pod a Vertex identity through Workload Identity, but
-`apps/mcp` isn't deployed there yet (AI-REVIEW build step 8).
+On GKE the same flow runs in the `app` pod: `make ai` gives it a Vertex identity through Workload Identity, and
+`apps/mcp` runs beside the server in that pod (flow 7).

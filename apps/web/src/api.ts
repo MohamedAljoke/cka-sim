@@ -144,12 +144,19 @@ export type ChatTurn = {
   tools: string[]
 }
 
+export type ChatCheck = Result & { task: string }
+
 export type ChatProgress = {
   text(delta: string): void
   tool(name: string): void
+  check(result: ChatCheck): void
+  warning(tool: string): void
 }
 
-type ChatEvent = { event: string; data: { text?: string; name?: string; detail?: string; tools?: string[] } }
+type ChatEvent = {
+  event: string
+  data: { text?: string; name?: string; tool?: string; detail?: string; tools?: string[] } & Partial<ChatCheck>
+}
 
 export async function chatAssistant(
   provider: string,
@@ -173,6 +180,8 @@ export async function chatAssistant(
           text += data.text ?? ''
           on.text(data.text ?? '')
         } else if (event === 'tool') on.tool(data.name ?? '')
+        else if (event === 'check') on.check(data as ChatCheck)
+        else if (event === 'warning') on.warning(data.tool ?? '')
         else if (event === 'error') throw new Error(data.detail)
         else if (event === 'done') return { text, tools: data.tools ?? [] }
       }

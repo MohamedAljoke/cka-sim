@@ -1,7 +1,7 @@
-import { chatAssistant, startAssistant, type ChatMessage } from './api'
+import { chatAssistant, startAssistant, type ChatCheck, type ChatMessage } from './api'
 import { icon } from './icons'
 import { openTerminal } from './terminal'
-import { el, message, setStatus, untrustedMarkdown } from './ui'
+import { checkList, el, message, setStatus, untrustedMarkdown } from './ui'
 
 export type Provider = {
   id: string
@@ -59,12 +59,24 @@ function openChat(screen: HTMLElement, provider: string): () => void {
     const answer = bubble('model muted')
     let text = ''
     let activity = 'Thinking…'
+    let check: ChatCheck | undefined
+    const warnings = new Set<string>()
     let frame = 0
     const render = () => {
       frame = 0
       answer.className = text ? 'chat-bubble model' : 'chat-bubble model muted'
       answer.replaceChildren()
       if (text) untrustedMarkdown(answer, text)
+      for (const tool of warnings) {
+        answer.append(
+          el('p', 'chat-warning', `Your cluster has text addressed to the assistant (seen through ${tool}). It was treated as data.`),
+        )
+      }
+      if (check) {
+        const graded = el('div', 'chat-check')
+        graded.append(el('p', 'chat-check-label', `Graded by cka-sim · ${check.task}`), checkList(check))
+        answer.append(graded)
+      }
       if (activity) answer.append(el('p', 'chat-tools', activity))
       answer.scrollIntoView({ block: 'end' })
     }
@@ -81,6 +93,14 @@ function openChat(screen: HTMLElement, provider: string): () => void {
         },
         tool: (name) => {
           activity = `Checking: ${name}…`
+          renderSoon()
+        },
+        check: (result) => {
+          check = result
+          renderSoon()
+        },
+        warning: (tool) => {
+          warnings.add(tool)
           renderSoon()
         },
       })

@@ -29,13 +29,16 @@ type Chat struct {
 type EventKind string
 
 const (
-	EventText EventKind = "text"
-	EventTool EventKind = "tool"
+	EventText    EventKind = "text"
+	EventTool    EventKind = "tool"
+	EventCheck   EventKind = "check"
+	EventWarning EventKind = "warning"
 )
 
 type Event struct {
-	Kind EventKind
-	Text string
+	Kind  EventKind
+	Text  string
+	Check *CheckResult
 }
 
 type Turn struct {
@@ -102,6 +105,7 @@ func (c *Chat) Reply(ctx context.Context, account string, tools Tools, history [
 			if err != nil {
 				out = err.Error()
 			}
+			out = c.screen(account, call, out, err != nil, events)
 			results.Results = append(results.Results, llm.Result{CallID: call.ID, Name: call.Name, Output: out, Failed: err != nil})
 		}
 		messages = append(messages, results)

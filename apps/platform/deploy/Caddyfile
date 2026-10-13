@@ -2,6 +2,9 @@
 	handle /api/auth/* {
 		reverse_proxy auth:7272
 	}
+	handle /mcp {
+		reverse_proxy {$CKA_SIM_MCP_UPSTREAM:127.0.0.1:7373}
+	}
 	@backend path /api/* /ws/*
 	handle @backend {
 		reverse_proxy 127.0.0.1:7070

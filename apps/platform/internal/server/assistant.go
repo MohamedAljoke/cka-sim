@@ -26,7 +26,8 @@ var (
 	errScoped     = domainerr.Forbidden("assistant_not_allowed", "an assistant token can't do this")
 	errNoTask     = domainerr.NotFound("no_task", "the learner has no task open")
 	errBadInspect = domainerr.Unprocessable("inspect_refused",
-		"only read-only kubectl: get, describe, logs, events, top, explain, api-resources or version, without watching or following")
+		"only read-only kubectl: "+strings.Join(inspectVerbs, ", ")+", with only these flags: "+strings.Join(inspectFlags, " ")+
+			"; -o can't read a template file")
 	errChatOff = domainerr.Unavailable("assistant_off", "no chat assistant is set up on this server")
 	errBadChat = httpx.Malformed(fmt.Sprintf(`the body must be JSON like {"provider": "gemini", "messages": [{"role": "user", "text": "…"}]}`+
 		` with 1 to %d messages, each up to %d bytes, alternating user and model and ending with user`, chatMessages, chatMessageMax))
@@ -42,8 +43,15 @@ const (
 
 var (
 	inspectVerbs = []string{"get", "describe", "logs", "events", "top", "explain", "api-resources", "version"}
-	// They never end on their own.
-	inspectRefused = []string{"-w", "--watch", "--watch-only", "-f", "--follow"}
+	inspectFlags = []string{
+		"-n", "--namespace", "-A", "--all-namespaces", "-l", "--selector", "--field-selector",
+		"-o", "--output", "--show-labels", "-L", "--label-columns", "--sort-by", "--no-headers", "--show-kind",
+		"--ignore-not-found", "--show-managed-fields",
+		"-c", "--container", "--all-containers", "--tail", "--since", "--since-time", "-p", "--previous", "--prefix",
+		"--timestamps", "--limit-bytes",
+		"--recursive", "--api-version", "--namespaced", "--verbs", "--api-group", "--for", "--types",
+		"--containers", "--sum", "--client",
+	}
 )
 
 func sessionOnly(h httpx.Handler) httpx.Handler {
@@ -171,11 +179,16 @@ func (a *api) chat(w http.ResponseWriter, r *http.Request) error {
 	defer tools.Close()
 	stream := &eventStream{w: w}
 	turn, err := c.Reply(ctx, claims.AccountID, tools, history, func(e assistant.Event) {
-		if e.Kind == assistant.EventTool {
+		switch e.Kind {
+		case assistant.EventTool:
 			stream.send("tool", map[string]string{"name": e.Text})
-			return
+		case assistant.EventCheck:
+			stream.send("check", e.Check)
+		case assistant.EventWarning:
+			stream.send("warning", map[string]string{"tool": e.Text})
+		default:
+			stream.send("text", map[string]string{"text": e.Text})
 		}
-		stream.send("text", map[string]string{"text": e.Text})
 	})
 	if err != nil && !stream.started {
 		return err
@@ -297,13 +310,32 @@ func readOnly(args []string) bool {
 	if len(args) == 0 || !slices.Contains(inspectVerbs, args[0]) {
 		return false
 	}
-	for _, arg := range args {
-		name, _, _ := strings.Cut(arg, "=")
-		if slices.Contains(inspectRefused, name) {
+	for i, arg := range args {
+		if !strings.HasPrefix(arg, "-") {
+			continue
+		}
+		name, value, attached := flagParts(arg)
+		if !slices.Contains(inspectFlags, name) {
+			return false
+		}
+		if name != "-o" && name != "--output" {
+			continue
+		}
+		if !attached && i+1 < len(args) {
+			value = args[i+1]
+		}
+		if format, _, _ := strings.Cut(value, "="); strings.HasSuffix(format, "-file") {
 			return false
 		}
 	}
 	return true
+}
+
+func flagParts(arg string) (name, value string, attached bool) {
+	if strings.HasPrefix(arg, "--") || len(arg) <= 2 {
+		return strings.Cut(arg, "=")
+	}
+	return arg[:2], strings.TrimPrefix(arg[2:], "="), true
 }
 
 func kubectlScript(args []string) string {

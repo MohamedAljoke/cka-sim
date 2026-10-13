@@ -12,12 +12,14 @@ APPS     := $(abspath ../../apps)
 LAB_DIR  := $(APPS)/lab
 PLATFORM := $(APPS)/platform
 AUTH     := $(APPS)/auth
+MCP      := $(APPS)/mcp
 # The platform's catalog decides which images a lab preloads.
 IMAGES   := $(shell paste -sd, $(PLATFORM)/catalog/images.txt)
 # Lab pods get their own range, so the firewall can tell them from GKE's system pods.
 LAB_PODS := 10.80.0.0/16
 APP_IMAGE := $(REGION)-docker.pkg.dev/$(PROJECT)/$(REPO)/app:latest
 AUTH_IMAGE := $(REGION)-docker.pkg.dev/$(PROJECT)/$(REPO)/auth:latest
+MCP_IMAGE := $(REGION)-docker.pkg.dev/$(PROJECT)/$(REPO)/mcp:latest
 SQL      := cka-sim-db
 INSTANCE := $(PROJECT):$(REGION):$(SQL)
 AUTH_GSA := cka-sim-auth@$(PROJECT).iam.gserviceaccount.com
@@ -95,13 +97,15 @@ ai: ## Vertex AI for the Gemini assistant and the identity the app's pod calls i
 	$(GC) iam service-accounts add-iam-policy-binding $(APP_GSA) --role roles/iam.workloadIdentityUser \
 	  --member "serviceAccount:$(PROJECT).svc.id.goog[default/cka-sim-app]" >/dev/null
 
-site: image ai ## the app and auth on the platform pool, a warm lab in the pool, HTTPS + login; `make url` prints the link
+site: image ai ## the app (with MCP) and auth on the platform pool, a warm lab in the pool, HTTPS + login; `make url` prints the link
 	$(GC) compute addresses describe cka-sim-site --region $(REGION) >/dev/null 2>&1 || \
 	  $(GC) compute addresses create cka-sim-site --region $(REGION)
 	docker build -f $(PLATFORM)/deploy/app.Dockerfile -t $(APP_IMAGE) $(APPS)
 	docker push $(APP_IMAGE)
 	docker build -f $(AUTH)/deploy/auth.Dockerfile -t $(AUTH_IMAGE) $(APPS)
 	docker push $(AUTH_IMAGE)
+	docker build -f $(MCP)/deploy/mcp.Dockerfile -t $(MCP_IMAGE) $(APPS)
+	docker push $(MCP_IMAGE)
 	@kubectl get secret cka-sim-auth >/dev/null 2>&1 || \
 	  kubectl create secret generic cka-sim-auth --from-literal=secret="$$(openssl rand -hex 32)"
 	@kubectl create secret generic cka-sim-db --dry-run=client -o yaml \
@@ -112,7 +116,7 @@ site: image ai ## the app and auth on the platform pool, a warm lab in the pool,
 	$(MAKE) --no-print-directory pool POOL=$(POOL)
 	AUTH_IMAGE=$(AUTH_IMAGE) INSTANCE=$(INSTANCE) AUTH_GSA=$(AUTH_GSA) envsubst < $(AUTH)/deploy/gke/auth.yaml | kubectl apply -f -
 	@ip=$$($(GC) compute addresses describe cka-sim-site --region $(REGION) --format='value(address)'); \
-	APP_IMAGE=$(APP_IMAGE) SITE_IP=$$ip SITE_HOST=$$ip.sslip.io APP_GSA=$(APP_GSA) PROJECT=$(PROJECT) \
+	APP_IMAGE=$(APP_IMAGE) MCP_IMAGE=$(MCP_IMAGE) SITE_IP=$$ip SITE_HOST=$$ip.sslip.io APP_GSA=$(APP_GSA) PROJECT=$(PROJECT) \
 	  envsubst < $(PLATFORM)/deploy/gke/app.yaml | kubectl apply -f -
 	kubectl rollout restart deployment/auth deployment/app
 

@@ -79,7 +79,8 @@ func New(c *platform.Client) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "inspect_cluster",
 		Description: "Run a read-only kubectl command in the learner's cluster as admin: get, describe, logs, events, top, " +
-			"explain, api-resources or version, without -w or -f. Output is cut at 8 KB; narrow it with -n, -l or -o.",
+			"explain, api-resources or version, with read flags only (-n, -A, -l, -o, -c, --tail, --previous…; no -w, -f, " +
+			"--server or --as). Output is cut at 8 KB; narrow it with -n, -l or -o.",
 		Annotations: readOnly,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in inspectArgs) (*mcp.CallToolResult, platform.Inspection, error) {
 		i, err := c.Inspect(ctx, in.Args)

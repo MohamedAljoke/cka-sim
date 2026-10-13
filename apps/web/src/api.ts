@@ -144,8 +144,52 @@ export type ChatTurn = {
   tools: string[]
 }
 
-export async function chatAssistant(provider: string, messages: ChatMessage[], signal: AbortSignal): Promise<ChatTurn> {
-  return (await call('POST', '/api/assistant/chat', { provider, messages }, signal)).json()
+export type ChatProgress = {
+  text(delta: string): void
+  tool(name: string): void
+}
+
+type ChatEvent = { event: string; data: { text?: string; name?: string; detail?: string; tools?: string[] } }
+
+export async function chatAssistant(
+  provider: string,
+  messages: ChatMessage[],
+  signal: AbortSignal,
+  on: ChatProgress,
+): Promise<ChatTurn> {
+  const res = await call('POST', '/api/assistant/chat', { provider, messages }, signal)
+  const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader()
+  let text = ''
+  let buffer = ''
+  try {
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) throw new Error('the assistant stopped before finishing its answer; ask again')
+      buffer += value
+      for (let end = buffer.indexOf('\n\n'); end >= 0; end = buffer.indexOf('\n\n')) {
+        const { event, data } = parseEvent(buffer.slice(0, end))
+        buffer = buffer.slice(end + 2)
+        if (event === 'text') {
+          text += data.text ?? ''
+          on.text(data.text ?? '')
+        } else if (event === 'tool') on.tool(data.name ?? '')
+        else if (event === 'error') throw new Error(data.detail)
+        else if (event === 'done') return { text, tools: data.tools ?? [] }
+      }
+    }
+  } finally {
+    reader.cancel().catch(() => {})
+  }
+}
+
+function parseEvent(block: string): ChatEvent {
+  let event = ''
+  let data = ''
+  for (const line of block.split('\n')) {
+    if (line.startsWith('event: ')) event = line.slice('event: '.length)
+    else if (line.startsWith('data: ')) data += line.slice('data: '.length)
+  }
+  return { event, data: JSON.parse(data || '{}') }
 }
 
 export type User = {

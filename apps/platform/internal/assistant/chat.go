@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +26,18 @@ type Chat struct {
 	used map[string]int
 }
 
+type EventKind string
+
+const (
+	EventText EventKind = "text"
+	EventTool EventKind = "tool"
+)
+
+type Event struct {
+	Kind EventKind
+	Text string
+}
+
 type Turn struct {
 	Text  string   `json:"text"`
 	Tools []string `json:"tools"`
@@ -38,7 +51,7 @@ func FindChat(chats []*Chat, id string) (*Chat, bool) {
 	return chats[i], true
 }
 
-func (c *Chat) Reply(ctx context.Context, account string, tools Tools, history []llm.Message) (Turn, error) {
+func (c *Chat) Reply(ctx context.Context, account string, tools Tools, history []llm.Message, events func(Event)) (Turn, error) {
 	if !c.allow(account) {
 		return Turn{}, domainerr.TooMany("assistant_limit",
 			fmt.Sprintf("that's today's %d messages to the assistant; it opens again tomorrow", c.Daily))
@@ -46,13 +59,25 @@ func (c *Chat) Reply(ctx context.Context, account string, tools Tools, history [
 	start := c.Now()
 	messages := slices.Clone(history)
 	turn := Turn{Tools: []string{}}
+	var text strings.Builder
 	var usage llm.Usage
 	for step := 1; step <= c.MaxSteps; step++ {
+		newStep := true
+		write := func(s string) {
+			text.WriteString(s)
+			events(Event{Kind: EventText, Text: s})
+		}
 		reply, err := c.Model.Generate(ctx, llm.Request{
 			System:    reviewerInstructions,
 			Messages:  messages,
 			Tools:     tools.List(),
 			MaxTokens: c.MaxTokens,
+		}, func(delta string) {
+			if newStep && text.Len() > 0 {
+				write("\n\n")
+			}
+			newStep = false
+			write(delta)
 		})
 		usage.In += reply.Usage.In
 		usage.Out += reply.Usage.Out
@@ -65,13 +90,14 @@ func (c *Chat) Reply(ctx context.Context, account string, tools Tools, history [
 			if reply.Message.Text == "" {
 				return Turn{}, domainerr.Unavailable("assistant_model", c.Model.Name()+" gave an empty answer; ask again")
 			}
-			turn.Text = reply.Message.Text
+			turn.Text = text.String()
 			return turn, nil
 		}
 		messages = append(messages, reply.Message)
 		results := llm.Message{Role: llm.RoleUser}
 		for _, call := range reply.Message.Calls {
 			turn.Tools = append(turn.Tools, call.Name)
+			events(Event{Kind: EventTool, Text: call.Name})
 			out, err := tools.Call(ctx, call.Name, call.Args)
 			if err != nil {
 				out = err.Error()

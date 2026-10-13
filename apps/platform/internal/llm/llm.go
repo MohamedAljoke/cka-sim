@@ -59,5 +59,5 @@ type Reply struct {
 
 type Model interface {
 	Name() string
-	Generate(ctx context.Context, req Request) (Reply, error)
+	Generate(ctx context.Context, req Request, text func(delta string)) (Reply, error)
 }

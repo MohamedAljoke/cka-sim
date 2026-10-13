@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -234,18 +235,29 @@ func TestInspectCutsLongOutput(t *testing.T) {
 	}
 }
 
-func TestChatAnswersAfterUsingTheToolsWithTheAssistantToken(t *testing.T) {
+func TestChatStreamsTheToolsAndTheAnswerWithTheAssistantToken(t *testing.T) {
 	srv := newAPI(t, &fakeRunner{})
 
 	status, body := request(t, srv, http.MethodPost, "/api/assistant/chat",
 		`{"provider": "fake-chat", "messages": [{"role": "user", "text": "review my attempt"}]}`)
 
-	var turn assistant.Turn
-	if status != http.StatusOK || json.Unmarshal([]byte(body), &turn) != nil {
-		t.Fatalf("got %d %q", status, body)
+	want := "event: tool\ndata: {\"name\":\"current_task\"}\n\n" +
+		"event: text\ndata: {\"text\":\"review my attempt: current task for tok-assistant\"}\n\n" +
+		"event: done\ndata: {\"tools\":[\"current_task\"]}\n\n"
+	if status != http.StatusOK || body != want {
+		t.Errorf("got %d %q", status, body)
 	}
-	if turn.Text != "review my attempt: current task for tok-assistant" || !slices.Equal(turn.Tools, []string{"current_task"}) {
-		t.Errorf("turn = %+v", turn)
+}
+
+func TestChatReportsAFailureAfterTheStreamBeganAsAnEvent(t *testing.T) {
+	srv := newAPI(t, &fakeRunner{})
+
+	status, body := request(t, srv, http.MethodPost, "/api/assistant/chat",
+		`{"provider": "fake-chat", "messages": [{"role": "user", "text": "break"}]}`)
+
+	if status != http.StatusOK || !strings.HasPrefix(body, "event: tool\n") ||
+		!strings.HasSuffix(body, "event: error\ndata: {\"detail\":\"look-first failed: quota exceeded\"}\n\n") {
+		t.Errorf("got %d %q", status, body)
 	}
 }
 
@@ -382,12 +394,17 @@ type lookFirstModel struct{}
 
 func (lookFirstModel) Name() string { return "look-first" }
 
-func (lookFirstModel) Generate(_ context.Context, req llm.Request) (llm.Reply, error) {
+func (lookFirstModel) Generate(_ context.Context, req llm.Request, text func(string)) (llm.Reply, error) {
 	last := req.Messages[len(req.Messages)-1]
 	if len(last.Results) == 0 {
 		return llm.Reply{Message: llm.Message{Role: llm.RoleModel, Calls: []llm.Call{{Name: "current_task"}}}}, nil
 	}
-	return llm.Reply{Message: llm.Message{Role: llm.RoleModel, Text: req.Messages[0].Text + ": " + last.Results[0].Output}}, nil
+	if req.Messages[0].Text == "break" {
+		return llm.Reply{}, errors.New("quota exceeded")
+	}
+	answer := req.Messages[0].Text + ": " + last.Results[0].Output
+	text(answer)
+	return llm.Reply{Message: llm.Message{Role: llm.RoleModel, Text: answer}}, nil
 }
 
 type fakeToolbox struct{}

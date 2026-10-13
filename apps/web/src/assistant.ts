@@ -50,27 +50,52 @@ function openChat(screen: HTMLElement, provider: string): () => void {
   }
 
   const ask = async () => {
-    const text = input.value.trim()
-    if (!text || send.disabled) return
+    const question = input.value.trim()
+    if (!question || send.disabled) return
     input.value = ''
     send.disabled = true
-    history.push({ role: 'user', text })
-    bubble('user').textContent = text
+    history.push({ role: 'user', text: question })
+    bubble('user').textContent = question
     const answer = bubble('model muted')
-    answer.textContent = 'Thinking…'
-    try {
-      const turn = await chatAssistant(provider, history.slice(-chatHistoryLimit), controller.signal)
-      history.push({ role: 'model', text: turn.text })
-      answer.className = 'chat-bubble model'
+    let text = ''
+    let activity = 'Thinking…'
+    let frame = 0
+    const render = () => {
+      frame = 0
+      answer.className = text ? 'chat-bubble model' : 'chat-bubble model muted'
       answer.replaceChildren()
-      untrustedMarkdown(answer, turn.text)
-      if (turn.tools.length) answer.append(el('p', 'chat-tools', `Used ${[...new Set(turn.tools)].join(', ')}`))
+      if (text) untrustedMarkdown(answer, text)
+      if (activity) answer.append(el('p', 'chat-tools', activity))
+      answer.scrollIntoView({ block: 'end' })
+    }
+    const renderSoon = () => {
+      frame ||= requestAnimationFrame(render)
+    }
+    render()
+    try {
+      const turn = await chatAssistant(provider, history.slice(-chatHistoryLimit), controller.signal, {
+        text: (delta) => {
+          text += delta
+          activity = ''
+          renderSoon()
+        },
+        tool: (name) => {
+          activity = `Checking: ${name}…`
+          renderSoon()
+        },
+      })
+      cancelAnimationFrame(frame)
+      history.push({ role: 'model', text: turn.text })
+      text = turn.text
+      activity = turn.tools.length ? `Used ${[...new Set(turn.tools)].join(', ')}` : ''
+      render()
     } catch (err) {
+      cancelAnimationFrame(frame)
       if (controller.signal.aborted) return
       history.pop()
       answer.className = 'chat-bubble error'
       answer.textContent = message(err)
-      input.value ||= text
+      input.value ||= question
     } finally {
       send.disabled = false
       answer.scrollIntoView({ block: 'end' })

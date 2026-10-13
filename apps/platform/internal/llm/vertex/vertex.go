@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"iter"
 
 	"google.golang.org/genai"
 
@@ -35,7 +36,7 @@ func New(ctx context.Context, cfg Config) (*Model, error) {
 
 func (m *Model) Name() string { return m.model }
 
-func (m *Model) Generate(ctx context.Context, req llm.Request) (llm.Reply, error) {
+func (m *Model) Generate(ctx context.Context, req llm.Request, text func(delta string)) (llm.Reply, error) {
 	contents, err := toContents(req.Messages)
 	if err != nil {
 		return llm.Reply{}, err
@@ -44,11 +45,7 @@ func (m *Model) Generate(ctx context.Context, req llm.Request) (llm.Reply, error
 	if err != nil {
 		return llm.Reply{}, err
 	}
-	res, err := m.client.Models.GenerateContent(ctx, m.model, contents, cfg)
-	if err != nil {
-		return llm.Reply{}, err
-	}
-	return fromResponse(res)
+	return collect(m.client.Models.GenerateContentStream(ctx, m.model, contents, cfg), text)
 }
 
 func toConfig(req llm.Request) (*genai.GenerateContentConfig, error) {
@@ -105,34 +102,46 @@ func toContents(messages []llm.Message) ([]*genai.Content, error) {
 	return contents, nil
 }
 
-func fromResponse(res *genai.GenerateContentResponse) (llm.Reply, error) {
+func collect(chunks iter.Seq2[*genai.GenerateContentResponse, error], text func(delta string)) (llm.Reply, error) {
 	reply := llm.Reply{Message: llm.Message{Role: llm.RoleModel}}
-	if u := res.UsageMetadata; u != nil {
-		reply.Usage = llm.Usage{In: int(u.PromptTokenCount), Out: int(u.CandidatesTokenCount + u.ThoughtsTokenCount)}
-	}
-	if len(res.Candidates) == 0 || res.Candidates[0].Content == nil {
-		reason := "no answer"
+	answered, reason := false, "no answer"
+	for res, err := range chunks {
+		if err != nil {
+			return reply, err
+		}
+		if u := res.UsageMetadata; u != nil {
+			reply.Usage = llm.Usage{In: int(u.PromptTokenCount), Out: int(u.CandidatesTokenCount + u.ThoughtsTokenCount)}
+		}
 		if res.PromptFeedback != nil && res.PromptFeedback.BlockReason != "" {
 			reason = "blocked: " + string(res.PromptFeedback.BlockReason)
 		}
-		return reply, fmt.Errorf("the model gave %s", reason)
-	}
-	for _, p := range res.Candidates[0].Content.Parts {
-		switch {
-		case p.FunctionCall != nil:
-			args, err := json.Marshal(p.FunctionCall.Args)
-			if err != nil {
-				return reply, err
-			}
-			reply.Message.Calls = append(reply.Message.Calls, llm.Call{
-				ID:        p.FunctionCall.ID,
-				Name:      p.FunctionCall.Name,
-				Args:      args,
-				Signature: p.ThoughtSignature,
-			})
-		case p.Text != "" && !p.Thought:
-			reply.Message.Text += p.Text
+		if len(res.Candidates) == 0 || res.Candidates[0].Content == nil {
+			continue
 		}
+		answered = true
+		for _, p := range res.Candidates[0].Content.Parts {
+			switch {
+			case p.FunctionCall != nil:
+				args, err := json.Marshal(p.FunctionCall.Args)
+				if err != nil {
+					return reply, err
+				}
+				reply.Message.Calls = append(reply.Message.Calls, llm.Call{
+					ID:        p.FunctionCall.ID,
+					Name:      p.FunctionCall.Name,
+					Args:      args,
+					Signature: p.ThoughtSignature,
+				})
+			case p.Text != "" && !p.Thought:
+				reply.Message.Text += p.Text
+				if text != nil {
+					text(p.Text)
+				}
+			}
+		}
+	}
+	if !answered {
+		return reply, fmt.Errorf("the model gave %s", reason)
 	}
 	return reply, nil
 }

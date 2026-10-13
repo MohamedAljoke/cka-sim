@@ -149,12 +149,16 @@ The model itself sits behind `llm.Model` (`internal/llm`), our own types for mes
 ```go
 type Model interface {
 	Name() string
-	Generate(ctx context.Context, req Request) (Reply, error)
+	Generate(ctx context.Context, req Request, text func(delta string)) (Reply, error)
 }
 ```
 
-`llm/vertex` is the only adapter so far (Gemini through `google.golang.org/genai`, with Google's default
-credentials). `CKA_SIM_LLM` picks it in `newChats` (`cmd/server/main.go`). An OpenAI adapter would also cover
+`Generate` streams: it hands each piece of text to `text` as it arrives and still returns the whole reply, so the
+tool loop stays simple. The endpoint passes those pieces and each tool call on to the browser as server-sent
+events (`tool`, `text`, `done`, `error`; flow 8 in `docs/FLOWS.md`).
+
+`llm/vertex` is the only adapter so far (Gemini through `google.golang.org/genai`'s `GenerateContentStream`, with
+Google's default credentials). `CKA_SIM_LLM` picks it in `newChats` (`cmd/server/main.go`). An OpenAI adapter would also cover
 Ollama through its OpenAI-compatible API; it's one more package and one more `case`.
 
 | Setting | Default | |
@@ -302,7 +306,7 @@ access in the platform; hardened against prompt injection from user-controlled c
 
 - **Codex:** a second `cli` provider. Only the config file and command differ.
 - **More `chat` models:** an OpenAI adapter for a BYOK key, and through the same API Ollama for users with no
-  paid AI. Then streaming, prompt caching for `task.md`/`explain.md`, structured output
+  paid AI. Then prompt caching for `task.md`/`explain.md`, structured output
   (`{verdict, mistakes[], hint}`) and `make eval` against the chat kind too (its judge could move off `claude -p`).
 - **Chat on GKE:** `make ai` (in `make site`) enables Vertex AI and gives the app's pod the `cka-sim-app`
   identity with `roles/aiplatform.user`; it waits on deploying `apps/mcp` (step 8).

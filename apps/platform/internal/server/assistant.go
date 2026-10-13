@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"slices"
 	"strings"
@@ -168,11 +169,48 @@ func (a *api) chat(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	defer tools.Close()
-	turn, err := c.Reply(ctx, claims.AccountID, tools, history)
-	if err != nil {
+	stream := &eventStream{w: w}
+	turn, err := c.Reply(ctx, claims.AccountID, tools, history, func(e assistant.Event) {
+		if e.Kind == assistant.EventTool {
+			stream.send("tool", map[string]string{"name": e.Text})
+			return
+		}
+		stream.send("text", map[string]string{"text": e.Text})
+	})
+	if err != nil && !stream.started {
 		return err
 	}
-	return httpx.WriteJSON(w, http.StatusOK, turn)
+	if err != nil {
+		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
+		stream.send("error", map[string]string{"detail": shownDetail(err)})
+		return nil
+	}
+	stream.send("done", map[string][]string{"tools": turn.Tools})
+	return nil
+}
+
+type eventStream struct {
+	w       http.ResponseWriter
+	started bool
+}
+
+func (s *eventStream) send(event string, data any) {
+	if !s.started {
+		s.w.Header().Set("Content-Type", "text/event-stream")
+		s.w.Header().Set("Cache-Control", "no-cache")
+		s.w.WriteHeader(http.StatusOK)
+		s.started = true
+	}
+	body, _ := json.Marshal(data)
+	fmt.Fprintf(s.w, "event: %s\ndata: %s\n\n", event, body)
+	http.NewResponseController(s.w).Flush()
+}
+
+func shownDetail(err error) string {
+	if domainError, ok := errors.AsType[*domainerr.Error](err); ok {
+		return domainError.Message
+	}
+	return "Something went wrong on our side."
 }
 
 func chatHistory(messages []chatMessage) ([]llm.Message, bool) {

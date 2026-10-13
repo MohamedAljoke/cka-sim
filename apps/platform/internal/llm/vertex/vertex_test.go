@@ -2,6 +2,9 @@ package vertex
 
 import (
 	"encoding/json"
+	"errors"
+	"iter"
+	"slices"
 	"strings"
 	"testing"
 
@@ -69,21 +72,20 @@ func TestContentsCarryCallsWithTheirSignatureAndResults(t *testing.T) {
 	}
 }
 
-func TestResponseKeepsTextCallsAndUsageButNotThoughts(t *testing.T) {
-	reply, err := fromResponse(&genai.GenerateContentResponse{
-		Candidates: []*genai.Candidate{{Content: &genai.Content{Parts: []*genai.Part{
-			{Text: "thinking hard", Thought: true},
-			{Text: "Let me check."},
-			{FunctionCall: &genai.FunctionCall{ID: "c1", Name: "current_task"}, ThoughtSignature: []byte("sig")},
-		}}}},
-		UsageMetadata: &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 100, CandidatesTokenCount: 20, ThoughtsTokenCount: 5},
-	})
+func TestCollectJoinsTheChunksAndStreamsTheTextButNotThoughts(t *testing.T) {
+	var deltas []string
+	reply, err := collect(chunks(
+		answer(&genai.Part{Text: "thinking hard", Thought: true}),
+		answer(&genai.Part{Text: "Let me "}),
+		answer(&genai.Part{Text: "check."}, &genai.Part{FunctionCall: &genai.FunctionCall{ID: "c1", Name: "current_task"}, ThoughtSignature: []byte("sig")}),
+		&genai.GenerateContentResponse{UsageMetadata: &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 100, CandidatesTokenCount: 20, ThoughtsTokenCount: 5}},
+	), func(d string) { deltas = append(deltas, d) })
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if reply.Message.Role != llm.RoleModel || reply.Message.Text != "Let me check." {
-		t.Errorf("message = %+v", reply.Message)
+	if reply.Message.Role != llm.RoleModel || reply.Message.Text != "Let me check." || !slices.Equal(deltas, []string{"Let me ", "check."}) {
+		t.Errorf("message = %+v, deltas %q", reply.Message, deltas)
 	}
 	if len(reply.Message.Calls) != 1 || reply.Message.Calls[0].Name != "current_task" || string(reply.Message.Calls[0].Signature) != "sig" {
 		t.Errorf("calls = %+v", reply.Message.Calls)
@@ -93,10 +95,38 @@ func TestResponseKeepsTextCallsAndUsageButNotThoughts(t *testing.T) {
 	}
 }
 
-func TestResponseWithoutACandidateSaysWhy(t *testing.T) {
-	_, err := fromResponse(&genai.GenerateContentResponse{PromptFeedback: &genai.GenerateContentResponsePromptFeedback{BlockReason: "SAFETY"}})
+func TestCollectWithoutACandidateSaysWhy(t *testing.T) {
+	_, err := collect(chunks(&genai.GenerateContentResponse{PromptFeedback: &genai.GenerateContentResponsePromptFeedback{BlockReason: "SAFETY"}}), nil)
 
 	if err == nil || !strings.Contains(err.Error(), "blocked: SAFETY") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestCollectStopsAtAStreamError(t *testing.T) {
+	broken := func(yield func(*genai.GenerateContentResponse, error) bool) {
+		if yield(answer(&genai.Part{Text: "half"}), nil) {
+			yield(nil, errors.New("connection reset"))
+		}
+	}
+
+	_, err := collect(broken, nil)
+
+	if err == nil || err.Error() != "connection reset" {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func answer(parts ...*genai.Part) *genai.GenerateContentResponse {
+	return &genai.GenerateContentResponse{Candidates: []*genai.Candidate{{Content: &genai.Content{Parts: parts}}}}
+}
+
+func chunks(responses ...*genai.GenerateContentResponse) iter.Seq2[*genai.GenerateContentResponse, error] {
+	return func(yield func(*genai.GenerateContentResponse, error) bool) {
+		for _, r := range responses {
+			if !yield(r, nil) {
+				return
+			}
+		}
 	}
 }

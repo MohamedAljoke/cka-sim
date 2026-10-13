@@ -24,7 +24,7 @@ func TestChatRunsTheToolsTheModelAsksForAndFeedsBackTheResults(t *testing.T) {
 	}}
 	tools := &fakeTools{out: map[string]string{"run_check": "PASS 1 / FAIL 1"}}
 
-	turn, err := newChat(model, 10).Reply(context.Background(), "a", tools, []llm.Message{{Role: llm.RoleUser, Text: "review my attempt"}})
+	turn, err := newChat(model, 10).Reply(context.Background(), "a", tools, []llm.Message{{Role: llm.RoleUser, Text: "review my attempt"}}, ignore)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,6 +45,32 @@ func TestChatRunsTheToolsTheModelAsksForAndFeedsBackTheResults(t *testing.T) {
 	}
 }
 
+func TestChatStreamsToolsAndTheTextOfEveryStep(t *testing.T) {
+	model := &fakeModel{replies: []llm.Message{
+		{Role: llm.RoleModel, Text: "Let me check.", Calls: []llm.Call{{Name: "run_check"}}},
+		{Role: llm.RoleModel, Text: "All checks pass."},
+	}}
+	var events []Event
+
+	turn, err := newChat(model, 10).Reply(context.Background(), "a", &fakeTools{}, nil, func(e Event) { events = append(events, e) })
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []Event{
+		{EventText, "Let me check."},
+		{EventTool, "run_check"},
+		{EventText, "\n\n"},
+		{EventText, "All checks pass."},
+	}
+	if !slices.Equal(events, want) {
+		t.Errorf("events = %q, want %q", events, want)
+	}
+	if turn.Text != "Let me check.\n\nAll checks pass." {
+		t.Errorf("turn text = %q", turn.Text)
+	}
+}
+
 func TestChatHandsAFailingToolBackToTheModel(t *testing.T) {
 	model := &fakeModel{replies: []llm.Message{
 		{Role: llm.RoleModel, Calls: []llm.Call{{Name: "inspect_cluster"}}},
@@ -52,7 +78,7 @@ func TestChatHandsAFailingToolBackToTheModel(t *testing.T) {
 	}}
 	tools := &fakeTools{fail: errors.New("only read-only kubectl")}
 
-	if _, err := newChat(model, 10).Reply(context.Background(), "a", tools, nil); err != nil {
+	if _, err := newChat(model, 10).Reply(context.Background(), "a", tools, nil, ignore); err != nil {
 		t.Fatal(err)
 	}
 
@@ -66,7 +92,7 @@ func TestChatGivesUpAfterMaxSteps(t *testing.T) {
 	loop := llm.Message{Role: llm.RoleModel, Calls: []llm.Call{{Name: "current_task"}}}
 	model := &fakeModel{replies: []llm.Message{loop, loop, loop, loop}}
 
-	_, err := newChat(model, 10).Reply(context.Background(), "a", &fakeTools{}, nil)
+	_, err := newChat(model, 10).Reply(context.Background(), "a", &fakeTools{}, nil, ignore)
 
 	if !errors.Is(err, domainerr.Unavailable("assistant_steps", "")) || len(model.requests) != 3 {
 		t.Errorf("err = %v after %d requests", err, len(model.requests))
@@ -76,7 +102,7 @@ func TestChatGivesUpAfterMaxSteps(t *testing.T) {
 func TestChatReportsAModelFailure(t *testing.T) {
 	model := &fakeModel{fail: errors.New("quota exceeded")}
 
-	_, err := newChat(model, 10).Reply(context.Background(), "a", &fakeTools{}, nil)
+	_, err := newChat(model, 10).Reply(context.Background(), "a", &fakeTools{}, nil, ignore)
 
 	if !errors.Is(err, domainerr.Unavailable("assistant_model", "")) || !strings.Contains(err.Error(), "quota exceeded") {
 		t.Errorf("err = %v", err)
@@ -89,11 +115,11 @@ func TestChatLimitsEachAccountPerDay(t *testing.T) {
 	chat := newChat(&fakeModel{replies: []llm.Message{answer, answer, answer, answer}}, 1)
 	chat.Now = func() time.Time { return now }
 
-	_, first := chat.Reply(context.Background(), "a", &fakeTools{}, nil)
-	_, second := chat.Reply(context.Background(), "a", &fakeTools{}, nil)
-	_, other := chat.Reply(context.Background(), "b", &fakeTools{}, nil)
+	_, first := chat.Reply(context.Background(), "a", &fakeTools{}, nil, ignore)
+	_, second := chat.Reply(context.Background(), "a", &fakeTools{}, nil, ignore)
+	_, other := chat.Reply(context.Background(), "b", &fakeTools{}, nil, ignore)
 	now = now.Add(2 * time.Hour)
-	_, tomorrow := chat.Reply(context.Background(), "a", &fakeTools{}, nil)
+	_, tomorrow := chat.Reply(context.Background(), "a", &fakeTools{}, nil, ignore)
 
 	if first != nil || other != nil || tomorrow != nil {
 		t.Errorf("first %v, other account %v, tomorrow %v; want all allowed", first, other, tomorrow)
@@ -161,7 +187,7 @@ type fakeModel struct {
 
 func (m *fakeModel) Name() string { return "fake-model" }
 
-func (m *fakeModel) Generate(_ context.Context, req llm.Request) (llm.Reply, error) {
+func (m *fakeModel) Generate(_ context.Context, req llm.Request, text func(string)) (llm.Reply, error) {
 	req.Messages = slices.Clone(req.Messages)
 	m.requests = append(m.requests, req)
 	if m.fail != nil {
@@ -169,8 +195,13 @@ func (m *fakeModel) Generate(_ context.Context, req llm.Request) (llm.Reply, err
 	}
 	reply := m.replies[0]
 	m.replies = m.replies[1:]
+	if reply.Text != "" {
+		text(reply.Text)
+	}
 	return llm.Reply{Message: reply}, nil
 }
+
+func ignore(Event) {}
 
 type fakeTools struct {
 	out  map[string]string

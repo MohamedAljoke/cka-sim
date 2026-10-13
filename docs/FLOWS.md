@@ -317,15 +317,21 @@ read-only kubectl rules are enforced in one place for both kinds of assistant.
 (`reviewer.md`, shared with Claude) and the tool list to the model through `llm.Model`. The Vertex adapter turns
 these into a Gemini `GenerateContent` call. When the model asks for tools, each one runs through MCP, and the
 results (or the tool's refusal) go back to the model. Gemini's thought signature travels with each call, because
-Gemini 3 refuses a conversation without it. It ends after a text answer, or after 8 rounds with 503
-`assistant_steps`. Each turn logs the account, model, steps, tokens in and out, and latency.
+Gemini 3 refuses a conversation without it. It ends after a text answer, or after 8 rounds with `assistant_steps`.
+Each turn logs the account, model, steps, tokens in and out, and latency.
 
-**What you see.** The answer appears as a bubble rendered from markdown with raw HTML shown as text, since it
-can quote your cluster. Under it a small line such as "Used current_task, inspect_cluster, run_check". An error
-shows in red with your message put back in the box to resend: Vertex failing (503 `assistant_model`), MCP
-down (503 `assistant_tools`) or the server started without a model (503 `assistant_off`). **Disconnect**, or
-leaving the task, drops the conversation.
+**The stream.** The Vertex adapter uses `GenerateContentStream`, and `Chat.Reply` passes on each piece of text
+and each tool call as it happens. The handler answers with server-sent events (`text/event-stream`): `tool
+{"name"}`, `text {"text"}`, then `done {"tools"}`, or `error {"detail"}` when something fails after the stream
+began. Every check before the first event (400, 409, 422, 429, 503) is still a normal problem response. Caddy on
+GKE and Vite locally pass the stream through as it comes.
+
+**What you see.** "Thinking…", then "Checking: run_check…" as each tool runs, then the answer writing itself
+word by word, rendered from markdown with raw HTML shown as text, since it can quote your cluster. Text the
+model wrote before a tool call ("Let me check.") stays in the answer. Under it a small line such as "Used
+current_task, inspect_cluster, run_check". An error shows in red with your message put back in the box to resend:
+Vertex failing (`assistant_model`), MCP down (503 `assistant_tools`) or the server started without a model (503
+`assistant_off`). **Disconnect**, or leaving the task, drops the conversation and stops an answer mid-stream.
 
 Not built yet: the chat on GKE. `make ai` gives the app's pod a Vertex identity through Workload Identity, but
-`apps/mcp` isn't deployed there yet (AI-REVIEW build step 8). There is also no streaming, so the answer appears
-all at once.
+`apps/mcp` isn't deployed there yet (AI-REVIEW build step 8).

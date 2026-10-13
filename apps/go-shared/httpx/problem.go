@@ -33,6 +33,7 @@ var kinds = map[domainerr.Kind]kindResponse{
 	domainerr.KindGone:          {http.StatusGone, "Gone"},
 	domainerr.KindUnavailable:   {http.StatusServiceUnavailable, "Service unavailable"},
 	domainerr.KindUnprocessable: {http.StatusUnprocessableEntity, "Unprocessable"},
+	domainerr.KindTooMany:       {http.StatusTooManyRequests, "Too many requests"},
 }
 
 type Reporter func(r *http.Request, err error)

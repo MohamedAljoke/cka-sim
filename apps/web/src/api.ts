@@ -134,6 +134,20 @@ export async function startAssistant(provider: string): Promise<void> {
   if (!res.ok) throw await failure(res, 'POST', path)
 }
 
+export type ChatMessage = {
+  role: 'user' | 'model'
+  text: string
+}
+
+export type ChatTurn = {
+  text: string
+  tools: string[]
+}
+
+export async function chatAssistant(provider: string, messages: ChatMessage[], signal: AbortSignal): Promise<ChatTurn> {
+  return (await call('POST', '/api/assistant/chat', { provider, messages }, signal)).json()
+}
+
 export type User = {
   id: string
   email: string

@@ -5,6 +5,8 @@ LAB := apps/lab
 WEB := apps/web
 AUTH := apps/auth
 MCP := apps/mcp
+-include .env
+export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' .env 2>/dev/null)
 # The same Compose project `cka-sim up` runs, so dev and the installed cka-sim share one lab, database and secrets.
 COMPOSE := docker compose -f $(CURDIR)/infra/local/compose.yml -f $(CURDIR)/infra/local/compose.dev.yml
 secret = "$$($(COMPOSE) run --rm --no-deps -T secrets cat /secrets/$(1))"

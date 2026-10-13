@@ -14,8 +14,8 @@ var ErrClaudeMissing = domainerr.Unavailable("assistant_missing", "Claude Code i
 
 const mcpServer = "cka-sim"
 
-//go:embed claude.md
-var claudeInstructions string
+//go:embed reviewer.md
+var reviewerInstructions string
 
 // claude --continue exits when there is nothing to continue.
 const claudeCommand = `if ls ~/.claude/projects/*/*.jsonl >/dev/null 2>&1; then exec claude --continue; fi; exec claude`
@@ -57,7 +57,7 @@ func claudeSetup(conn Connection) (string, error) {
 	for _, f := range []struct{ path, body string }{
 		{"/etc/claude-code/managed-settings.json", string(settings) + "\n"},
 		{"/etc/claude-code/managed-mcp.json", string(servers) + "\n"},
-		{"/etc/claude-code/CLAUDE.md", claudeInstructions},
+		{"/etc/claude-code/CLAUDE.md", reviewerInstructions},
 	} {
 		b.WriteString("cat > " + f.path + " <<'CKA_SIM_EOF'\n" + f.body + "CKA_SIM_EOF\n")
 	}

@@ -3,7 +3,8 @@
 Goal: on the same page as the task and terminal, the user talks to an AI that looks at their cluster, explains
 what is wrong and gives hints without spoiling the answer. Users will pick different AIs over time: their Claude
 subscription today, Codex later, and maybe a cka-sim subscription or their own API key. So the AI sits behind an
-abstraction from day one. **v1 builds only the Claude subscription case.**
+abstraction from day one. **v1 built the Claude subscription case; the `chat` kind now runs on Gemini (Vertex
+AI), paid from our GCP credit** (flow 8 in `docs/FLOWS.md`).
 
 ## Constraint that shapes everything: subscriptions only work in the vendor's own client
 
@@ -20,7 +21,7 @@ That gives two kinds of assistant, and the abstraction is built around them:
 | Kind | Who calls the model | What the pane shows | Examples |
 |---|---|---|---|
 | `cli` | the vendor's CLI, logged in with the user's subscription | a terminal running that CLI | Claude Code (v1), Codex CLI |
-| `chat` | our backend, with an API key or our own plan | a native chat UI | BYOK Anthropic/OpenAI key, cka-sim plan (later) |
+| `chat` | our backend, with an API key or our own plan | a native chat UI | Gemini on Vertex AI (built), BYOK Anthropic/OpenAI key, Ollama (later) |
 
 Both kinds use the same cka-sim tools through the same MCP server. Only the driver changes.
 
@@ -139,8 +140,31 @@ type Tokens interface {
 - `claude`: writes the managed MCP config, settings and instructions, then launches `claude`.
 - `codex` (later): writes `~/.codex/config.toml` with the MCP server and a read-only sandbox mode, then launches
   `codex`.
-- `chat` providers (later) don't use `Prepare` at all. They get a separate `Chat(ctx, messages, tools)` interface
-  that runs the agent loop in our backend. They're kept apart because subscriptions must never reach that path.
+- `chat` providers don't use `Prepare` at all. They're `*assistant.Chat` values in `server.Practice.Chats`, kept
+  apart from `Provider` because subscriptions must never reach that path. `Chat.Reply` runs the agent loop in our
+  backend over the same MCP tools (`assistant.MCPTools`, an MCP client of `apps/mcp`).
+
+The model itself sits behind `llm.Model` (`internal/llm`), our own types for messages, tool calls and results:
+
+```go
+type Model interface {
+	Name() string
+	Generate(ctx context.Context, req Request) (Reply, error)
+}
+```
+
+`llm/vertex` is the only adapter so far (Gemini through `google.golang.org/genai`, with Google's default
+credentials). `CKA_SIM_LLM` picks it in `newChats` (`cmd/server/main.go`). An OpenAI adapter would also cover
+Ollama through its OpenAI-compatible API; it's one more package and one more `case`.
+
+| Setting | Default | |
+|---|---|---|
+| `CKA_SIM_LLM` | empty (no chat) | `vertex` |
+| `CKA_SIM_VERTEX_PROJECT` | | the GCP project billed |
+| `CKA_SIM_VERTEX_LOCATION` | `global` | the cluster's region may not serve the newest Gemini |
+| `CKA_SIM_VERTEX_MODEL` | `gemini-3.5-flash` | GA on the `global` endpoint (2026-10) |
+| `CKA_SIM_CHAT_MCP_URL` | `http://127.0.0.1:7373/mcp` | where the platform reaches `apps/mcp`; `CKA_SIM_MCP_URL` is where the lab does |
+| `CKA_SIM_CHAT_DAILY` | `100` | messages per account per day, kept in memory |
 
 ## `apps/mcp`: its own app
 
@@ -277,10 +301,11 @@ access in the platform; hardened against prompt injection from user-controlled c
 ## Later
 
 - **Codex:** a second `cli` provider. Only the config file and command differ.
-- **`chat` kind:** a BYOK API key or a cka-sim plan, with the agent loop in our backend using the same MCP tools.
-  This brings in token budgets per review, prompt caching for `task.md`/`explain.md`, structured output
-  (`{verdict, mistakes[], hint}`), and cost and latency logging.
-- **Local model (Ollama):** a `chat` provider for users with no paid AI.
+- **More `chat` models:** an OpenAI adapter for a BYOK key, and through the same API Ollama for users with no
+  paid AI. Then streaming, prompt caching for `task.md`/`explain.md`, structured output
+  (`{verdict, mistakes[], hint}`) and `make eval` against the chat kind too (its judge could move off `claude -p`).
+- **Chat on GKE:** `make ai` (in `make site`) enables Vertex AI and gives the app's pod the `cka-sim-app`
+  identity with `roles/aiplatform.user`; it waits on deploying `apps/mcp` (step 8).
 - **RAG:** Kubernetes docs in pgvector on the existing Cloud SQL Postgres, only if evals show it helps.
 
 [swappable parts]: ../apps/platform/internal/sandbox

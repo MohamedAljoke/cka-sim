@@ -1,7 +1,7 @@
-import { startAssistant } from './api'
+import { chatAssistant, startAssistant, type ChatMessage } from './api'
 import { icon } from './icons'
 import { openTerminal } from './terminal'
-import { el, message, setStatus } from './ui'
+import { el, message, setStatus, untrustedMarkdown } from './ui'
 
 export type Provider = {
   id: string
@@ -21,11 +21,83 @@ function cli(id: string, label: string, intro: string): Provider {
   }
 }
 
+function chat(id: string, label: string, intro: string): Provider {
+  return { id, label, intro, prepare: async () => {}, mount: (screen) => openChat(screen, id) }
+}
+
+const chatHistoryLimit = 39
+
+function openChat(screen: HTMLElement, provider: string): () => void {
+  const history: ChatMessage[] = []
+  const controller = new AbortController()
+  const log = el('div', 'chat-log')
+  const input = el('textarea', 'chat-input')
+  input.rows = 2
+  input.placeholder = 'Ask for a review or a hint. Enter sends, Shift+Enter adds a line.'
+  input.setAttribute('aria-label', 'Message to the assistant')
+  const send = el('button', 'action primary', 'Send')
+  send.type = 'button'
+  const form = el('div', 'chat-form')
+  form.append(input, send)
+  screen.classList.add('chat')
+  screen.replaceChildren(log, form)
+
+  const bubble = (kind: string) => {
+    const b = el('div', `chat-bubble ${kind}`)
+    log.append(b)
+    b.scrollIntoView({ block: 'end' })
+    return b
+  }
+
+  const ask = async () => {
+    const text = input.value.trim()
+    if (!text || send.disabled) return
+    input.value = ''
+    send.disabled = true
+    history.push({ role: 'user', text })
+    bubble('user').textContent = text
+    const answer = bubble('model muted')
+    answer.textContent = 'Thinking…'
+    try {
+      const turn = await chatAssistant(provider, history.slice(-chatHistoryLimit), controller.signal)
+      history.push({ role: 'model', text: turn.text })
+      answer.className = 'chat-bubble model'
+      answer.replaceChildren()
+      untrustedMarkdown(answer, turn.text)
+      if (turn.tools.length) answer.append(el('p', 'chat-tools', `Used ${[...new Set(turn.tools)].join(', ')}`))
+    } catch (err) {
+      if (controller.signal.aborted) return
+      history.pop()
+      answer.className = 'chat-bubble error'
+      answer.textContent = message(err)
+      input.value ||= text
+    } finally {
+      send.disabled = false
+      answer.scrollIntoView({ block: 'end' })
+    }
+  }
+
+  send.onclick = ask
+  input.onkeydown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault()
+      ask()
+    }
+  }
+  input.focus()
+  return () => controller.abort()
+}
+
 const providers: Provider[] = [
   cli(
     'claude',
     'Claude · your subscription',
     'Claude Code opens here and signs in with your own Claude Pro or Max plan, once per lab. It can read the task and your cluster and give hints, but it cannot change anything.',
+  ),
+  chat(
+    'gemini',
+    'Gemini · cka-sim',
+    'Gemini runs on cka-sim, so there is nothing to sign in to. It can read the task and your cluster and give hints, but it cannot change anything.',
   ),
 ]
 

@@ -21,12 +21,13 @@ AUTH_IMAGE := $(REGION)-docker.pkg.dev/$(PROJECT)/$(REPO)/auth:latest
 SQL      := cka-sim-db
 INSTANCE := $(PROJECT):$(REGION):$(SQL)
 AUTH_GSA := cka-sim-auth@$(PROJECT).iam.gserviceaccount.com
+APP_GSA  := cka-sim-app@$(PROJECT).iam.gserviceaccount.com
 DB_PASSWORD := $(HOME)/.config/cka-sim/gke-db-password
 POOL    ?= 1
 SANDBOX := v1.0.4
 GC      := gcloud --project $(PROJECT)
 
-.PHONY: help project cluster image sandbox pool wall db site url site-down db-down down
+.PHONY: help project cluster image sandbox pool wall db ai site url site-down ai-down db-down down
 
 help:
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
@@ -85,7 +86,16 @@ db: ## Cloud SQL Postgres for auth (smallest tier) and the identity its pod uses
 	$(GC) iam service-accounts add-iam-policy-binding $(AUTH_GSA) --role roles/iam.workloadIdentityUser \
 	  --member "serviceAccount:$(PROJECT).svc.id.goog[default/cka-sim-auth]" >/dev/null
 
-site: image ## the app and auth on the platform pool, a warm lab in the pool, HTTPS + login; `make url` prints the link
+ai: ## Vertex AI for the Gemini assistant and the identity the app's pod calls it with (once)
+	$(GC) services enable aiplatform.googleapis.com
+	$(GC) iam service-accounts describe $(APP_GSA) >/dev/null 2>&1 || \
+	  $(GC) iam service-accounts create cka-sim-app --display-name "cka-sim app"
+	$(GC) projects add-iam-policy-binding $(PROJECT) --member serviceAccount:$(APP_GSA) \
+	  --role roles/aiplatform.user --condition None >/dev/null
+	$(GC) iam service-accounts add-iam-policy-binding $(APP_GSA) --role roles/iam.workloadIdentityUser \
+	  --member "serviceAccount:$(PROJECT).svc.id.goog[default/cka-sim-app]" >/dev/null
+
+site: image ai ## the app and auth on the platform pool, a warm lab in the pool, HTTPS + login; `make url` prints the link
 	$(GC) compute addresses describe cka-sim-site --region $(REGION) >/dev/null 2>&1 || \
 	  $(GC) compute addresses create cka-sim-site --region $(REGION)
 	docker build -f $(PLATFORM)/deploy/app.Dockerfile -t $(APP_IMAGE) $(APPS)
@@ -102,7 +112,8 @@ site: image ## the app and auth on the platform pool, a warm lab in the pool, HT
 	$(MAKE) --no-print-directory pool POOL=$(POOL)
 	AUTH_IMAGE=$(AUTH_IMAGE) INSTANCE=$(INSTANCE) AUTH_GSA=$(AUTH_GSA) envsubst < $(AUTH)/deploy/gke/auth.yaml | kubectl apply -f -
 	@ip=$$($(GC) compute addresses describe cka-sim-site --region $(REGION) --format='value(address)'); \
-	APP_IMAGE=$(APP_IMAGE) SITE_IP=$$ip SITE_HOST=$$ip.sslip.io envsubst < $(PLATFORM)/deploy/gke/app.yaml | kubectl apply -f -
+	APP_IMAGE=$(APP_IMAGE) SITE_IP=$$ip SITE_HOST=$$ip.sslip.io APP_GSA=$(APP_GSA) PROJECT=$(PROJECT) \
+	  envsubst < $(PLATFORM)/deploy/gke/app.yaml | kubectl apply -f -
 	kubectl rollout restart deployment/auth deployment/app
 
 url: ## print the site's link and login
@@ -116,6 +127,9 @@ site-down: ## remove the app, auth, the load balancer, its IP, and every lab
 	kubectl delete service/site service/auth serviceaccount/cka-sim-auth pvc/caddy-data \
 	  secret/cka-sim-auth secret/cka-sim-db secret/cka-sim-site --ignore-not-found
 	$(GC) compute addresses delete cka-sim-site --region $(REGION) --quiet
+
+ai-down: ## delete the app's Vertex AI identity
+	$(GC) iam service-accounts delete $(APP_GSA) --quiet
 
 db-down: ## delete the Cloud SQL instance (its data too) and auth's identity
 	$(GC) sql instances delete $(SQL) --quiet

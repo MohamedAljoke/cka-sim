@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/auth"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/desk"
 	labagent "github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/llm"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
 )
@@ -24,11 +26,17 @@ var (
 	errNoTask     = domainerr.NotFound("no_task", "the learner has no task open")
 	errBadInspect = domainerr.Unprocessable("inspect_refused",
 		"only read-only kubectl: get, describe, logs, events, top, explain, api-resources or version, without watching or following")
+	errChatOff = domainerr.Unavailable("assistant_off", "no chat assistant is set up on this server")
+	errBadChat = httpx.Malformed(fmt.Sprintf(`the body must be JSON like {"provider": "gemini", "messages": [{"role": "user", "text": "…"}]}`+
+		` with 1 to %d messages, each up to %d bytes, alternating user and model and ending with user`, chatMessages, chatMessageMax))
 )
 
 const (
 	inspectLimit   = 8 << 10
 	inspectTimeout = 20 * time.Second
+	chatMessages   = 40
+	chatMessageMax = 8 << 10
+	chatTimeout    = 90 * time.Second
 )
 
 var (
@@ -113,6 +121,76 @@ func (a *api) prepareAssistant(r *http.Request, id string) (*desk.Desk, assistan
 		return nil, nil, scriptFailed(err)
 	}
 	return d, p, nil
+}
+
+type chatRequest struct {
+	Provider string        `json:"provider"`
+	Messages []chatMessage `json:"messages"`
+}
+
+type chatMessage struct {
+	Role llm.Role `json:"role"`
+	Text string   `json:"text"`
+}
+
+func (a *api) chat(w http.ResponseWriter, r *http.Request) error {
+	var req chatRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, chatMessages*chatMessageMax*2)).Decode(&req); err != nil {
+		return errBadChat
+	}
+	history, ok := chatHistory(req.Messages)
+	if !ok {
+		return errBadChat
+	}
+	c, ok := assistant.FindChat(a.Chats, req.Provider)
+	if !ok && len(a.Chats) == 0 {
+		return errChatOff
+	}
+	if !ok {
+		return domainerr.Unprocessable("assistant_unknown", fmt.Sprintf("no assistant %q", req.Provider))
+	}
+	claims, _ := auth.FromContext(r.Context())
+	d, err := a.desk(r)
+	if err != nil {
+		return err
+	}
+	if err := notDuringExam(d); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), chatTimeout)
+	defer cancel()
+	token, err := a.Tokens.Issue(ctx, r)
+	if err != nil {
+		return err
+	}
+	tools, err := a.ChatTools.Open(ctx, token)
+	if err != nil {
+		return err
+	}
+	defer tools.Close()
+	turn, err := c.Reply(ctx, claims.AccountID, tools, history)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, turn)
+}
+
+func chatHistory(messages []chatMessage) ([]llm.Message, bool) {
+	if len(messages) == 0 || len(messages) > chatMessages {
+		return nil, false
+	}
+	history := make([]llm.Message, len(messages))
+	for i, m := range messages {
+		want := llm.RoleUser
+		if i%2 == 1 {
+			want = llm.RoleModel
+		}
+		if m.Role != want || m.Text == "" || len(m.Text) > chatMessageMax {
+			return nil, false
+		}
+		history[i] = llm.Message{Role: m.Role, Text: m.Text}
+	}
+	return history, messages[len(messages)-1].Role == llm.RoleUser
 }
 
 type currentTask struct {

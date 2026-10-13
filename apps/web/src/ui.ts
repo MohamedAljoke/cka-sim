@@ -1,10 +1,31 @@
-import { marked } from 'marked'
+import { Marked, marked } from 'marked'
 import type { Result, Task } from './api'
 import { icon } from './icons'
 
 // Questions and explanations come from the bundled catalog, not from users, so they render as is.
 export function markdown(target: HTMLElement, text: string) {
   target.insertAdjacentHTML('beforeend', marked.parse(text, { async: false }))
+}
+
+// Model answers can repeat text from the learner's cluster, so raw HTML is shown as text and only web links stay links.
+const untrusted = new Marked({
+  renderer: {
+    html: ({ text }) => escapeHTML(text),
+    image: ({ text }) => escapeHTML(text),
+    link({ href, tokens }) {
+      const text = this.parser.parseInline(tokens)
+      if (!/^https?:\/\//i.test(href)) return text
+      return `<a href="${escapeHTML(href)}" target="_blank" rel="noopener noreferrer">${text}</a>`
+    },
+  },
+})
+
+export function untrustedMarkdown(target: HTMLElement, text: string) {
+  target.insertAdjacentHTML('beforeend', untrusted.parse(text, { async: false }))
+}
+
+function escapeHTML(text: string): string {
+  return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 }
 
 export function checkList(r: Result): HTMLElement {

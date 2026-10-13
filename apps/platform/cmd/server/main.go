@@ -21,6 +21,7 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/desk"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/exam"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/llm/vertex"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox/gke"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox/local"
@@ -40,6 +41,12 @@ type settings struct {
 	LabIdle    time.Duration `key:"CKA_SIM_LAB_IDLE" default:"30m"`
 	AuthURL    string        `key:"CKA_SIM_AUTH_URL" default:"http://127.0.0.1:7272"`
 	MCPURL     string        `key:"CKA_SIM_MCP_URL" default:"http://host.docker.internal:7373/mcp"`
+	LLM        string        `key:"CKA_SIM_LLM" default:""`
+	Project    string        `key:"CKA_SIM_VERTEX_PROJECT" default:""`
+	Location   string        `key:"CKA_SIM_VERTEX_LOCATION" default:"global"`
+	Model      string        `key:"CKA_SIM_VERTEX_MODEL" default:"gemini-3.5-flash"`
+	ChatMCPURL string        `key:"CKA_SIM_CHAT_MCP_URL" default:"http://127.0.0.1:7373/mcp"`
+	ChatDaily  int           `key:"CKA_SIM_CHAT_DAILY" default:"100" min:"1"`
 }
 
 func main() {
@@ -65,6 +72,10 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	chats, err := newChats(ctx, cfg)
+	if err != nil {
+		return err
+	}
 	all, err := tasks.Load(catalog.FS)
 	if err != nil {
 		return fmt.Errorf("load the task catalog: %w", err)
@@ -82,6 +93,8 @@ func run(ctx context.Context) error {
 		Assistants: []assistant.Provider{assistant.Claude{}},
 		Tokens:     assistant.AuthTokens{URL: cfg.AuthURL},
 		MCPURL:     cfg.MCPURL,
+		Chats:      chats,
+		ChatTools:  assistant.MCPTools{URL: cfg.ChatMCPURL},
 	}
 
 	sessions := auth.Verifier{Secret: []byte(cfg.AuthSecret), Now: time.Now}
@@ -118,6 +131,24 @@ func newProvider(ctx context.Context, cfg settings) (sandbox.Provider, error) {
 		return p, nil
 	default:
 		return nil, fmt.Errorf("unknown CKA_SIM_PROVIDER %q; want gke or nothing", cfg.Provider)
+	}
+}
+
+func newChats(ctx context.Context, cfg settings) ([]*assistant.Chat, error) {
+	switch cfg.LLM {
+	case "":
+		return nil, nil
+	case "vertex":
+		if cfg.Project == "" {
+			return nil, errors.New("CKA_SIM_LLM=vertex needs CKA_SIM_VERTEX_PROJECT")
+		}
+		model, err := vertex.New(ctx, vertex.Config{Project: cfg.Project, Location: cfg.Location, Model: cfg.Model})
+		if err != nil {
+			return nil, err
+		}
+		return []*assistant.Chat{{ID: "gemini", Model: model, MaxSteps: 8, MaxTokens: 2048, Daily: cfg.ChatDaily, Now: time.Now}}, nil
+	default:
+		return nil, fmt.Errorf("unknown CKA_SIM_LLM %q; want vertex or nothing", cfg.LLM)
 	}
 }
 

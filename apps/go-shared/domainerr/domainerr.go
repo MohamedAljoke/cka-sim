@@ -12,6 +12,7 @@ const (
 	KindGone          Kind = "gone"
 	KindUnavailable   Kind = "unavailable"
 	KindUnprocessable Kind = "unprocessable"
+	KindTooMany       Kind = "too_many"
 )
 
 type Error struct {
@@ -81,4 +82,8 @@ func Unavailable(code, message string) *Error {
 
 func Unprocessable(code, message string) *Error {
 	return &Error{Kind: KindUnprocessable, Code: code, Message: message}
+}
+
+func TooMany(code, message string) *Error {
+	return &Error{Kind: KindTooMany, Code: code, Message: message}
 }

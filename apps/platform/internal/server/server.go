@@ -21,6 +21,8 @@ type Practice struct {
 	Assistants []assistant.Provider
 	Tokens     assistant.Tokens
 	MCPURL     string
+	Chats      []*assistant.Chat
+	ChatTools  assistant.Toolbox
 }
 
 func New(desks *desk.Desks, practice Practice) http.Handler {
@@ -43,6 +45,7 @@ func New(desks *desk.Desks, practice Practice) http.Handler {
 	})
 	handle("GET /ws/assistant", a.serveAssistant)
 	handle("POST /api/assistant", a.startAssistant)
+	handle("POST /api/assistant/chat", a.chat)
 	assist("GET /api/assistant/task", a.currentTask)
 	assist("POST /api/assistant/inspect", a.inspect)
 	handle("GET /api/lab", a.getLab)

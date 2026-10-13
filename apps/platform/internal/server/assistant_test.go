@@ -15,6 +15,7 @@ import (
 
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/assistant"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/auth"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/llm"
 )
 
 func TestStartAssistantPreparesTheLabWithAToken(t *testing.T) {
@@ -233,6 +234,88 @@ func TestInspectCutsLongOutput(t *testing.T) {
 	}
 }
 
+func TestChatAnswersAfterUsingTheToolsWithTheAssistantToken(t *testing.T) {
+	srv := newAPI(t, &fakeRunner{})
+
+	status, body := request(t, srv, http.MethodPost, "/api/assistant/chat",
+		`{"provider": "fake-chat", "messages": [{"role": "user", "text": "review my attempt"}]}`)
+
+	var turn assistant.Turn
+	if status != http.StatusOK || json.Unmarshal([]byte(body), &turn) != nil {
+		t.Fatalf("got %d %q", status, body)
+	}
+	if turn.Text != "review my attempt: current task for tok-assistant" || !slices.Equal(turn.Tools, []string{"current_task"}) {
+		t.Errorf("turn = %+v", turn)
+	}
+}
+
+func TestChatRefusesAMalformedConversation(t *testing.T) {
+	srv := newAPI(t, &fakeRunner{})
+
+	for _, payload := range []string{
+		`{"provider": "fake-chat", "messages": []}`,
+		`{"provider": "fake-chat", "messages": [{"role": "model", "text": "hi"}]}`,
+		`{"provider": "fake-chat", "messages": [{"role": "user", "text": "a"}, {"role": "model", "text": "b"}]}`,
+		`{"provider": "fake-chat", "messages": [{"role": "user", "text": ""}]}`,
+		`{"provider": "fake-chat", "messages": [{"role": "user", "text": "` + strings.Repeat("x", chatMessageMax+1) + `"}]}`,
+	} {
+		status, body := request(t, srv, http.MethodPost, "/api/assistant/chat", payload)
+
+		if status != http.StatusBadRequest {
+			t.Errorf("%.60s: got %d %q", payload, status, body)
+		}
+	}
+}
+
+func TestChatNeedsAKnownProvider(t *testing.T) {
+	srv := newAPI(t, &fakeRunner{})
+
+	status, body := request(t, srv, http.MethodPost, "/api/assistant/chat", `{"provider": "nope", "messages": [{"role": "user", "text": "hi"}]}`)
+
+	if status != http.StatusUnprocessableEntity || problemCode(t, body) != "assistant_unknown" {
+		t.Errorf("got %d %q", status, body)
+	}
+}
+
+func TestChatSaysWhenNoneIsSetUp(t *testing.T) {
+	srv := serve(t, readyDesks(t, &fakeRunner{}, newFakeOpener()), Practice{Tokens: fakeTokens{}})
+
+	status, body := request(t, srv, http.MethodPost, "/api/assistant/chat", `{"provider": "gemini", "messages": [{"role": "user", "text": "hi"}]}`)
+
+	if status != http.StatusServiceUnavailable || problemCode(t, body) != "assistant_off" {
+		t.Errorf("got %d %q", status, body)
+	}
+}
+
+func TestChatIsRefusedDuringAnExamAndToAnAssistantToken(t *testing.T) {
+	srv := newAPI(t, &fakeRunner{})
+	payload := `{"provider": "fake-chat", "messages": [{"role": "user", "text": "hi"}]}`
+
+	scoped, scopedBody := asAssistant(t, srv, http.MethodPost, "/api/assistant/chat", payload)
+	beginExam(t, srv)
+	exam, examBody := request(t, srv, http.MethodPost, "/api/assistant/chat", payload)
+
+	if scoped != http.StatusForbidden || problemCode(t, scopedBody) != "assistant_not_allowed" {
+		t.Errorf("assistant token got %d %q", scoped, scopedBody)
+	}
+	if exam != http.StatusConflict || problemCode(t, examBody) != "exam_running" {
+		t.Errorf("during the exam got %d %q", exam, examBody)
+	}
+}
+
+func TestChatStopsAtTheDailyLimit(t *testing.T) {
+	srv := newAPI(t, &fakeRunner{})
+	payload := `{"provider": "fake-chat", "messages": [{"role": "user", "text": "hi"}]}`
+
+	request(t, srv, http.MethodPost, "/api/assistant/chat", payload)
+	request(t, srv, http.MethodPost, "/api/assistant/chat", payload)
+	status, body := request(t, srv, http.MethodPost, "/api/assistant/chat", payload)
+
+	if status != http.StatusTooManyRequests || problemCode(t, body) != "assistant_limit" {
+		t.Errorf("got %d %q", status, body)
+	}
+}
+
 const (
 	testMCPURL    = "http://mcp.test/mcp"
 	prepareScript = "prepare fake-ai tok-assistant " + testMCPURL + "\n"
@@ -294,3 +377,33 @@ func dialAssistant(t *testing.T, srv *httptest.Server, opener *fakeOpener) *webs
 	receive(t, opener.opened)
 	return conn
 }
+
+type lookFirstModel struct{}
+
+func (lookFirstModel) Name() string { return "look-first" }
+
+func (lookFirstModel) Generate(_ context.Context, req llm.Request) (llm.Reply, error) {
+	last := req.Messages[len(req.Messages)-1]
+	if len(last.Results) == 0 {
+		return llm.Reply{Message: llm.Message{Role: llm.RoleModel, Calls: []llm.Call{{Name: "current_task"}}}}, nil
+	}
+	return llm.Reply{Message: llm.Message{Role: llm.RoleModel, Text: req.Messages[0].Text + ": " + last.Results[0].Output}}, nil
+}
+
+type fakeToolbox struct{}
+
+func (fakeToolbox) Open(_ context.Context, token string) (assistant.Tools, error) {
+	return fakeChatTools{token: token}, nil
+}
+
+type fakeChatTools struct {
+	token string
+}
+
+func (fakeChatTools) List() []llm.Tool { return []llm.Tool{{Name: "current_task"}} }
+
+func (f fakeChatTools) Call(_ context.Context, name string, _ json.RawMessage) (string, error) {
+	return strings.ReplaceAll(name, "_", " ") + " for " + f.token, nil
+}
+
+func (fakeChatTools) Close() error { return nil }

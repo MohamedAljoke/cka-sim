@@ -3,6 +3,8 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: cka-sim-app
+  annotations:
+    iam.gke.io/gcp-service-account: ${APP_GSA}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -77,6 +79,10 @@ spec:
                   key: token
             - name: SITE_HOST
               value: ${SITE_HOST}
+            - name: CKA_SIM_LLM
+              value: vertex
+            - name: CKA_SIM_VERTEX_PROJECT
+              value: ${PROJECT}
             - name: CKA_SIM_AUTH_SECRET
               valueFrom:
                 secretKeyRef:

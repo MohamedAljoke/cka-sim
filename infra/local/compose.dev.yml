@@ -4,5 +4,7 @@ services:
     ports:
       - "127.0.0.1:7171:7171"
   postgres:
+    # pgvector for the Assistant's docs search, which needs Vertex AI and so only runs in development.
+    image: pgvector/pgvector:0.8.6-pg16
     ports:
       - "127.0.0.1:5434:5432"

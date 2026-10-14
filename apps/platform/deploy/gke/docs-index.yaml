@@ -1,0 +1,52 @@
+# Embeds the Kubernetes docs for the assistant's search_docs into Cloud SQL, as the app (it may call Vertex AI and reach
+# the database). Runs to the end once; a re-run only embeds pages that changed.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: docs-index
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      serviceAccountName: cka-sim-app
+      restartPolicy: Never
+      nodeSelector:
+        cloud.google.com/gke-nodepool: default-pool
+      enableServiceLinks: false
+      initContainers:
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.25.4
+          restartPolicy: Always
+          args:
+            - --port=5432
+            - --health-check
+            - --http-address=0.0.0.0
+            - ${INSTANCE}
+          startupProbe:
+            httpGet:
+              path: /startup
+              port: 9090
+            periodSeconds: 2
+            failureThreshold: 30
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+      containers:
+        - name: index
+          image: ${DOCS_IMAGE}
+          env:
+            - name: CKA_SIM_DOCS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cka-sim-db
+                  key: url
+            - name: CKA_SIM_VERTEX_PROJECT
+              value: ${PROJECT}
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi

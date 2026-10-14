@@ -19,6 +19,7 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/assistant"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/auth"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/desk"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/docs"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/exam"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/llm/vertex"
@@ -47,6 +48,8 @@ type settings struct {
 	Model      string        `key:"CKA_SIM_VERTEX_MODEL" default:"gemini-3.5-flash"`
 	ChatMCPURL string        `key:"CKA_SIM_CHAT_MCP_URL" default:"http://127.0.0.1:7373/mcp"`
 	ChatDaily  int           `key:"CKA_SIM_CHAT_DAILY" default:"100" min:"1"`
+	DocsDB     string        `key:"CKA_SIM_DOCS_DATABASE_URL" default:""`
+	EmbedModel string        `key:"CKA_SIM_EMBED_MODEL" default:"gemini-embedding-001"`
 }
 
 func main() {
@@ -76,6 +79,11 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	search, closeDocs, err := newDocs(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer closeDocs()
 	all, err := tasks.Load(catalog.FS)
 	if err != nil {
 		return fmt.Errorf("load the task catalog: %w", err)
@@ -95,6 +103,7 @@ func run(ctx context.Context) error {
 		MCPURL:     cfg.MCPURL,
 		Chats:      chats,
 		ChatTools:  assistant.MCPTools{URL: cfg.ChatMCPURL},
+		Docs:       search,
 	}
 
 	sessions := auth.Verifier{Secret: []byte(cfg.AuthSecret), Now: time.Now}
@@ -150,6 +159,31 @@ func newChats(ctx context.Context, cfg settings) ([]*assistant.Chat, error) {
 	default:
 		return nil, fmt.Errorf("unknown CKA_SIM_LLM %q; want vertex or nothing", cfg.LLM)
 	}
+}
+
+func newDocs(ctx context.Context, cfg settings) (server.DocsSearch, func(), error) {
+	if cfg.LLM != "vertex" || cfg.DocsDB == "" {
+		return nil, func() {}, nil
+	}
+	pool, err := docs.Connect(ctx, cfg.DocsDB)
+	if err != nil {
+		return nil, nil, err
+	}
+	store := docs.Postgres{Pool: pool}
+	model, err := store.Meta(ctx, "model")
+	if err == nil && model != "" && model != cfg.EmbedModel {
+		err = fmt.Errorf("the docs were embedded with %s; set CKA_SIM_EMBED_MODEL=%s or re-index", model, model)
+	}
+	if err != nil {
+		pool.Close()
+		return nil, nil, err
+	}
+	embedder, err := vertex.NewEmbedder(ctx, vertex.Config{Project: cfg.Project, Location: cfg.Location, Model: cfg.EmbedModel}, docs.Dims)
+	if err != nil {
+		pool.Close()
+		return nil, nil, err
+	}
+	return docs.Search{Embedder: embedder, Store: store}, pool.Close, nil
 }
 
 var accountID = regexp.MustCompile(`^[0-9A-Za-z-]+$`)

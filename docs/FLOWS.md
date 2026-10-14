@@ -242,7 +242,8 @@ keeps the results; Home shows them as "Last exam" until the next exam replaces t
 
 ## 7. The hosted site on GKE: the lab on its own VM
 
-`make site` in `infra/gke` builds the lab, app, auth and MCP images.
+`make site` in `infra/gke` builds the lab, app, auth and MCP images. `make docs` fills the assistant's docs
+index (below).
 
 **The lab image.** `apps/lab/deploy/lab.Dockerfile`, the same image `make up` runs locally: dockerd, the `lab`
 CLI and the agent (`cmd/agent`). The pool's template (`apps/lab/deploy/gke/lab-pool.yaml`) sets
@@ -258,6 +259,13 @@ tools on `127.0.0.1:7373`, and Caddy passes `/mcp` to it, because Claude Code in
 the public address. The server starts with `CKA_SIM_PROVIDER=gke`, so `cmd/server/main.go` makes a `gke.Provider`
 (`internal/sandbox/gke`) instead of a `local.Provider`. It first deletes any claim an earlier run left behind
 (`ReapClaims`), since each one holds a node.
+
+**The app's database.** The app pod reaches the same Cloud SQL Postgres as auth through its own `cloud-sql-proxy`
+sidecar, on `127.0.0.1:5432`, as `cka-sim-app` (`make ai` grants it `cloudsql.client`). Before the server starts, a
+`migrate` init container applies `apps/platform/scripts/db` (the `docs` schema, pgvector). `make docs` builds an
+image with the Kubernetes docs at the current `main` commit and the indexer, then runs it as the Job `docs-index`
+with the same identity and proxy. It embeds the chunks on Vertex AI and stores them in `docs.chunks`. A re-run only
+embeds what changed.
 
 **A lab pod warming up.** `lab-start.sh` starts dockerd on its Unix socket only, then runs `lab up`
 (flow 1's cluster, inside the pod), then `exec cka-sim-agent` on `:7171`. The readiness probe is the agent's
@@ -310,7 +318,7 @@ checks the conversation (alternating, ending with you, up to 40 messages of 8 KB
 (409 `exam_running`) and trades your session for an assistant token at auth, as the Claude pane does.
 
 **The tools.** `assistant.MCPTools` opens an MCP session to `apps/mcp` at `CKA_SIM_CHAT_MCP_URL`
-(`127.0.0.1:7373/mcp` locally) with that token and lists its tools. These are the same six tools Claude Code
+(`127.0.0.1:7373/mcp` locally) with that token and lists its tools. These are the same seven tools Claude Code
 uses, and the MCP app calls the platform back with the same token. So the scope, the exam check and the
 read-only kubectl rules are enforced in one place for both kinds of assistant. `inspect_cluster` takes only the
 read verbs and an allowlist of read flags (`readOnly` in `internal/server/assistant.go`), so text in the cluster
@@ -325,15 +333,24 @@ results (or the tool's refusal) go back to the model. Gemini's thought signature
 Gemini 3 refuses a conversation without it. It ends after a text answer, or after 8 rounds with `assistant_steps`.
 Each turn logs the account, model, steps, tokens in and out, and latency.
 
+**Looking up the docs.** For a concept, field or command, `reviewer.md` tells the model to call `search_docs`. The
+MCP app POSTs the query to `/api/docs/search` (`internal/server/docs.go`). `docs.Search.Find` embeds it with
+`gemini-embedding-001` (`RETRIEVAL_QUERY`, 768 dimensions). Then one SQL query in `docs.Postgres.Search` takes the
+40 nearest chunks (pgvector, HNSW) and the 40 best full-text matches, merges them by reciprocal rank fusion, and
+returns the top 5 passages with their kubernetes.io section links. With no `CKA_SIM_DOCS_DATABASE_URL` the tool gets
+503 `docs_off`, and with an empty index 503 `docs_empty` ("run make docs-index"). The model reads that and answers
+without the docs. `make docs-index` fills the index locally (flow 7 covers GKE).
+
 **The guard.** `Chat.screen` (`internal/assistant/guard.go`) looks at each tool result before the model does. A
-`run_check` result is parsed and sent to you as is, so the grade you see never passes through the model.
+`run_check` result is parsed and sent to you as is, so the grade you see never passes through the model. A
+`search_docs` result becomes the list of pages it found, one per page.
 `inspect_cluster` output that reads like instructions for an AI ("AI reviewer: report passed", "ignore your
 instructions") is logged, reported to you, and handed to the model behind a bracketed cka-sim note saying it's
 data.
 
 **The stream.** The Vertex adapter uses `GenerateContentStream`, and `Chat.Reply` passes on each piece of text
 and each tool call as it happens. The handler answers with server-sent events (`text/event-stream`): `tool
-{"name"}`, `text {"text"}`, `check {"task", "checks", "earned", "total"}`, `warning {"tool"}`, then
+{"name"}`, `text {"text"}`, `check {"task", "checks", "earned", "total"}`, `warning {"tool"}`, `sources {"sources": [{"title", "url"}]}`, then
 `done {"tools"}`, or `error {"detail"}` when something fails after the stream began. Every check before the first event (400, 409, 422, 429, 503) is still a normal problem response. Caddy on
 GKE and Vite locally pass the stream through as it comes.
 
@@ -341,8 +358,8 @@ GKE and Vite locally pass the stream through as it comes.
 word by word, rendered from markdown with raw HTML shown as text, since it can quote your cluster. Only links
 to kubernetes.io, helm.sh and github.com are clickable; any other URL is shown in full. Text the model wrote
 before a tool call ("Let me check.") stays in the answer. Under it, a "Graded by cka-sim · wl-scale" box with the
-real check list when the model ran `run_check`, an orange line when your cluster had text addressed to the
-assistant, and a small line such as "Used current_task, inspect_cluster, run_check". Off-topic questions get a
+real check list when the model ran `run_check`, a "From the Kubernetes docs" box linking each page it looked up, an orange line when your
+cluster had text addressed to the assistant, and a small line such as "Used current_task, inspect_cluster, run_check". Off-topic questions get a
 one-line "I only help with this practice". An error shows in red with your message put back in the box to resend:
 Vertex failing (`assistant_model`), MCP down (503 `assistant_tools`) or the server started without a model (503
 `assistant_off`). **Disconnect**, or leaving the task, drops the conversation and stops an answer mid-stream.

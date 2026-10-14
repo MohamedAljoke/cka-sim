@@ -23,6 +23,7 @@ type Practice struct {
 	MCPURL     string
 	Chats      []*assistant.Chat
 	ChatTools  assistant.Toolbox
+	Docs       DocsSearch
 }
 
 func New(desks *desk.Desks, practice Practice) http.Handler {
@@ -48,6 +49,7 @@ func New(desks *desk.Desks, practice Practice) http.Handler {
 	handle("POST /api/assistant/chat", a.chat)
 	assist("GET /api/assistant/task", a.currentTask)
 	assist("POST /api/assistant/inspect", a.inspect)
+	assist("POST /api/docs/search", a.searchDocs)
 	handle("GET /api/lab", a.getLab)
 	handle("POST /api/lab", a.startLab)
 	handle("DELETE /api/lab", a.endLab)

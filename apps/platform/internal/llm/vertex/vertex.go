@@ -23,6 +23,14 @@ type Model struct {
 }
 
 func New(ctx context.Context, cfg Config) (*Model, error) {
+	client, err := newClient(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &Model{client: client, model: cfg.Model}, nil
+}
+
+func newClient(ctx context.Context, cfg Config) (*genai.Client, error) {
 	cc := &genai.ClientConfig{Project: cfg.Project, Location: cfg.Location, Backend: genai.BackendVertexAI}
 	if err := cc.UseDefaultCredentials(); err != nil {
 		return nil, fmt.Errorf("vertex AI needs Google credentials (gcloud auth application-default login): %w", err)
@@ -31,7 +39,7 @@ func New(ctx context.Context, cfg Config) (*Model, error) {
 	if err != nil {
 		return nil, fmt.Errorf("vertex AI client: %w", err)
 	}
-	return &Model{client: client, model: cfg.Model}, nil
+	return client, nil
 }
 
 func (m *Model) Name() string { return m.model }

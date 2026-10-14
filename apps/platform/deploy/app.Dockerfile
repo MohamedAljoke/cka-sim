@@ -15,11 +15,13 @@ COPY go-shared /src/go-shared
 COPY platform/go.mod platform/go.sum ./
 RUN go mod download
 COPY platform .
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /cka-sim-server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /cka-sim-server ./cmd/server && \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /sql-migrate github.com/rubenv/sql-migrate/sql-migrate
 
 FROM alpine:3.22
 RUN apk add --no-cache caddy
-COPY --from=go /cka-sim-server /usr/local/bin/
+COPY --from=go /cka-sim-server /sql-migrate /usr/local/bin/
+COPY platform/scripts/db /db
 COPY --from=web /web/dist /srv
 COPY platform/deploy/Caddyfile /etc/caddy/Caddyfile
 COPY platform/deploy/app-start.sh /app-start.sh

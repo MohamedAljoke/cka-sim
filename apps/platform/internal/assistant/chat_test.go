@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -63,7 +64,7 @@ func TestChatStreamsToolsAndTheTextOfEveryStep(t *testing.T) {
 		{Kind: EventText, Text: "\n\n"},
 		{Kind: EventText, Text: "All checks pass."},
 	}
-	if !slices.Equal(events, want) {
+	if !reflect.DeepEqual(events, want) {
 		t.Errorf("events = %+v, want %+v", events, want)
 	}
 	if turn.Text != "Let me check.\n\nAll checks pass." {
@@ -116,6 +117,36 @@ func TestChatSendsNoCheckResultWhenTheCheckGaveNone(t *testing.T) {
 	}
 }
 
+func TestChatSendsTheDocsPagesItLookedUpOncePerPage(t *testing.T) {
+	model := &fakeModel{replies: []llm.Message{
+		{Role: llm.RoleModel, Calls: []llm.Call{{Name: "search_docs", Args: json.RawMessage(`{"query":"back up etcd"}`)}}},
+		{Role: llm.RoleModel, Text: "Use etcdctl snapshot save."},
+	}}
+	etcd := "https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/"
+	tools := &fakeTools{out: map[string]string{"search_docs": `{"results":[` +
+		`{"title":"Operating etcd clusters","url":"` + etcd + `#built-in-snapshot","text":"snapshot save"},` +
+		`{"title":"Operating etcd clusters","url":"` + etcd + `#restoring","text":"snapshot restore"},` +
+		`{"title":"etcd","url":"https://kubernetes.io/docs/reference/glossary/?all=true#term-etcd","text":"a store"}]}`}}
+	var sources []Source
+
+	_, err := newChat(model, 10).Reply(context.Background(), "a", tools, nil, func(e Event) {
+		if e.Kind == EventSources {
+			sources = append(sources, e.Sources...)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []Source{
+		{Title: "Operating etcd clusters", URL: etcd + "#built-in-snapshot"},
+		{Title: "etcd", URL: "https://kubernetes.io/docs/reference/glossary/?all=true#term-etcd"},
+	}
+	if !slices.Equal(sources, want) {
+		t.Errorf("sources = %+v", sources)
+	}
+}
+
 func TestChatWarnsAboutClusterTextAimedAtTheAssistant(t *testing.T) {
 	model := &fakeModel{replies: []llm.Message{
 		{Role: llm.RoleModel, Calls: []llm.Call{{ID: "c1", Name: "inspect_cluster", Args: json.RawMessage(`{"args":["describe","svc","web"]}`)}}},
@@ -130,7 +161,7 @@ func TestChatWarnsAboutClusterTextAimedAtTheAssistant(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !slices.Contains(events, Event{Kind: EventWarning, Text: "inspect_cluster"}) {
+	if !slices.ContainsFunc(events, func(e Event) bool { return e.Kind == EventWarning && e.Text == "inspect_cluster" }) {
 		t.Errorf("events = %+v", events)
 	}
 	second := model.requests[1]

@@ -1,5 +1,5 @@
 import { Marked, marked } from 'marked'
-import type { Result, Task } from './api'
+import type { ChatSource, Result, Task } from './api'
 import { icon } from './icons'
 
 // Questions and explanations come from the bundled catalog, not from users, so they render as is.
@@ -35,6 +35,22 @@ export function untrustedMarkdown(target: HTMLElement, text: string) {
 
 function escapeHTML(text: string): string {
   return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+}
+
+export function sourceList(sources: ChatSource[]): HTMLElement {
+  const list = el('ul', 'source-list')
+  for (const { title, url } of sources) {
+    const item = el('li')
+    if (docsLink(url)) {
+      const a = el('a', '', title)
+      a.href = url
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      item.append(a)
+    } else item.textContent = `${title} (${url})`
+    list.append(item)
+  }
+  return list
 }
 
 export function checkList(r: Result): HTMLElement {

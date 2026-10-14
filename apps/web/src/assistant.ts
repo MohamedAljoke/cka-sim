@@ -1,7 +1,7 @@
-import { chatAssistant, startAssistant, type ChatCheck, type ChatMessage } from './api'
+import { chatAssistant, startAssistant, type ChatCheck, type ChatMessage, type ChatSource } from './api'
 import { icon } from './icons'
 import { openTerminal } from './terminal'
-import { checkList, el, message, setStatus, untrustedMarkdown } from './ui'
+import { checkList, el, message, setStatus, sourceList, untrustedMarkdown } from './ui'
 
 export type Provider = {
   id: string
@@ -60,6 +60,7 @@ function openChat(screen: HTMLElement, provider: string): () => void {
     let text = ''
     let activity = 'Thinking…'
     let check: ChatCheck | undefined
+    const sources = new Map<string, ChatSource>()
     const warnings = new Set<string>()
     let frame = 0
     const render = () => {
@@ -76,6 +77,11 @@ function openChat(screen: HTMLElement, provider: string): () => void {
         const graded = el('div', 'chat-check')
         graded.append(el('p', 'chat-check-label', `Graded by cka-sim · ${check.task}`), checkList(check))
         answer.append(graded)
+      }
+      if (sources.size) {
+        const looked = el('div', 'chat-sources')
+        looked.append(el('p', 'chat-check-label', 'From the Kubernetes docs'), sourceList([...sources.values()]))
+        answer.append(looked)
       }
       if (activity) answer.append(el('p', 'chat-tools', activity))
       answer.scrollIntoView({ block: 'end' })
@@ -101,6 +107,13 @@ function openChat(screen: HTMLElement, provider: string): () => void {
         },
         warning: (tool) => {
           warnings.add(tool)
+          renderSoon()
+        },
+        sources: (found) => {
+          for (const source of found) {
+            const page = source.url.split('#')[0]
+            if (!sources.has(page)) sources.set(page, source)
+          }
           renderSoon()
         },
       })

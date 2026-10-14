@@ -20,6 +20,9 @@ LAB_PODS := 10.80.0.0/16
 APP_IMAGE := $(REGION)-docker.pkg.dev/$(PROJECT)/$(REPO)/app:latest
 AUTH_IMAGE := $(REGION)-docker.pkg.dev/$(PROJECT)/$(REPO)/auth:latest
 MCP_IMAGE := $(REGION)-docker.pkg.dev/$(PROJECT)/$(REPO)/mcp:latest
+DOCS_IMAGE := $(REGION)-docker.pkg.dev/$(PROJECT)/$(REPO)/docs:latest
+# Docs for the lab's Kubernetes version; v1.37 is current, so it lives on main until release-1.37 is cut.
+DOCS_REF ?= main
 SQL      := cka-sim-db
 INSTANCE := $(PROJECT):$(REGION):$(SQL)
 AUTH_GSA := cka-sim-auth@$(PROJECT).iam.gserviceaccount.com
@@ -29,7 +32,7 @@ POOL    ?= 1
 SANDBOX := v1.0.4
 GC      := gcloud --project $(PROJECT)
 
-.PHONY: help project cluster image sandbox pool wall db ai site url site-down ai-down db-down down
+.PHONY: help project cluster image sandbox pool wall db ai site docs url site-down ai-down db-down down
 
 help:
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
@@ -61,6 +64,10 @@ image: ## build and push the lab image
 sandbox: ## install agent-sandbox (the warm pool controller)
 	kubectl apply -f https://github.com/kubernetes-sigs/agent-sandbox/releases/download/$(SANDBOX)/sandbox.yaml
 	kubectl apply -f https://github.com/kubernetes-sigs/agent-sandbox/releases/download/$(SANDBOX)/extensions.yaml
+	@# A lab boots kind plus its add-ons in more than the default 5m, so a warm lab was replaced before it was ever Ready.
+	kubectl -n agent-sandbox-system patch deployment agent-sandbox-controller --type json -p '[{"op": "replace", \
+	  "path": "/spec/template/spec/containers/0/args", \
+	  "value": ["--leader-elect=true", "--extensions", "--sandbox-warm-pool-readiness-grace-period=20m"]}]'
 
 pool: ## keep POOL warm labs (POOL=1); POOL=0 empties it
 	POOL_SIZE=$(POOL) IMAGE=$(IMAGE) IMAGES=$(IMAGES) envsubst < $(LAB_DIR)/deploy/gke/lab-pool.yaml | kubectl apply -f -
@@ -88,12 +95,14 @@ db: ## Cloud SQL Postgres for auth (smallest tier) and the identity its pod uses
 	$(GC) iam service-accounts add-iam-policy-binding $(AUTH_GSA) --role roles/iam.workloadIdentityUser \
 	  --member "serviceAccount:$(PROJECT).svc.id.goog[default/cka-sim-auth]" >/dev/null
 
-ai: ## Vertex AI for the Gemini assistant and the identity the app's pod calls it with (once)
+ai: ## Vertex AI for the Gemini assistant and the identity the app's pod calls it and its docs database with (once)
 	$(GC) services enable aiplatform.googleapis.com
 	$(GC) iam service-accounts describe $(APP_GSA) >/dev/null 2>&1 || \
 	  $(GC) iam service-accounts create cka-sim-app --display-name "cka-sim app"
 	$(GC) projects add-iam-policy-binding $(PROJECT) --member serviceAccount:$(APP_GSA) \
 	  --role roles/aiplatform.user --condition None >/dev/null
+	$(GC) projects add-iam-policy-binding $(PROJECT) --member serviceAccount:$(APP_GSA) \
+	  --role roles/cloudsql.client --condition None >/dev/null
 	$(GC) iam service-accounts add-iam-policy-binding $(APP_GSA) --role roles/iam.workloadIdentityUser \
 	  --member "serviceAccount:$(PROJECT).svc.id.goog[default/cka-sim-app]" >/dev/null
 
@@ -117,8 +126,18 @@ site: image ai ## the app (with MCP) and auth on the platform pool, a warm lab i
 	AUTH_IMAGE=$(AUTH_IMAGE) INSTANCE=$(INSTANCE) AUTH_GSA=$(AUTH_GSA) envsubst < $(AUTH)/deploy/gke/auth.yaml | kubectl apply -f -
 	@ip=$$($(GC) compute addresses describe cka-sim-site --region $(REGION) --format='value(address)'); \
 	APP_IMAGE=$(APP_IMAGE) MCP_IMAGE=$(MCP_IMAGE) SITE_IP=$$ip SITE_HOST=$$ip.sslip.io APP_GSA=$(APP_GSA) PROJECT=$(PROJECT) \
-	  envsubst < $(PLATFORM)/deploy/gke/app.yaml | kubectl apply -f -
+	  INSTANCE=$(INSTANCE) envsubst < $(PLATFORM)/deploy/gke/app.yaml | kubectl apply -f -
 	kubectl rollout restart deployment/auth deployment/app
+
+docs: ## embed the Kubernetes docs for the assistant's search_docs into Cloud SQL (a Job; about $0.30 of Vertex the first time)
+	docker build -f $(PLATFORM)/deploy/docs.Dockerfile -t $(DOCS_IMAGE) $(APPS) \
+	  --build-arg DOCS_SHA=$$(git ls-remote https://github.com/kubernetes/website refs/heads/$(DOCS_REF) | cut -f1)
+	docker push $(DOCS_IMAGE)
+	kubectl delete job docs-index --ignore-not-found
+	DOCS_IMAGE=$(DOCS_IMAGE) INSTANCE=$(INSTANCE) PROJECT=$(PROJECT) \
+	  envsubst < $(PLATFORM)/deploy/gke/docs-index.yaml | kubectl apply -f -
+	@until kubectl logs -f job/docs-index -c index 2>/dev/null; do sleep 3; done
+	@test "$$(kubectl get job docs-index -o jsonpath='{.status.succeeded}')" = 1
 
 url: ## print the site's link and login
 	@echo "https://$$($(GC) compute addresses describe cka-sim-site --region $(REGION) --format='value(address)').sslip.io"
@@ -126,6 +145,7 @@ url: ## print the site's link and login
 
 site-down: ## remove the app, auth, the load balancer, its IP, and every lab
 	kubectl delete deployment app auth --ignore-not-found
+	kubectl delete job docs-index --ignore-not-found
 	kubectl delete sandboxclaims -l app.kubernetes.io/managed-by=cka-sim --ignore-not-found
 	$(MAKE) --no-print-directory pool POOL=0
 	kubectl delete service/site service/auth serviceaccount/cka-sim-auth pvc/caddy-data \

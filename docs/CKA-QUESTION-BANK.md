@@ -16,6 +16,8 @@ Checked on 2026-10-09.
   Kustomize, CRDs, Gateway API), not for official facts:
   - [certland.net: CKA Certified Kubernetes Administrator guide 2026](https://certland.net/blog/cka-certified-kubernetes-administrator-guide-2026/)
   - [examcert.app: CKA study guide 2026](https://www.examcert.app/blog/cka-study-guide-2026/)
+- **The Kubernetes docs:** the v1.37 concept pages, read from cka-sim's own docs index (`docs.chunks`) on
+  2026-10-13. They gave T39–T41, A54–A58, N54–N56, W47–W57 and S26–S28.
 - **Our own tasks:** the 8 tasks on branch `archive/v1` (`tasks/`) and `wl-scale` on `main`
   (`apps/platform/catalog/`).
 - **Common practice topics:** what shows up again and again in killer.sh-style mock exams.
@@ -79,6 +81,7 @@ Things the exam environment does that our tasks should copy:
 | T10 | Write how kube-scheduler, controller-manager, etcd and DNS are run in this cluster (static Pod, Deployment, systemd process) to a file. | ★ | || main `tr-components` |
 | T11 | Write the order of commands you would use to check a cluster's health to a file (`crictl ps`, `journalctl -u kubelet`, `/var/log/pods`). | ★ | || main `tr-etcd` (folded into T18) |
 | T37 | Check control-plane health without the removed `componentstatuses`: `kubectl get --raw='/readyz?verbose'`, `/livez`, and the kubelet's `/healthz`. Write the failing check to a file. | ★ | || main `tr-health` |
+| T41 | Write which instance holds the leader Lease of kube-scheduler and kube-controller-manager (`kubectl get lease -n kube-system`), and when each node last renewed its heartbeat Lease in `kube-node-lease`. | ★ |  | |
 
 ### Resource usage
 
@@ -125,6 +128,8 @@ Things the exam environment does that our tasks should copy:
 | T25 | A container keeps restarting with `Last State: OOMKilled` (exit code 137). Tell it apart from an app crash and raise the memory limit just enough for it to run. | ★★ | || main `tr-oomkilled` |
 | T26 | Inspect a distroless Pod with no shell by attaching an ephemeral container (`kubectl debug -it --target`), and read a node's files with `kubectl debug node/<name>` instead of ssh. | ★★ | || main `tr-debug` |
 | T27 | Pods are in `ImagePullBackOff` because the image is in a private registry. Create a `docker-registry` Secret and attach it via `imagePullSecrets` on the ServiceAccount so every Pod gets it. | ★★ | local registry with auth || main `tr-private-registry` |
+| T39 | A Deployment's Pods never run because its `runtimeClassName` names a RuntimeClass that doesn't exist, or one whose `handler` containerd doesn't have. Find the reason in the events and fix it. | ★★ |  | |
+| T40 | A Pod is evicted for using too much local ephemeral storage. Find which limit it hit (a container `ephemeral-storage` limit or an `emptyDir` `sizeLimit`) and fix the Pod so it runs. | ★★ |  | |
 
 ---
 
@@ -167,6 +172,8 @@ Things the exam environment does that our tasks should copy:
 |---|---|---|---|---|
 | A44 | Write the API group and version of given resources, and whether each is namespaced (`kubectl api-resources`, `kubectl api-versions`). | ★ | || main `ar-api-resources` |
 | A45 | Call the API directly to list the Pods of a namespace, with `kubectl proxy` plus `curl` or with `kubectl get --raw`. | ★ | || main `ar-raw-api` |
+| A57 | Evict a Pod through the Eviction API (POST an `Eviction` to `pods/<name>/eviction` with `kubectl create --raw`), then show a PodDisruptionBudget refusing the next eviction with `429 Too Many Requests`. | ★★ |  | |
+| A58 | Two tools own fields of one Deployment. Find who manages `spec.replicas` (`--show-managed-fields`), apply a manifest with `kubectl apply --server-side`, and resolve the conflict with `--force-conflicts`. | ★★ |  | |
 
 ### Infrastructure and kubeadm
 
@@ -178,6 +185,8 @@ Things the exam environment does that our tasks should copy:
 | A9 | Check which kubeadm certificates expire soonest and renew them. Write their expiry dates to a file. | ★★ | || main `ar-certs` |
 | A10 | Find the kubelet config file, the static Pod path and the cgroup driver on a node, and write them to a file. | ★ | || main `ar-kubelet-facts` |
 | A29 | Set `evictionHard` and `systemReserved` in a worker's kubelet config, restart the kubelet, and check the new `Allocatable` in `kubectl describe node`. | ★★ | systemd kubelet on node || main `ar-kubelet-reserved` |
+| A55 | Turn on graceful node shutdown on a worker (`shutdownGracePeriod`, `shutdownGracePeriodCriticalPods` in the kubelet config), restart the kubelet, and check the running config through `kubectl get --raw /api/v1/nodes/<node>/proxy/configz`. | ★★ | systemd kubelet on node | |
+| A56 | Cap the number of processes per Pod on a worker (`podPidsLimit` in the kubelet config), and show that a Pod which forks past the cap can't start more processes. | ★★ | systemd kubelet on node | |
 
 ### Cluster lifecycle and etcd
 
@@ -186,6 +195,7 @@ Things the exam environment does that our tasks should copy:
 | A11 | Back up etcd with `etcdctl snapshot save` (endpoints and certs), then restore from an older snapshot and get the cluster healthy. | ★★★ | etcd static Pod | main `ar-etcd` |
 | A12 | Find etcd's version, data dir and member list, and write them to a file. | ★ | || main `ar-etcd-facts` |
 | A27 | A Namespace or PVC is stuck in `Terminating`. Find the finalizer that holds it (e.g. `kubernetes.io/pvc-protection` held by a running Pod) and fix the cause instead of force-removing the finalizer. | ★★ | || main `ar-finalizer` |
+| A54 | Delete a Deployment but keep its ReplicaSet and Pods running (`kubectl delete --cascade=orphan`), check they lost their `ownerReferences`, and write how background, foreground and orphan deletion differ. | ★★ |  | |
 
 ### Highly-available control plane
 
@@ -280,6 +290,8 @@ Things the exam environment does that our tasks should copy:
 | N33 | Create an `ExternalName` Service for an outside DNS name and check the CNAME answer from a Pod. | ★ | || main `nw-externalname` |
 | N34 | Create a multi-port Service that uses named `targetPort`s, so changing the container port number doesn't break it. | ★★ | || main `nw-named-port` |
 | N35 | Make a Service send a client to the same Pod each time with `sessionAffinity: ClientIP`. | ★ | || later: the local lab kernel lacks the iptables `recent` match, so kube-proxy fails to sync while a ClientIP-affinity Service exists |
+| N54 | Set `internalTrafficPolicy: Local` on a Service, and show that a client Pod on a node without a backend gets no answer while one on a node with a backend does. Write why in a file. | ★★ | 2+ workers | |
+| N55 | Read a Service's EndpointSlices (label `kubernetes.io/service-name`) and write each endpoint's IP, node and its `ready`, `serving` and `terminating` conditions, including one Pod that is shutting down. | ★★ |  | |
 
 ### Gateway API
 
@@ -319,6 +331,7 @@ Things the exam environment does that our tasks should copy:
 | N38 | Write the CoreDNS Service IP, the name of the ConfigMap that holds the Corefile, and the upstream it forwards to, to a file. | ★ | || main `nw-coredns-facts` |
 | N39 | Turn on the CoreDNS `log` plugin, find the queries for one name in the CoreDNS logs, then turn it off again. | ★★ | || main `nw-coredns-log` |
 | N40 | Make one name resolve cluster-wide to a fixed IP with the CoreDNS `hosts` plugin (or `rewrite` it to a Service name), and check it from a Pod. | ★★ | || main `nw-coredns-hosts` |
+| N56 | Give a Pod a stable DNS name with `hostname` and `subdomain` plus a headless Service named after the subdomain, and resolve `<hostname>.<subdomain>.<ns>.svc.cluster.local` from another Pod. | ★★ |  | |
 
 ---
 
@@ -330,6 +343,7 @@ Things the exam environment does that our tasks should copy:
 |---|---|---|---|---|
 | W27 | Select Pods with equality and set-based label selectors, write the matches to a file, add and remove labels, and annotate a Pod. | ★ | | main `wl-labels` |
 | W28 | Create a labelled namespace and run workloads in it, and find which namespace a named Pod lives in. | ★ | | main `wl-namespace` |
+| W47 | List Pods by field instead of label (`--field-selector status.phase!=Running`, `spec.nodeName=<node>`), combine two fields in one selector, and write the results to a file. | ★ |  | |
 
 ### Deployments, rollouts and rollbacks
 
@@ -342,6 +356,9 @@ Things the exam environment does that our tasks should copy:
 | W29 | A Deployment update hangs with `ProgressDeadlineExceeded`. Find the reason in the new ReplicaSet's events (exceeded ResourceQuota) and get the rollout through without deleting the quota. | ★★ | || main `wl-quota-rollout` |
 | W32 | Blue/green: run `v1` and `v2` as two Deployments and switch the Service selector, with no downtime. | ★★ | || main `wl-blue-green` |
 | W33 | Canary without a service mesh: two Deployments behind one Service in a 3:1 replica ratio. | ★★ | || main `wl-canary` |
+| W48 | Update a StatefulSet's image with a partitioned rolling update so only ordinals ≥ 2 change (`rollingUpdate.partition`), write which Pod runs which image, then finish the rollout. | ★★ |  | |
+| W49 | A StatefulSet starts its Pods one at a time and is slow to scale. Switch it to `podManagementPolicy: Parallel`. The field can't be changed in place, so recreate the StatefulSet without deleting its Pods or PVCs. | ★★★ |  | |
+| W50 | Change a DaemonSet to `updateStrategy: OnDelete`, update its image, and show only the Pods you delete get the new one. Then switch back to `RollingUpdate` with `maxUnavailable`. | ★★ |  | |
 
 ### ConfigMaps and Secrets
 
@@ -382,6 +399,7 @@ Things the exam environment does that our tasks should copy:
 | W34 | A CronJob never runs (`suspend: true`, a wrong schedule, or `concurrencyPolicy: Forbid` behind a stuck Job). Fix it and trigger one run by hand with `kubectl create job --from=cronjob/x`. | ★★ | || main `wl-cronjob-fix` |
 | W35 | Clean up a Job after it finishes and cap how long it may run (`ttlSecondsAfterFinished`, `activeDeadlineSeconds`). | ★ | || main `wl-job-limits` |
 | W36 | Use `podFailurePolicy` so a Job fails at once on exit code 42 but retries other failures. | ★★ | || main `wl-pod-failure-policy` |
+| W51 | Run an Indexed Job (`completionMode: Indexed`) where each Pod handles the item for its `JOB_COMPLETION_INDEX`, and write which index each Pod ran. | ★★ |  | |
 
 ### Admission and scheduling
 
@@ -399,6 +417,12 @@ Things the exam environment does that our tasks should copy:
 | W44 | Pin a Deployment's image by digest (`image@sha256:…`) instead of a tag, and set `imagePullPolicy` so a moved tag can't change what runs. | ★ | || main `wl-image-digest` |
 | W45 | Set `runAsUser` at Pod level and a different one on one container, and write the effective UID of each container (`id`). | ★ | || main `wl-runas-precedence` |
 | W46 | Find a container's process on the node (`crictl inspect` → PID, `ps`) and write which UID it runs as on the host. | ★★ | || main `wl-host-process` |
+| W52 | Taint a node `NoExecute` and show that Pods without a toleration are evicted at once, while one with `tolerationSeconds: 60` leaves a minute later. Write the `not-ready` and `unreachable` tolerations Kubernetes adds to every Pod. | ★★ |  | |
+| W53 | Place a cache Pod on the same node as a web Deployment with required `podAffinity` (`topologyKey: kubernetes.io/hostname`), and show it stays Pending while no web Pod runs. | ★★ |  | |
+| W54 | Create a PriorityClass with `preemptionPolicy: Never`, and show its Pod waits ahead of lower-priority Pods but never evicts them, unlike a preempting class. | ★★ |  | |
+| W55 | New Pods stay `SchedulingGated`. Find the `schedulingGates` in their spec and remove them so they schedule, and write why a gate can be removed but not added after the Pod is created. | ★★ |  | |
+| W56 | Run a second scheduler as a Deployment (kube-scheduler with its own `schedulerName` in its profile) and place a Pod with it. Show that a Pod naming a scheduler that doesn't exist stays Pending with no scheduling events. | ★★★ |  | |
+| W57 | Add Pod Security `warn` and `audit` labels at `restricted` (pinned with `-version`) to a namespace that enforces `baseline`, write the warnings a Deployment gets, and explain why `enforce` checks only Pods while `warn` also fires on the Deployment. | ★★ |  | |
 
 ---
 
@@ -431,6 +455,9 @@ Things the exam environment does that our tasks should copy:
 | S23 | Two StorageClasses are both marked default. Make exactly one default, and explain in a file how `storageClassName: ""` differs from leaving the field out. | ★★ | || main `st-two-defaults` |
 | S24 | A PVC is `Pending` and the team thinks it's broken. Show it is `WaitForFirstConsumer`, then get it bound by creating the Pod that uses it. | ★ | || main `st-wffc` |
 | S25 | A non-root container gets `permission denied` reading its Secret volume (`defaultMode: 0440`). Fix it with `securityContext.fsGroup`, without running as root. | ★★ | || main `st-fsgroup` |
+| S26 | Give a Pod scratch space with a generic ephemeral volume (`ephemeral.volumeClaimTemplate`). Write the name of the PVC it creates (`<pod>-<volume>`), and show the PVC is deleted with the Pod. | ★★ |  | |
+| S27 | Clone a PVC into a new one with `dataSource` (kind `PersistentVolumeClaim`), and check the clone has the data and is independent of its source. | ★★ | CSI driver with cloning | |
+| S28 | Give a Pod a raw block device (`volumeMode: Block`, `volumeDevices` with a `devicePath`) instead of a filesystem, and write the device path to a file. | ★★ | block-capable CSI driver | |
 
 ---
 
@@ -438,11 +465,11 @@ Things the exam environment does that our tasks should copy:
 
 | Domain | Weight | Questions | Covered |
 |---|---|---|---|
-| Troubleshooting | 30% | 38 | 37 (main) |
-| Cluster Architecture | 25% | 53 | 46 (main) |
-| Services & Networking | 20% | 53 | 52 (main) |
-| Workloads & Scheduling | 15% | 46 | 46 (main) |
-| Storage | 10% | 25 | 22 (main) |
+| Troubleshooting | 30% | 41 | 37 (main) |
+| Cluster Architecture | 25% | 58 | 46 (main) |
+| Services & Networking | 20% | 56 | 52 (main) |
+| Workloads & Scheduling | 15% | 57 | 46 (main) |
+| Storage | 10% | 28 | 22 (main) |
 
 ## Build progress
 
@@ -473,6 +500,7 @@ The work of turning these questions into catalog tasks, kept here so it survives
 - Node convention, so tasks don't fight in one exam: taints go only on `cka-sim-worker` (`tr-kubelet` already breaks it), node labels only on `cka-sim-worker2`. A task that taints a node needs a `reset.sh` that removes the taint (see `wl-taints`).
 
 **Pending (2026-10-12):** every built task passes its selftest. Every question the current cluster can host is built. What's left needs the add-ons still open in "What the cluster still needs".
+The questions added on 2026-10-13 (T39–T41, A54–A58, N54–N56, W47–W57, S26–S28) are not built yet.
 
 **Waves (the build order):**
 
@@ -544,7 +572,7 @@ These are grouped by how many questions each one unblocks:
    leave them last.
 9. **3 control-plane nodes:** A13, A14.
 10. ~~**A private registry with auth**~~: done; `cka-sim-registry:5000`.
-11. **A CSI driver with expansion** (e.g. csi-driver-host-path): A23, S5, S13, S14.
+11. **A CSI driver with expansion** (e.g. csi-driver-host-path): A23, S5, S13, S14, S27, S28.
 
 ## A suggested order for turning these into tasks
 

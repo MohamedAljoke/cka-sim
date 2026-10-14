@@ -33,12 +33,14 @@ const (
 	EventTool    EventKind = "tool"
 	EventCheck   EventKind = "check"
 	EventWarning EventKind = "warning"
+	EventSources EventKind = "sources"
 )
 
 type Event struct {
-	Kind  EventKind
-	Text  string
-	Check *CheckResult
+	Kind    EventKind
+	Text    string
+	Check   *CheckResult
+	Sources []Source
 }
 
 type Turn struct {

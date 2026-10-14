@@ -186,6 +186,8 @@ func (a *api) chat(w http.ResponseWriter, r *http.Request) error {
 			stream.send("check", e.Check)
 		case assistant.EventWarning:
 			stream.send("warning", map[string]string{"tool": e.Text})
+		case assistant.EventSources:
+			stream.send("sources", map[string][]assistant.Source{"sources": e.Sources})
 		default:
 			stream.send("text", map[string]string{"text": e.Text})
 		}

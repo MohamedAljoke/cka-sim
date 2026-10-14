@@ -66,6 +66,37 @@ spec:
         - name: caddy-data
           persistentVolumeClaim:
             claimName: caddy-data
+      initContainers:
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.25.4
+          restartPolicy: Always
+          args:
+            - --port=5432
+            - --health-check
+            - --http-address=0.0.0.0
+            - ${INSTANCE}
+          startupProbe:
+            httpGet:
+              path: /startup
+              port: 9090
+            periodSeconds: 2
+            failureThreshold: 30
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+        - name: migrate
+          image: ${APP_IMAGE}
+          workingDir: /db
+          command: [sql-migrate, up, -env=production]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cka-sim-db
+                  key: url
       containers:
         - name: app
           image: ${APP_IMAGE}
@@ -88,6 +119,11 @@ spec:
               value: vertex
             - name: CKA_SIM_VERTEX_PROJECT
               value: ${PROJECT}
+            - name: CKA_SIM_DOCS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cka-sim-db
+                  key: url
             - name: CKA_SIM_AUTH_SECRET
               valueFrom:
                 secretKeyRef:

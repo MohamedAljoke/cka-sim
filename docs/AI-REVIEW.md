@@ -169,6 +169,8 @@ Ollama through its OpenAI-compatible API; it's one more package and one more `ca
 | `CKA_SIM_VERTEX_MODEL` | `gemini-3.5-flash` | GA on the `global` endpoint (2026-10) |
 | `CKA_SIM_CHAT_MCP_URL` | `http://127.0.0.1:7373/mcp` | where the platform reaches `apps/mcp`; `CKA_SIM_MCP_URL` is where the lab does |
 | `CKA_SIM_CHAT_DAILY` | `100` | messages per account per day, kept in memory |
+| `CKA_SIM_DOCS_DATABASE_URL` | empty (no docs search) | Postgres with pgvector; used only with `CKA_SIM_LLM=vertex` |
+| `CKA_SIM_EMBED_MODEL` | `gemini-embedding-001` | must match the model the docs were indexed with; the server refuses to start otherwise |
 
 ## `apps/mcp`: its own app
 
@@ -190,6 +192,7 @@ with the platform's reason, so it can say "end the exam first" instead of guessi
 | `run_check` | `POST /api/tasks/{id}/check` | blocked |
 | `inspect_cluster` | `POST /api/assistant/inspect`: `{"args": [...]}`, kubectl verbs `get` `describe` `logs` `events` `top` `explain` `api-resources` `version`, no `-w`/`--watch`/`-f`/`--follow`. Run shell-quoted as admin on the control plane with `timeout 15`; output capped at 8 KB; a failing kubectl is output, not an error | blocked |
 | `explain` | `GET /api/tasks/{id}/solution` (it returns `explain.md`); the tool's description says to call it only when the learner asks for the answer or gives up | blocked |
+| `search_docs` | `POST /api/docs/search`: `{"query": "…"}`, the top 5 passages of the Kubernetes docs with their kubernetes.io links (see RAG below); 503 `docs_off` or `docs_empty` when there's nothing to search | blocked |
 
 Never exposed: `solution.sh` and the body of `check.sh`.
 
@@ -209,6 +212,42 @@ no TLS and no extra Service. Caddy also routes `/mcp` to it, and `CKA_SIM_MCP_UR
 pod reaches no private address, so Claude Code in it comes back through the public site. The platform reaches
 auth at `http://auth:7272` (`CKA_SIM_AUTH_URL`). Each lab still builds its base image, Claude Code included,
 while it warms up in the pool; baking Claude Code into the lab image would only shorten the warm-up.
+
+## RAG: `search_docs`
+
+Both kinds can look things up in the **Kubernetes v1.37 docs**, the pages the learner may open during the real
+exam, so an explanation can rest on the official page and link to it instead of the model's memory.
+
+- **Corpus.** `content/en/docs` of `kubernetes/website`. v1.37 is the current release, so its docs live on `main`
+  until `release-1.37` is cut; `DOCS_REF` moves then, and the index keeps the commit it was built from in
+  `docs.meta`. Generated API references (`reference/kubernetes-api`, `config-api`) and `contribute/` are left out:
+  `kubectl explain` covers fields better. That's about 7,700 chunks and 2M tokens.
+- **Chunking** (`internal/docs/chunk.go`). Each page is split at its `#`, `##` and `###` headings, never inside a
+  code block. A long section is split again at blank lines, at about 2,000 characters, and nothing goes over 6,000.
+  Each chunk starts with `Page › Section › Subsection` and links to its section's anchor. Hugo shortcodes are
+  resolved: a glossary tooltip becomes its text, `code_sample` inlines the YAML from `content/en/examples`, and
+  version shortcodes become `1.37`. Markdown links keep only their text.
+- **Embeddings.** `llm.Embedder`, implemented by `vertex.Embedder`: `gemini-embedding-001` at 768 dimensions, with
+  `RETRIEVAL_DOCUMENT` for chunks and `RETRIEVAL_QUERY` for questions. Batches hold up to 50 texts or 60,000
+  characters, and a 429 is retried with backoff.
+- **Store.** pgvector in the same Postgres as auth, in its own `docs` schema with its own migration table
+  (`apps/platform/scripts/db`). `docs.chunks` holds the text, a `vector(768)` with an HNSW index, and a generated
+  `tsvector` with a GIN index.
+- **Hybrid search** (`docs.Postgres.Search`). One SQL query takes the 40 nearest chunks by cosine distance and the
+  40 best full-text matches, then merges them by reciprocal rank fusion (k = 60). The full-text half ORs the
+  question's words, because a learner's question rarely contains every word on the page that answers it. Exact
+  terms such as `PodDisruptionBudget` or `--dry-run` are where embeddings alone are weak.
+- **Indexing.** `cmd/docs index` embeds only chunks whose hash changed, upserts them, and deletes chunks that are
+  gone, so a re-run against the same commit costs nothing. Changing the model needs `-fresh`. Locally it's
+  `make docs-index` (`DOCS_FLAGS=-dry-run` prints the size and cost). On GKE it's `make -C infra/gke docs`: a Job
+  (`apps/platform/deploy/gke/docs-index.yaml`) runs as the app's identity, with the Cloud SQL proxy as a sidecar.
+- **What the learner sees.** `Chat.screen` turns each `search_docs` result into a `sources` event, and the pane
+  lists the pages under the answer as "From the Kubernetes docs", one link per page. `reviewer.md` (also Claude's
+  `CLAUDE.md`) says to look up a concept, field or command and give the link, and to trust the docs over memory.
+- **Eval.** `make docs-eval` asks 32 CKA-style questions (`cmd/docs/eval.yaml`), each with the page or pages that
+  answer it, in keyword-only, vector-only and hybrid mode. It prints recall@5 and MRR per mode. RESULTS_PLACEHOLDER
+
+The docs index is our content, not the learner's, so its output isn't screened for injection.
 
 ## Guardrails
 
@@ -330,10 +369,13 @@ What it taught us so far:
   the ground truth.
 - **Prompt-injection defense:** treating user-controlled cluster state as untrusted, and defending by design: no
   harmful capability, no exfiltration channel, a verdict shown outside the model, then detection and logging.
+- **RAG:** chunking real-world docs, embeddings, pgvector with HNSW, hybrid search with reciprocal rank fusion, and a
+  retrieval eval that measures each half.
 
 Resume bullet: *"Built a standalone MCP server exposing a live Kubernetes lab to LLM clients behind a
 provider-agnostic assistant (Claude Code and Codex subscriptions, API-key chat); enforced least-privilege, exam-aware
-access in the platform; hardened against prompt injection from user-controlled cluster state."*
+access in the platform; hardened against prompt injection from user-controlled cluster state; grounded answers in
+the Kubernetes docs with hybrid (pgvector + full-text) retrieval, measured by a retrieval eval."*
 
 ## Later
 
@@ -341,7 +383,9 @@ access in the platform; hardened against prompt injection from user-controlled c
 - **More `chat` models:** an OpenAI adapter for a BYOK key, and through the same API Ollama for users with no
   paid AI. Then prompt caching for `task.md`/`explain.md`, structured output
   (`{verdict, mistakes[], hint}`) and `make eval` against the chat kind too (its judge could move off `claude -p`).
-- **RAG:** Kubernetes docs in pgvector on the existing Cloud SQL Postgres, only if evals show it helps.
+- **RAG, next steps:** run `make eval` on the chat kind with and without `search_docs`, to see whether citing the
+  docs makes reviews better and not only longer. Add Helm's docs (also allowed in the exam) as a second source, and
+  a reranker if recall@5 stalls.
 - **Stronger input and output screening:** a classifier call per message, or Google Cloud Model Armor
   (prompt-injection, jailbreak and data-loss filters on both the prompt and the answer), once usage justifies the
   cost. Secret values could be redacted from `inspect_cluster` output before they reach a third-party model.

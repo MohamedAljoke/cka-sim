@@ -61,3 +61,15 @@ type Model interface {
 	Name() string
 	Generate(ctx context.Context, req Request, text func(delta string)) (Reply, error)
 }
+
+type Purpose string
+
+const (
+	PurposeDocument Purpose = "document"
+	PurposeQuery    Purpose = "query"
+)
+
+type Embedder interface {
+	Name() string
+	Embed(ctx context.Context, texts []string, purpose Purpose) ([][]float32, error)
+}

@@ -335,6 +335,7 @@ func newAPIWithShells(t *testing.T, r *fakeRunner, shells func() *fakeOpener) (*
 		MCPURL:    testMCPURL,
 		Chats:     []*assistant.Chat{{ID: "fake-chat", Model: lookFirstModel{}, MaxSteps: 3, MaxTokens: 100, Daily: 2, Now: time.Now}},
 		ChatTools: fakeToolbox{},
+		Docs:      fakeDocs{},
 	}), desks
 }
 

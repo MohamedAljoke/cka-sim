@@ -32,7 +32,7 @@ func TestEveryToolIsReadOnly(t *testing.T) {
 		}
 	}
 	slices.Sort(names)
-	want := []string{"current_task", "explain", "inspect_cluster", "list_tasks", "run_check", "task_question"}
+	want := []string{"current_task", "explain", "inspect_cluster", "list_tasks", "run_check", "search_docs", "task_question"}
 	if !slices.Equal(names, want) {
 		t.Errorf("tools = %q, want %q", names, want)
 	}
@@ -73,6 +73,21 @@ func TestInspectSendsTheArgs(t *testing.T) {
 		t.Errorf("inspect_cluster = %+v", got)
 	}
 	if body := p.body("POST /api/assistant/inspect"); body != `{"args":["get","pods","-n","team-a"]}` {
+		t.Errorf("platform got %s", body)
+	}
+}
+
+func TestSearchDocsSendsTheQuery(t *testing.T) {
+	session, p := connect(t)
+	p.reply("POST /api/docs/search", `{"results":[{"title":"Operating etcd clusters","url":"https://kubernetes.io/docs/x/","text":"snapshot save"}]}`)
+
+	var got platform.DocsResults
+	call(t, session, "search_docs", map[string]any{"query": "back up etcd"}, &got)
+
+	if len(got.Results) != 1 || got.Results[0].URL != "https://kubernetes.io/docs/x/" {
+		t.Errorf("search_docs = %+v", got)
+	}
+	if body := p.body("POST /api/docs/search"); body != `{"query":"back up etcd"}` {
 		t.Errorf("platform got %s", body)
 	}
 }

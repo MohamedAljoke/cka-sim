@@ -12,11 +12,15 @@ COMPOSE := docker compose -f $(CURDIR)/infra/local/compose.yml -f $(CURDIR)/infr
 secret = "$$($(COMPOSE) run --rm --no-deps -T secrets cat /secrets/$(1))"
 TOKEN := CKA_SIM_AGENT_TOKEN=$(call secret,agent-token)
 AUTH_ENV := CKA_SIM_AUTH_SECRET=$(call secret,auth-secret)
+DOCS_ENV := CKA_SIM_DOCS_DATABASE_URL=postgres://cka_sim:cka_sim@127.0.0.1:5434/cka_sim?sslmode=disable
+DOCS_DIR := $(HOME)/.cache/cka-sim/website
+# Docs for the lab's Kubernetes version; v1.37 is current, so it lives on main until release-1.37 is cut.
+DOCS_REF ?= main
 
-.PHONY: help doctor secrets up down shell serve web dev db auth mcp test boundaries selftest eval try
+.PHONY: help doctor secrets up down shell serve web dev db auth mcp docs-index docs-eval test boundaries selftest eval try
 
 help:
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
+	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
 
 doctor: ## check this machine can run a lab
 	@$(MAKE) --no-print-directory -C $(LAB) doctor
@@ -35,7 +39,7 @@ shell: ## open a shell on the base host, where the exam starts
 	$(COMPOSE) exec lab lab shell
 
 serve: secrets ## run the backend for the page on 127.0.0.1:7070
-	cd $(PLATFORM) && $(TOKEN) $(AUTH_ENV) go run ./cmd/server
+	cd $(PLATFORM) && $(TOKEN) $(AUTH_ENV) $(DOCS_ENV) go run ./cmd/server
 
 web: $(WEB)/node_modules ## serve the page with hot reload on http://localhost:5173
 	cd $(WEB) && npm run dev
@@ -45,19 +49,30 @@ dev: up db secrets $(WEB)/node_modules ## lab and Postgres up, then auth, the ba
 	@cd $(PLATFORM) && go build -o bin/server ./cmd/server
 	@cd $(AUTH) && go build -o bin/server ./cmd/server
 	@cd $(MCP) && go build -o bin/server ./cmd/server
-	@$(TOKEN) $(AUTH_ENV) $(PLATFORM)/bin/server & server=$$!; $(AUTH_ENV) $(AUTH)/bin/server & auth=$$!; \
+	@$(TOKEN) $(AUTH_ENV) $(DOCS_ENV) $(PLATFORM)/bin/server & server=$$!; $(AUTH_ENV) $(AUTH)/bin/server & auth=$$!; \
 	  $(MCP)/bin/server & mcp=$$!; \
 	  trap 'kill $$server $$auth $$mcp 2>/dev/null; wait $$server $$auth $$mcp' INT TERM EXIT; cd $(WEB) && npm run dev
 
 db: ## start Postgres, then apply migrations and seeds
 	$(COMPOSE) up -d --wait postgres
 	@$(MAKE) --no-print-directory -C $(AUTH) migrate seed
+	cd $(PLATFORM)/scripts/db && go tool sql-migrate up -env=development
 
 auth: secrets ## run the auth server on 127.0.0.1:7272 (make db first)
 	cd $(AUTH) && $(AUTH_ENV) go run ./cmd/server
 
 mcp: ## run the MCP server for the Assistant on 127.0.0.1:7373 (the lab reaches it as host.docker.internal)
 	cd $(MCP) && go run ./cmd/server
+
+docs-index: db ## embed the Kubernetes docs for search_docs (spends Vertex credit; DOCS_FLAGS=-dry-run prints the cost)
+	@test -d $(DOCS_DIR)/.git || git clone --depth 1 --filter=blob:none --sparse -b $(DOCS_REF) \
+	  https://github.com/kubernetes/website $(DOCS_DIR)
+	git -C $(DOCS_DIR) sparse-checkout set content/en/docs content/en/examples
+	git -C $(DOCS_DIR) fetch --depth 1 origin $(DOCS_REF) && git -C $(DOCS_DIR) checkout -q FETCH_HEAD
+	cd $(PLATFORM) && $(DOCS_ENV) go run ./cmd/docs index -dir $(DOCS_DIR) -ref $$(git -C $(DOCS_DIR) rev-parse HEAD) $(DOCS_FLAGS)
+
+docs-eval: ## score search_docs on CKA-style questions, keyword vs vector vs hybrid (spends a little Vertex credit)
+	cd $(PLATFORM) && $(DOCS_ENV) go run ./cmd/docs eval -dir $(DOCS_DIR)
 
 test: boundaries ## vet and test the Go code
 	cd apps/go-shared && go vet ./... && go test ./...

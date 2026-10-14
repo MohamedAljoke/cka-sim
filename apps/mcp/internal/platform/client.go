@@ -57,6 +57,16 @@ type Inspection struct {
 	Truncated bool   `json:"truncated,omitempty"`
 }
 
+type DocsPassage struct {
+	Title string `json:"title"`
+	URL   string `json:"url"`
+	Text  string `json:"text"`
+}
+
+type DocsResults struct {
+	Results []DocsPassage `json:"results"`
+}
+
 func (c *Client) CurrentTask(ctx context.Context) (CurrentTask, error) {
 	var t CurrentTask
 	return t, c.do(ctx, http.MethodGet, "/api/assistant/task", nil, &t)
@@ -89,6 +99,11 @@ func (c *Client) Explain(ctx context.Context, id string) (string, error) {
 func (c *Client) Inspect(ctx context.Context, args []string) (Inspection, error) {
 	var i Inspection
 	return i, c.do(ctx, http.MethodPost, "/api/assistant/inspect", map[string][]string{"args": args}, &i)
+}
+
+func (c *Client) SearchDocs(ctx context.Context, query string) (DocsResults, error) {
+	var r DocsResults
+	return r, c.do(ctx, http.MethodPost, "/api/docs/search", map[string]string{"query": query}, &r)
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body, out any) error {

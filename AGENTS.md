@@ -1,44 +1,51 @@
 # Agent Guide
 
+These rules win over the patterns on `main`. Use `main` as a reference for behaviour, not for structure.
+
 ## 1. Apps never import each other
 
 Every project under `apps/` is independent. An app may import `apps/go-shared`, and nothing else from `apps/`.
 
-- `platform` must not import `web`, `web` must not import `platform`, and so on for any app added later.
-- When two apps need to agree on something (request/response types, events, API shapes), put that contract in `apps/go-shared/contract/` and have both sides import it from there.
-- `go-shared` itself never imports any app.
+- When two apps must agree on something (API shapes, events), the contract goes in `apps/go-shared/contract/`.
+- `go-shared` never imports any app.
 
 ## 2. Comments only when truly needed
 
-The code explains itself. Use clear names and small functions instead of comments.
+Clear names and small functions instead of comments. Comment only a non-obvious *why* (a workaround, a hidden
+constraint). When in doubt, leave it out.
 
-- Do not add comments that restate what the code does.
-- Write a comment only for a non-obvious *why*: a workaround, a hidden constraint, a surprising decision.
-- When in doubt, leave it out.
+## 3. App layout
 
-## 3. Interfaces belong to the consumer
+```
+internal/domain/<name>/           entity and its rules (tasks.Task, Validate), domain errors
+internal/domain/<name>/usecases/  one use case per action: NewListTasks(repo), Execute(ctx)
+internal/infra/adapters/<tech>/   repository implementations: files/ today, postgres/ later; no files at adapters/
+internal/api/                     HTTP layer; takes use cases as concrete types
+cmd/                              wiring
+e2e/                              end-to-end tests
+```
 
-The package that calls the methods defines the interface, with only the methods it calls. The package that
-implements it returns a concrete type and never declares the interface itself.
+`domain` never imports `infra` or `api`.
 
-- Inside an app, each domain is a folder under `internal/domain` (`internal/domain/tasks`). Its root holds the
-  entity and its rules (`tasks.Task`, `Validate`). Its `usecases` folder holds one use case per action
-  (`ListTasks`), built with `New…` and run with `Execute`. A use case defines the repository interface it
-  needs (`usecases.TaskRepository`) and gets it injected.
-- `internal/infra/adapters` implements those repositories, one folder per technology and never a file at its
-  root: `adapters/files` (`files.TaskRepository`) today, `adapters/postgres` later. `internal/api` is the
-  HTTP layer and takes the use cases as concrete types (`*usecases.ListTasks`). `cmd` wires them together.
-- `domain` never imports `infra` or `api`; both of those import `domain`.
-- Abstract only when needed: add an interface where a real second implementation exists or is planned (a
-  repository behind files or Postgres), not as a reflex on every layer boundary.
-- Keep interfaces small: one or two methods is normal. Add a method only when a consumer calls it.
+## 4. Interfaces: at the consumer, and only when needed
 
-## 4. Errors: the domain names them, the HTTP layer answers them
+- The package that calls the methods defines the interface, with only those methods (`usecases.TaskRepository`).
+  Implementations return concrete types.
+- Add an interface only where a second implementation exists or is planned (files or Postgres behind a
+  repository), not at every layer boundary.
 
-- A failure the domain can name is a domain error, declared with `go-shared/domainerr` next to its domain
-  (`tasks.ErrUnavailable` in `internal/domain/tasks/errors.go`). Its kind says what went wrong
-  (`NotFound`, `Conflict`, `Unavailable`…), never an HTTP status. Mark it `.AsFault()` when it should
-  also be logged.
-- A use case wraps the cause so the log keeps it: `fmt.Errorf("%w: %w", tasks.ErrUnavailable, err)`.
-- Only the HTTP layer turns errors into responses: `httpx.Problems` maps each kind to a status and shows
-  the domain error's message. Anything that isn't a domain error is a 500 whose cause stays in the log.
+## 5. Errors: the domain names them, the HTTP layer answers them
+
+- A failure the domain can name is a `go-shared/domainerr` error in its domain's `errors.go`
+  (`tasks.ErrUnavailable`). Its kind says what went wrong, never an HTTP status. `.AsFault()` also logs it.
+- Use cases keep the cause: `fmt.Errorf("%w: %w", tasks.ErrUnavailable, err)`.
+- Only `httpx.Problems` turns errors into responses: kind → status, with the domain error's message. Anything
+  else is a 500 whose cause stays in the log.
+
+## 6. Tests
+
+- Unit tests per layer. Fake only what sits behind an interface (repositories); use the real use case
+  everywhere else.
+- `e2e/` builds the real server binary, runs it on a free port and calls it over HTTP. Every endpoint gets e2e
+  cases for its most important behaviour, including how it refuses bad requests.
+- Test functions first, helpers and fakes at the end of the file. `make test` runs everything, e2e uncached.

@@ -3,7 +3,7 @@
 PLATFORM := apps/platform
 WEB := apps/web
 
-.PHONY: help serve web dev test boundaries
+.PHONY: help serve web dev test e2e boundaries
 
 help:
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
@@ -22,8 +22,13 @@ dev: $(WEB)/node_modules ## the backend and the page together
 
 test: boundaries $(WEB)/node_modules ## vet and test the Go code, type-check the page
 	cd apps/go-shared && go vet ./... && go test ./...
-	cd $(PLATFORM) && go vet ./... && go test ./...
+	cd $(PLATFORM) && go vet ./... && go test $$(go list ./... | grep -v /e2e$$)
+	@# Never cached: the e2e tests build the server in a subprocess, so Go can't see when its code changes.
+	cd $(PLATFORM) && go test -count=1 ./e2e
 	cd $(WEB) && npx tsc
+
+e2e: ## run the platform's end-to-end tests against the real server binary
+	cd $(PLATFORM) && go test ./e2e -count=1 -v
 
 boundaries: ## fail if an app imports another app (only apps/go-shared is shared)
 	@bad=0; for mod in apps/*/go.mod; do \

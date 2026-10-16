@@ -8,6 +8,7 @@
   --accent-wash: oklch(92.5% 0.045 33);
   --chip: oklch(94.8% 0.015 85);
   --bad: oklch(52% 0.18 28);
+  --good: oklch(55% 0.13 150);
   --radius: 8px;
   color-scheme: light;
   font: 400 16px/1.55 'Segoe UI', system-ui, sans-serif;
@@ -26,6 +27,7 @@
     --accent-wash: oklch(32% 0.06 33);
     --chip: oklch(30% 0.02 265);
     --bad: oklch(70% 0.16 28);
+    --good: oklch(72% 0.14 150);
     color-scheme: dark;
   }
 }
@@ -290,4 +292,57 @@ code {
   color: var(--ink-2);
   text-decoration: underline;
   cursor: pointer;
+}
+
+.lab-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.lab-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.lab-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--rule);
+}
+
+.lab-panel[data-state='starting'] .lab-dot,
+.lab-panel[data-state='stopping'] .lab-dot {
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.lab-panel[data-state='ready'] .lab-dot {
+  background: var(--good);
+}
+
+.lab-panel[data-state='failed'] .lab-dot {
+  background: var(--bad);
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lab-dot {
+    animation: none !important;
+  }
 }

@@ -14,7 +14,13 @@ import (
 	"time"
 )
 
-var baseURL string
+const agentToken = "e2e-agent-token-0123456789abcdef"
+
+var (
+	serverBin string
+	baseURL   string
+	agent     = newFakeAgent()
+)
 
 func TestMain(m *testing.M) {
 	os.Exit(run(m))
@@ -28,12 +34,14 @@ func run(m *testing.M) int {
 	}
 	defer os.RemoveAll(dir)
 
-	bin := filepath.Join(dir, "server")
-	if out, err := exec.Command("go", "build", "-o", bin, "../cmd/server").CombinedOutput(); err != nil {
+	serverBin = filepath.Join(dir, "server")
+	if out, err := exec.Command("go", "build", "-o", serverBin, "../cmd/server").CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "build the server: %v\n%s", err, out)
 		return 1
 	}
-	server, url, err := start(bin)
+	agentURL, closeAgent := serveAgent(agent)
+	defer closeAgent()
+	server, url, err := start(agentURL)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "start the server:", err)
 		return 1
@@ -50,8 +58,9 @@ func run(m *testing.M) int {
 
 var listening = regexp.MustCompile(`http://[0-9.]+:[0-9]+`)
 
-func start(bin string) (*exec.Cmd, string, error) {
-	server := exec.Command(bin, "-addr", "127.0.0.1:0")
+func start(labURL string) (*exec.Cmd, string, error) {
+	server := exec.Command(serverBin)
+	server.Env = append(os.Environ(), "CKA_SIM_PLATFORM_ADDR=127.0.0.1:0", "CKA_SIM_LAB_URL="+labURL, "CKA_SIM_AGENT_TOKEN="+agentToken)
 	server.Stderr = os.Stderr
 	stdout, err := server.StdoutPipe()
 	if err != nil {
@@ -87,7 +96,12 @@ func stop(server *exec.Cmd) error {
 
 func request(t *testing.T, method, path string, headers map[string]string) (int, []byte) {
 	t.Helper()
-	req, err := http.NewRequest(method, baseURL+path, nil)
+	return requestTo(t, baseURL, method, path, headers)
+}
+
+func requestTo(t *testing.T, url, method, path string, headers map[string]string) (int, []byte) {
+	t.Helper()
+	req, err := http.NewRequest(method, url+path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

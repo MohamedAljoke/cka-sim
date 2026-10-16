@@ -1,9 +1,14 @@
 # Shortcuts for developing cka-sim from source. `make` alone lists them.
 
-PLATFORM := apps/platform
-WEB := apps/web
+-include .env
+export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' .env 2>/dev/null)
 
-.PHONY: help serve web dev test e2e boundaries
+PLATFORM := apps/platform
+SHARED := apps/go-shared
+WEB := apps/web
+BUF := go run github.com/bufbuild/buf/cmd/buf@v1.74.0
+
+.PHONY: help serve web dev test e2e proto boundaries
 
 help:
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
@@ -21,14 +26,17 @@ dev: $(WEB)/node_modules ## the backend and the page together
 	  trap 'kill $$server 2>/dev/null; wait $$server' INT TERM EXIT; cd $(WEB) && npm run dev
 
 test: boundaries $(WEB)/node_modules ## vet and test the Go code, type-check the page
-	cd apps/go-shared && go vet ./... && go test ./...
+	cd $(SHARED) && go vet ./... && go test ./...
 	cd $(PLATFORM) && go vet ./... && go test $$(go list ./... | grep -v /e2e$$)
-	@# Never cached: the e2e tests build the server in a subprocess, so Go can't see when its code changes.
+	@# Never cached: the e2e tests build their binary in a subprocess, so Go can't see when its code changes.
 	cd $(PLATFORM) && go test -count=1 ./e2e
 	cd $(WEB) && npx tsc
 
 e2e: ## run the platform's end-to-end tests against the real server binary
 	cd $(PLATFORM) && go test ./e2e -count=1 -v
+
+proto: ## lint the contracts in apps/go-shared/contract and regenerate their Go code
+	cd $(SHARED) && $(BUF) lint && $(BUF) generate
 
 boundaries: ## fail if an app imports another app (only apps/go-shared is shared)
 	@bad=0; for mod in apps/*/go.mod; do \

@@ -1,4 +1,5 @@
 import { getSolution, getTask, type TaskDetail } from './api'
+import { labPanel } from './lab'
 import { homePath } from './routes'
 import { chips, el, markdown, message } from './ui'
 
@@ -18,7 +19,7 @@ export async function showTask(pane: HTMLElement, id: string, signal: AbortSigna
   const question = el('div', 'markdown')
   markdown(question, task.question)
   const card = el('article', 'card task-page')
-  card.append(el('h1', '', task.title), chips(task), hostLine(task), question, solutionPanel(task.id, signal))
+  card.append(el('h1', '', task.title), chips(task), labPanel(signal), hostLine(task), question, solutionPanel(task.id, signal))
   pane.replaceChildren(backLink(), card)
 }
 

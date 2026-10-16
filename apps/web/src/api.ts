@@ -41,6 +41,28 @@ export async function getSolution(id: string, signal?: AbortSignal): Promise<str
   return reply.solution
 }
 
+export type LabState = 'none' | 'starting' | 'ready' | 'stopping' | 'failed'
+
+export type Lab = {
+  state: LabState
+  step?: string
+  startedAt?: string
+  readyAt?: string
+  error?: string
+}
+
+export async function getLab(signal?: AbortSignal): Promise<Lab> {
+  return (await call('GET', '/api/lab', signal)).json()
+}
+
+export async function startLab(signal?: AbortSignal): Promise<Lab> {
+  return (await call('POST', '/api/lab', signal)).json()
+}
+
+export async function stopLab(signal?: AbortSignal): Promise<Lab> {
+  return (await call('DELETE', '/api/lab', signal)).json()
+}
+
 async function call(method: string, path: string, signal?: AbortSignal): Promise<Response> {
   const res = await fetch(path, { method, signal })
   if (!res.ok) throw await failure(res, method, path)

@@ -6,7 +6,9 @@ These rules win over the patterns on `main`. Use `main` as a reference for behav
 
 Every project under `apps/` is independent. An app may import `apps/go-shared`, and nothing else from `apps/`.
 
-- When two apps must agree on something (API shapes, events), the contract goes in `apps/go-shared/contract/`.
+- When two apps must agree on something (API shapes, events), the contract goes in `apps/go-shared/contract/`
+  as a `.proto` file served and called with Connect. `make proto` lints it and regenerates the Go code, which is
+  committed. Generated types stay in `api/` and adapters; a domain may use a contract's enum, not its messages.
 - `go-shared` never imports any app.
 
 ## 2. Comments only when truly needed

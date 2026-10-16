@@ -4,7 +4,7 @@ PLATFORM := apps/platform
 LAB := apps/lab
 WEB := apps/web
 AUTH := apps/auth
-MCP := apps/mcp
+ASSISTANT := apps/assistant
 -include .env
 export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' .env 2>/dev/null)
 # The same Compose project `cka-sim up` runs, so dev and the installed cka-sim share one lab, database and secrets.
@@ -17,7 +17,7 @@ DOCS_DIR := $(HOME)/.cache/cka-sim/website
 # Docs for the lab's Kubernetes version; v1.37 is current, so it lives on main until release-1.37 is cut.
 DOCS_REF ?= main
 
-.PHONY: help doctor secrets up down shell serve web dev db auth mcp docs-index docs-eval test boundaries selftest eval try
+.PHONY: help doctor secrets up down shell serve web dev db auth assistant docs-index docs-eval test boundaries selftest eval try
 
 help:
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
@@ -28,8 +28,8 @@ doctor: ## check this machine can run a lab
 secrets:
 	@$(COMPOSE) run --rm secrets
 
-up: doctor ## build and start the lab, stopping cka-sim's own app, auth and mcp; waits until its cluster is up
-	@$(COMPOSE) stop app auth mcp
+up: doctor ## build and start the lab, stopping cka-sim's own app, auth and assistant; waits until its cluster is up
+	@$(COMPOSE) stop app auth assistant
 	$(COMPOSE) up -d --build --wait --wait-timeout 1800 lab
 
 down: ## stop everything; keeps the cluster, accounts and images, like cka-sim down
@@ -39,47 +39,47 @@ shell: ## open a shell on the base host, where the exam starts
 	$(COMPOSE) exec lab lab shell
 
 serve: secrets ## run the backend for the page on 127.0.0.1:7070
-	cd $(PLATFORM) && $(TOKEN) $(AUTH_ENV) $(DOCS_ENV) go run ./cmd/server
+	cd $(PLATFORM) && $(TOKEN) $(AUTH_ENV) go run ./cmd/server
 
 web: $(WEB)/node_modules ## serve the page with hot reload on http://localhost:5173
 	cd $(WEB) && npm run dev
 
 # The binaries run directly, not via go run, so Ctrl-C reaches them and the trap can wait for them.
-dev: up db secrets $(WEB)/node_modules ## lab and Postgres up, then auth, the backend, MCP and the page together
+dev: up db secrets $(WEB)/node_modules ## lab and Postgres up, then auth, the backend, the assistant and the page together
 	@cd $(PLATFORM) && go build -o bin/server ./cmd/server
 	@cd $(AUTH) && go build -o bin/server ./cmd/server
-	@cd $(MCP) && go build -o bin/server ./cmd/server
-	@$(TOKEN) $(AUTH_ENV) $(DOCS_ENV) $(PLATFORM)/bin/server & server=$$!; $(AUTH_ENV) $(AUTH)/bin/server & auth=$$!; \
-	  $(MCP)/bin/server & mcp=$$!; \
-	  trap 'kill $$server $$auth $$mcp 2>/dev/null; wait $$server $$auth $$mcp' INT TERM EXIT; cd $(WEB) && npm run dev
+	@cd $(ASSISTANT) && go build -o bin/server ./cmd/server
+	@$(TOKEN) $(AUTH_ENV) $(PLATFORM)/bin/server & server=$$!; $(AUTH_ENV) $(AUTH)/bin/server & auth=$$!; \
+	  $(DOCS_ENV) $(ASSISTANT)/bin/server & assistant=$$!; \
+	  trap 'kill $$server $$auth $$assistant 2>/dev/null; wait $$server $$auth $$assistant' INT TERM EXIT; cd $(WEB) && npm run dev
 
 db: ## start Postgres, then apply migrations and seeds
 	$(COMPOSE) up -d --wait postgres
 	@$(MAKE) --no-print-directory -C $(AUTH) migrate seed
-	cd $(PLATFORM)/scripts/db && go tool sql-migrate up -env=development
+	cd $(ASSISTANT)/scripts/db && go tool sql-migrate up -env=development
 
 auth: secrets ## run the auth server on 127.0.0.1:7272 (make db first)
 	cd $(AUTH) && $(AUTH_ENV) go run ./cmd/server
 
-mcp: ## run the MCP server for the Assistant on 127.0.0.1:7373 (the lab reaches it as host.docker.internal)
-	cd $(MCP) && go run ./cmd/server
+assistant: ## run the assistant (chat, docs search, MCP tools) on 127.0.0.1:7373 (the lab reaches it as host.docker.internal)
+	cd $(ASSISTANT) && $(DOCS_ENV) go run ./cmd/server
 
 docs-index: db ## embed the Kubernetes docs for search_docs (spends Vertex credit; DOCS_FLAGS=-dry-run prints the cost)
 	@test -d $(DOCS_DIR)/.git || git clone --depth 1 --filter=blob:none --sparse -b $(DOCS_REF) \
 	  https://github.com/kubernetes/website $(DOCS_DIR)
 	git -C $(DOCS_DIR) sparse-checkout set content/en/docs content/en/examples
 	git -C $(DOCS_DIR) fetch --depth 1 origin $(DOCS_REF) && git -C $(DOCS_DIR) checkout -q FETCH_HEAD
-	cd $(PLATFORM) && $(DOCS_ENV) go run ./cmd/docs index -dir $(DOCS_DIR) -ref $$(git -C $(DOCS_DIR) rev-parse HEAD) $(DOCS_FLAGS)
+	cd $(ASSISTANT) && $(DOCS_ENV) go run ./cmd/docs index -dir $(DOCS_DIR) -ref $$(git -C $(DOCS_DIR) rev-parse HEAD) $(DOCS_FLAGS)
 
 docs-eval: ## score search_docs on hits and on staying quiet (first run fills the embedding cache; reruns need no Vertex)
-	cd $(PLATFORM) && $(DOCS_ENV) go run ./cmd/docs eval -dir $(DOCS_DIR)
+	cd $(ASSISTANT) && $(DOCS_ENV) go run ./cmd/docs eval -dir $(DOCS_DIR)
 
 test: boundaries ## vet and test the Go code
 	cd apps/go-shared && go vet ./... && go test ./...
 	cd $(LAB) && go vet ./... && go test ./...
 	cd $(PLATFORM) && go vet ./... && go test ./...
 	cd $(AUTH) && go vet ./... && go test ./...
-	cd $(MCP) && go vet ./... && go test ./...
+	cd $(ASSISTANT) && go vet ./... && go test ./...
 
 boundaries: ## fail if an app imports another app (only apps/go-shared is shared)
 	@bad=0; for mod in apps/*/go.mod; do \

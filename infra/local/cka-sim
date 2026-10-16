@@ -53,12 +53,12 @@ shell) compose exec lab lab shell ;;
 update)
   check_docker
   curl -fsSL "$installer" | CKA_SIM_HOME="$dir" CKA_SIM_INSTALL_ONLY=1 sh
-  compose pull app auth lab mcp
+  compose pull app auth lab assistant
   exec "$dir/cka-sim" up
   ;;
 uninstall)
   compose down --volumes
-  for part in app auth lab mcp; do
+  for part in app auth lab assistant; do
     docker image rm "ghcr.io/mohamedaljoke/cka-sim-$part:${CKA_SIM_VERSION:-latest}" >/dev/null 2>&1 || true
   done
   link=$(command -v cka-sim || true)

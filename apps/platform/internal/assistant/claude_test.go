@@ -22,10 +22,13 @@ func TestClaudeWritesItsManagedFilesOnTheBaseHost(t *testing.T) {
 	if lab.host != labagent.BaseHost {
 		t.Errorf("ran on %q, want the base host", lab.host)
 	}
-	for _, path := range []string{"managed-settings.json", "managed-mcp.json", "CLAUDE.md"} {
+	for _, path := range []string{"managed-settings.json", "managed-mcp.json"} {
 		if !strings.Contains(lab.script, "cat > /etc/claude-code/"+path+" <<'CKA_SIM_EOF'") {
 			t.Errorf("script doesn't write %s:\n%s", path, lab.script)
 		}
+	}
+	if strings.Contains(lab.script, "cat > /etc/claude-code/CLAUDE.md") || !strings.Contains(lab.script, "rm -f /etc/claude-code/CLAUDE.md\n") {
+		t.Errorf("script should remove CLAUDE.md, not write it:\n%s", lab.script)
 	}
 }
 

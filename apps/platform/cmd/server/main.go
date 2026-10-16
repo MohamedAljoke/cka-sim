@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -19,10 +20,8 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/assistant"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/auth"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/desk"
-	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/docs"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/exam"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/labagent"
-	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/llm/vertex"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox/gke"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/sandbox/local"
@@ -42,15 +41,7 @@ type settings struct {
 	LabIdle    time.Duration `key:"CKA_SIM_LAB_IDLE" default:"30m"`
 	AuthURL    string        `key:"CKA_SIM_AUTH_URL" default:"http://127.0.0.1:7272"`
 	MCPURL     string        `key:"CKA_SIM_MCP_URL" default:"http://host.docker.internal:7373/mcp"`
-	LLM        string        `key:"CKA_SIM_LLM" default:""`
-	Project    string        `key:"CKA_SIM_VERTEX_PROJECT" default:""`
-	Location   string        `key:"CKA_SIM_VERTEX_LOCATION" default:"global"`
-	Model      string        `key:"CKA_SIM_VERTEX_MODEL" default:"gemini-3.5-flash"`
-	ChatMCPURL string        `key:"CKA_SIM_CHAT_MCP_URL" default:"http://127.0.0.1:7373/mcp"`
-	ChatDaily  int           `key:"CKA_SIM_CHAT_DAILY" default:"100" min:"1"`
-	DocsDB     string        `key:"CKA_SIM_DOCS_DATABASE_URL" default:""`
-	EmbedModel string        `key:"CKA_SIM_EMBED_MODEL" default:"gemini-embedding-001"`
-	DocsMin    float64       `key:"CKA_SIM_DOCS_MIN_SIMILARITY" default:"0.65" min:"0" max:"1"`
+	Assistant  string        `key:"CKA_SIM_ASSISTANT_URL" default:"http://127.0.0.1:7373"`
 }
 
 func main() {
@@ -76,15 +67,10 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	chats, err := newChats(ctx, cfg)
+	assistantURL, err := url.Parse(cfg.Assistant)
 	if err != nil {
-		return err
+		return fmt.Errorf("CKA_SIM_ASSISTANT_URL: %w", err)
 	}
-	search, closeDocs, err := newDocs(ctx, cfg)
-	if err != nil {
-		return err
-	}
-	defer closeDocs()
 	all, err := tasks.Load(catalog.FS)
 	if err != nil {
 		return fmt.Errorf("load the task catalog: %w", err)
@@ -96,15 +82,13 @@ func run(ctx context.Context) error {
 	desks := desk.New(openDesk(provider, all, examDir), time.Now)
 	go desks.Watch(ctx, time.Minute, cfg.LabIdle)
 	practice := server.Practice{
-		Tasks:      all,
-		Files:      catalog.FS,
-		Exams:      true,
-		Assistants: []assistant.Provider{assistant.Claude{}},
-		Tokens:     assistant.AuthTokens{URL: cfg.AuthURL},
-		MCPURL:     cfg.MCPURL,
-		Chats:      chats,
-		ChatTools:  assistant.MCPTools{URL: cfg.ChatMCPURL},
-		Docs:       search,
+		Tasks:        all,
+		Files:        catalog.FS,
+		Exams:        true,
+		Assistants:   []assistant.Provider{assistant.Claude{}},
+		Tokens:       assistant.AuthTokens{URL: cfg.AuthURL},
+		MCPURL:       cfg.MCPURL,
+		AssistantURL: assistantURL,
 	}
 
 	sessions := auth.Verifier{Secret: []byte(cfg.AuthSecret), Now: time.Now}
@@ -142,49 +126,6 @@ func newProvider(ctx context.Context, cfg settings) (sandbox.Provider, error) {
 	default:
 		return nil, fmt.Errorf("unknown CKA_SIM_PROVIDER %q; want gke or nothing", cfg.Provider)
 	}
-}
-
-func newChats(ctx context.Context, cfg settings) ([]*assistant.Chat, error) {
-	switch cfg.LLM {
-	case "":
-		return nil, nil
-	case "vertex":
-		if cfg.Project == "" {
-			return nil, errors.New("CKA_SIM_LLM=vertex needs CKA_SIM_VERTEX_PROJECT")
-		}
-		model, err := vertex.New(ctx, vertex.Config{Project: cfg.Project, Location: cfg.Location, Model: cfg.Model})
-		if err != nil {
-			return nil, err
-		}
-		return []*assistant.Chat{{ID: "gemini", Model: model, MaxSteps: 8, MaxTokens: 2048, Daily: cfg.ChatDaily, Now: time.Now}}, nil
-	default:
-		return nil, fmt.Errorf("unknown CKA_SIM_LLM %q; want vertex or nothing", cfg.LLM)
-	}
-}
-
-func newDocs(ctx context.Context, cfg settings) (server.DocsSearch, func(), error) {
-	if cfg.LLM != "vertex" || cfg.DocsDB == "" {
-		return nil, func() {}, nil
-	}
-	pool, err := docs.Connect(ctx, cfg.DocsDB)
-	if err != nil {
-		return nil, nil, err
-	}
-	store := docs.Postgres{Pool: pool}
-	model, err := store.Meta(ctx, "model")
-	if err == nil && model != "" && model != cfg.EmbedModel {
-		err = fmt.Errorf("the docs were embedded with %s; set CKA_SIM_EMBED_MODEL=%s or re-index", model, model)
-	}
-	if err != nil {
-		pool.Close()
-		return nil, nil, err
-	}
-	embedder, err := vertex.NewEmbedder(ctx, vertex.Config{Project: cfg.Project, Location: cfg.Location, Model: cfg.EmbedModel}, docs.Dims)
-	if err != nil {
-		pool.Close()
-		return nil, nil, err
-	}
-	return docs.Search{Embedder: embedder, Store: store, MinSimilarity: cfg.DocsMin}, pool.Close, nil
 }
 
 var accountID = regexp.MustCompile(`^[0-9A-Za-z-]+$`)

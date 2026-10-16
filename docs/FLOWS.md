@@ -10,7 +10,7 @@ New flows go here in the same shape: the trigger, then each hop in order, then w
 `cka-sim up` runs (`infra/local/compose.yml`, project `cka-sim-local`) plus `infra/local/compose.dev.yml`,
 which opens the lab's agent on `127.0.0.1:7171` and Postgres on `127.0.0.1:5434` for the apps that run on the
 host. So `make dev`, `make try` and an installed cka-sim share one lab, one database and one set of secrets,
-never two clusters. It stops the project's `app`, `auth` and `mcp` containers, so only one platform drives the
+never two clusters. It stops the project's `app`, `auth` and `assistant` containers, so only one platform drives the
 lab. Then it builds the lab image (`apps/lab/deploy/lab.Dockerfile`: dockerd, the `lab` CLI and the agent) and
 starts the privileged container `cka-sim-lab`, after the one-shot `secrets` service has written the agent
 token and the auth secret into the `secrets` volume (only the first time). The Makefile reads them from there. That's the same image GKE runs as a pod on its own
@@ -242,7 +242,7 @@ keeps the results; Home shows them as "Last exam" until the next exam replaces t
 
 ## 7. The hosted site on GKE: the lab on its own VM
 
-`make site` in `infra/gke` builds the lab, app, auth and MCP images. `make docs` fills the assistant's docs
+`make site` in `infra/gke` builds the lab, app, auth and assistant images. `make docs` fills the assistant's docs
 index (below).
 
 **The lab image.** `apps/lab/deploy/lab.Dockerfile`, the same image `make up` runs locally: dockerd, the `lab`
@@ -254,15 +254,15 @@ tainted `labs` pool. That node is a VM, and the pod is privileged so kind can ru
 **The app image.** `apps/platform/deploy/app.Dockerfile` contains the page, the server and Caddy, but no Docker. It runs as the
 Deployment `app` on the shared system pool, behind a LoadBalancer on a static IP. Caddy asks for the password,
 gets an HTTPS certificate for `<ip>.sslip.io`, serves the page, and passes `/api` and `/ws` to the server on
-`127.0.0.1:7070` (`/api/auth` to the `auth` Deployment). A second container, `apps/mcp`, serves the assistant's
-tools on `127.0.0.1:7373`, and Caddy passes `/mcp` to it, because Claude Code in a lab can only come back through
-the public address. The server starts with `CKA_SIM_PROVIDER=gke`, so `cmd/server/main.go` makes a `gke.Provider`
+`127.0.0.1:7070` (`/api/auth` to the `auth` Deployment). A second container, `apps/assistant`, serves the Gemini
+chat and the assistant's tools on `127.0.0.1:7373`, and Caddy passes `/mcp` to it, because Claude Code in a lab can only
+come back through the public address. The server starts with `CKA_SIM_PROVIDER=gke`, so `cmd/server/main.go` makes a `gke.Provider`
 (`internal/sandbox/gke`) instead of a `local.Provider`. It first deletes any claim an earlier run left behind
 (`ReapClaims`), since each one holds a node.
 
 **The app's database.** The app pod reaches the same Cloud SQL Postgres as auth through its own `cloud-sql-proxy`
 sidecar, on `127.0.0.1:5432`, as `cka-sim-app` (`make ai` grants it `cloudsql.client`). Before the server starts, a
-`migrate` init container applies `apps/platform/scripts/db` (the `docs` schema, pgvector). `make docs` builds an
+`migrate` init container from the assistant image applies `apps/assistant/scripts/db` (the `docs` schema, pgvector). `make docs` builds an
 image with the Kubernetes docs at the current `main` commit and the indexer, then runs it as the Job `docs-index`
 with the same identity and proxy. It embeds the chunks on Vertex AI and stores them in `docs.chunks`. A re-run only
 embeds what changed.
@@ -306,36 +306,41 @@ a lab's node when its claim ends, so a later lab can still land on a node a prev
 ## 8. Asking the Gemini assistant
 
 **Trigger.** On a practice task, you open the Assistant bar, pick **Gemini · cka-sim** and type "review my
-attempt". This needs the platform started with `CKA_SIM_LLM=vertex` and `CKA_SIM_VERTEX_PROJECT` (locally:
-`gcloud auth application-default login` once, `cp .env.example .env`, then `make dev`, which reads `.env`).
-At startup `newChats` (`cmd/server/main.go`) builds `vertex.New` (`internal/llm/vertex`), which finds the
-Google credentials and fails the start if there are none.
+attempt". This needs the assistant (`apps/assistant`) started with `CKA_SIM_LLM=vertex` and `CKA_SIM_VERTEX_PROJECT`
+(locally: `gcloud auth application-default login` once, `cp .env.example .env`, then `make dev`, which reads `.env`
+and starts the assistant on `127.0.0.1:7373` next to the platform). At startup `newChats`
+(`apps/assistant/cmd/server/main.go`) builds `vertex.New` (`internal/llm/vertex`), which finds the Google
+credentials and fails the start if there are none.
 
 **The request.** The pane (`chat` in `apps/web/src/assistant.ts`) shows your bubble and "Thinking…", and sends
 `POST /api/assistant/chat` with `{"provider": "gemini", "messages": [...]}`, the whole text conversation so far.
-The server keeps no chat state, and tool turns never come from the browser. `chat` (`internal/server/assistant.go`)
-checks the conversation (alternating, ending with you, up to 40 messages of 8 KB), refuses during an exam
-(409 `exam_running`) and trades your session for an assistant token at auth, as the Claude pane does.
+Nothing keeps chat state, and tool turns never come from the browser. The platform's `chat`
+(`apps/platform/internal/server/assistant.go`) trades your session for an assistant token at auth, as the Claude
+pane does, and proxies the request to the assistant at `CKA_SIM_ASSISTANT_URL` with that token in place of your
+cookie. The assistant's `reply` (`apps/assistant/internal/server/chat.go`) checks the conversation (alternating,
+ending with you, up to 40 messages of 8 KB), then asks the platform who you are: `GET /api/assistant/learner` with
+the token. Only the platform can check a token, and it refuses during an exam (409 `exam_running`).
 
-**The tools.** `assistant.MCPTools` opens an MCP session to `apps/mcp` at `CKA_SIM_CHAT_MCP_URL`
-(`127.0.0.1:7373/mcp` locally) with that token and lists its tools. These are the same seven tools Claude Code
-uses, and the MCP app calls the platform back with the same token. So the scope, the exam check and the
-read-only kubectl rules are enforced in one place for both kinds of assistant. `inspect_cluster` takes only the
-read verbs and an allowlist of read flags (`readOnly` in `internal/server/assistant.go`), so text in the cluster
+**The tools.** `chat.MCPTools` builds, for that token, the same MCP server the assistant serves on `/mcp`
+(`tools.New` in `internal/tools`), connects to it in memory and lists its tools. These are the same seven tools
+Claude Code uses, and each one calls the platform with the same token (`search_docs` asks `/learner` first). So the
+scope, the exam check and the read-only kubectl rules are enforced in one place for both kinds of assistant.
+`inspect_cluster` takes only the read verbs and an allowlist of read flags (`readOnly` in
+`apps/platform/internal/server/assistant.go`), so text in the cluster
 can't talk the model into `--server=https://elsewhere`, `--as`, `--raw` or an `-o go-template-file=` that reads a
 file on the node.
 
-**The loop.** `Chat.Reply` (`internal/assistant/chat.go`) first counts the message against your daily limit
+**The loop.** `Chat.Reply` (`apps/assistant/internal/chat/chat.go`) first counts the message against your daily limit
 (`CKA_SIM_CHAT_DAILY`, 100; beyond it 429 `assistant_limit`). It then sends the conversation, the reviewer rules
-(`reviewer.md`, shared with Claude) and the tool list to the model through `llm.Model`. The Vertex adapter turns
-these into a Gemini `GenerateContent` call. When the model asks for tools, each one runs through MCP, and the
+(`internal/tools/reviewer.md`, which is also the MCP server's instructions, so Claude Code reads the same rules) and the tool list to the model through `llm.Model`. The Vertex adapter turns
+these into a Gemini `GenerateContent` call. When the model asks for tools, each one runs through the MCP session, and the
 results (or the tool's refusal) go back to the model. Gemini's thought signature travels with each call, because
 Gemini 3 refuses a conversation without it. It ends after a text answer, or after 8 rounds with `assistant_steps`.
 Each turn logs the account, model, steps, tokens in and out, and latency.
 
 **Looking up the docs.** For a concept, field or command, `reviewer.md` tells the model to call `search_docs` with
-the open task's domain. The MCP app POSTs the query and domain to `/api/docs/search` (`internal/server/docs.go`).
-`docs.Search.Find` embeds the query with `gemini-embedding-001` (`RETRIEVAL_QUERY`, 768 dimensions). Then one SQL query
+the open task's domain. The tool runs in the assistant: after the platform's `/learner` answers, it calls
+`docs.Search.Find` (`internal/docs`), which embeds the query with `gemini-embedding-001` (`RETRIEVAL_QUERY`, 768 dimensions). Then one SQL query
 in `docs.Postgres.Search` takes the 40 nearest chunks (pgvector, HNSW) and the 40 best full-text matches, both limited
 to pages of that domain plus untagged pages such as `reference/kubectl/`. A troubleshooting task searches every page.
 It merges them by reciprocal rank fusion, drops passages with a cosine similarity under `CKA_SIM_DOCS_MIN_SIMILARITY`
@@ -344,7 +349,7 @@ don't cover it, and the model says so without a link. With no `CKA_SIM_DOCS_DATA
 `docs_off`, with an empty index 503 `docs_empty` ("run make docs-index"), and with an unknown domain 422
 `docs_domain`. `make docs-index` fills the index locally and tags each chunk's domain from its URL (flow 7 covers GKE).
 
-**The guard.** `Chat.screen` (`internal/assistant/guard.go`) looks at each tool result before the model does. A
+**The guard.** `Chat.screen` (`apps/assistant/internal/chat/guard.go`) looks at each tool result before the model does. A
 `run_check` result is parsed and sent to you as is, so the grade you see never passes through the model. A
 `search_docs` result becomes the list of pages it found, one per page, and its passages are kept for the turn. When
 the answer is done, `ground` checks every quote that sits next to a kubernetes.io link (a `>` block, or a quoted
@@ -355,10 +360,11 @@ instructions") is logged, reported to you, and handed to the model behind a brac
 data.
 
 **The stream.** The Vertex adapter uses `GenerateContentStream`, and `Chat.Reply` passes on each piece of text
-and each tool call as it happens. The handler answers with server-sent events (`text/event-stream`): `tool
+and each tool call as it happens. The assistant's handler answers with server-sent events (`text/event-stream`): `tool
 {"name"}`, `text {"text"}`, `check {"task", "checks", "earned", "total"}`, `warning {"tool"}`, `sources {"sources": [{"title", "url"}]}`, then
-`done {"text", "tools"}`, where `text` is the final answer after the quote check, or `error {"detail"}` when something fails after the stream began. Every check before the first event (400, 409, 422, 429, 503) is still a normal problem response. Caddy on
-GKE and Vite locally pass the stream through as it comes.
+`done {"text", "tools"}`, where `text` is the final answer after the quote check, or `error {"detail"}` when something fails after the stream began. Every check before the first event (400, 401, 409, 422, 429, 503) is still a normal problem response. The
+platform's proxy (`httputil.ReverseProxy` with `FlushInterval: -1`), Caddy on GKE and Vite locally pass the stream
+through as it comes.
 
 **What you see.** "Thinking…", then "Checking: run_check…" as each tool runs, then the answer writing itself
 word by word, rendered from markdown with raw HTML shown as text, since it can quote your cluster. Only links
@@ -368,8 +374,8 @@ so a quote that isn't in the docs now reads "(paraphrase)". Under it, a "Graded 
 real check list when the model ran `run_check`, a "From the Kubernetes docs" box linking each page it looked up, an orange line when your
 cluster had text addressed to the assistant, and a small line such as "Used current_task, inspect_cluster, run_check". Off-topic questions get a
 one-line "I only help with this practice". An error shows in red with your message put back in the box to resend:
-Vertex failing (`assistant_model`), MCP down (503 `assistant_tools`) or the server started without a model (503
-`assistant_off`). **Disconnect**, or leaving the task, drops the conversation and stops an answer mid-stream.
+Vertex failing (`assistant_model`), the assistant down (503 `assistant_unreachable`) or started without a model
+(503 `assistant_off`). **Disconnect**, or leaving the task, drops the conversation and stops an answer mid-stream.
 
 On GKE the same flow runs in the `app` pod: `make ai` gives it a Vertex identity through Workload Identity, and
-`apps/mcp` runs beside the server in that pod (flow 7).
+`apps/assistant` runs beside the server in that pod with the Vertex and docs settings (flow 7).

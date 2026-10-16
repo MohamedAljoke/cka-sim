@@ -22,8 +22,8 @@ jobs:
             dockerfile: auth/deploy/auth.Dockerfile
           - name: lab
             dockerfile: lab/deploy/lab.Dockerfile
-          - name: mcp
-            dockerfile: mcp/deploy/mcp.Dockerfile
+          - name: assistant
+            dockerfile: assistant/deploy/assistant.Dockerfile
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

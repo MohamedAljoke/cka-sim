@@ -13,7 +13,7 @@ engineering decisions and searches them with pgvector plus Postgres full-text se
 
 ## 1. `search_docs` always returns five passages, even bad ones
 
-`apps/platform/internal/docs/store.go` fuses the vector and keyword ranks with RRF and returns the top `k`
+`apps/assistant/internal/docs/store.go` fuses the vector and keyword ranks with RRF and returns the top `k`
 (`shown = 5`). RRF only orders, it never rejects. Ask about Helm hooks or an AWS console and the assistant
 still gets five kubernetes.io passages, and the tool description tells it to cite them. `Result` has no
 score, so the assistant can't tell a strong match from a weak one.
@@ -45,7 +45,7 @@ answers "is any of them good enough".
 
 ## 2. The docs eval only tests hits, and needs Vertex every run
 
-`apps/platform/cmd/docs/eval.yaml` has 32 questions and each has a `want` page. Nothing checks that the
+`apps/assistant/cmd/docs/eval.yaml` has 32 questions and each has a `want` page. Nothing checks that the
 search stays quiet when it should, so §1's threshold would be untested. `evaluate` also embeds every
 question through Vertex on every run and needs a filled index, so it can't run in CI.
 
@@ -64,7 +64,7 @@ decision-memory's `make eval` (`internal/domain/eval`) does three things worth c
 - Allow `want: []` in `eval.yaml` and add 8 to 10 questions outside the exam docs: Helm internals, a cloud
   console, Docker Compose, Terraform, a non-Kubernetes question. Report them as their own line: "quiet when
   it should be: 7 / 8".
-- Cache the question vectors in `apps/platform/cmd/docs/eval-embeddings.json`, keyed by model and query
+- Cache the question vectors in `apps/assistant/cmd/docs/eval-embeddings.json`, keyed by model and query
   text.
 - Print each `want` page's similarity next to the threshold, and the closest wrong page.
 - Optional, for `cka-sim up` without GCP: an Ollama `nomic-embed-text` embedder (also 768 dims) behind

@@ -88,7 +88,7 @@ spec:
               cpu: 25m
               memory: 64Mi
         - name: migrate
-          image: ${APP_IMAGE}
+          image: ${ASSISTANT_IMAGE}
           workingDir: /db
           command: [sql-migrate, up, -env=production]
           env:
@@ -115,15 +115,6 @@ spec:
             # The lab reaches no private address, so Claude Code in it comes back through the public site.
             - name: CKA_SIM_MCP_URL
               value: https://${SITE_HOST}/mcp
-            - name: CKA_SIM_LLM
-              value: vertex
-            - name: CKA_SIM_VERTEX_PROJECT
-              value: ${PROJECT}
-            - name: CKA_SIM_DOCS_DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: cka-sim-db
-                  key: url
             - name: CKA_SIM_AUTH_SECRET
               valueFrom:
                 secretKeyRef:
@@ -139,17 +130,26 @@ spec:
             requests:
               cpu: 50m
               memory: 128Mi
-        - name: mcp
-          image: ${MCP_IMAGE}
+        - name: assistant
+          image: ${ASSISTANT_IMAGE}
           env:
-            - name: CKA_SIM_MCP_ADDR
+            - name: CKA_SIM_ASSISTANT_ADDR
               value: 127.0.0.1:7373
             - name: CKA_SIM_PLATFORM_URL
               value: http://127.0.0.1:7070
+            - name: CKA_SIM_LLM
+              value: vertex
+            - name: CKA_SIM_VERTEX_PROJECT
+              value: ${PROJECT}
+            - name: CKA_SIM_DOCS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cka-sim-db
+                  key: url
           resources:
             requests:
               cpu: 10m
-              memory: 32Mi
+              memory: 64Mi
 ---
 apiVersion: v1
 kind: Service

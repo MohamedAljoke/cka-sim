@@ -2,7 +2,6 @@ package assistant
 
 import (
 	"context"
-	_ "embed"
 	"encoding/json"
 	"strings"
 
@@ -13,9 +12,6 @@ import (
 var ErrClaudeMissing = domainerr.Unavailable("assistant_missing", "Claude Code is not installed in this lab yet")
 
 const mcpServer = "cka-sim"
-
-//go:embed reviewer.md
-var reviewerInstructions string
 
 // claude --continue exits when there is nothing to continue.
 const claudeCommand = `if ls ~/.claude/projects/*/*.jsonl >/dev/null 2>&1; then exec claude --continue; fi; exec claude`
@@ -42,6 +38,7 @@ func (Claude) Prepare(ctx context.Context, lab Lab, conn Connection) error {
 }
 
 // Managed files are the ones the candidate can't override, so the assistant can only read and use our tools.
+// Its rules come from the MCP server's instructions, so an old CLAUDE.md from before that goes.
 func claudeSetup(conn Connection) (string, error) {
 	settings, err := json.MarshalIndent(claudeSettings(conn), "", "  ")
 	if err != nil {
@@ -53,11 +50,10 @@ func claudeSetup(conn Connection) (string, error) {
 	}
 	var b strings.Builder
 	b.WriteString("if ! su -l candidate -c 'command -v claude' >/dev/null 2>&1; then echo missing; exit 0; fi\n")
-	b.WriteString("umask 022\nmkdir -p /etc/claude-code\n")
+	b.WriteString("umask 022\nmkdir -p /etc/claude-code\nrm -f /etc/claude-code/CLAUDE.md\n")
 	for _, f := range []struct{ path, body string }{
 		{"/etc/claude-code/managed-settings.json", string(settings) + "\n"},
 		{"/etc/claude-code/managed-mcp.json", string(servers) + "\n"},
-		{"/etc/claude-code/CLAUDE.md", reviewerInstructions},
 	} {
 		b.WriteString("cat > " + f.path + " <<'CKA_SIM_EOF'\n" + f.body + "CKA_SIM_EOF\n")
 	}

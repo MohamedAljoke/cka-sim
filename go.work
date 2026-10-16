@@ -1,9 +1,9 @@
 go 1.26.9
 
 use (
+	./apps/assistant
 	./apps/auth
 	./apps/go-shared
 	./apps/lab
-	./apps/mcp
 	./apps/platform
 )

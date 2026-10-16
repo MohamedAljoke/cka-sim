@@ -331,11 +331,8 @@ func newAPIWithShells(t *testing.T, r *fakeRunner, shells func() *fakeOpener) (*
 		return &desk.Desk{Lab: lab, Exam: session}, nil
 	}, time.Now)
 	return serve(t, desks, Practice{Tasks: all, Files: files, Exams: true, Assistants: []assistant.Provider{fakeAssistant{}},
-		Tokens:    fakeTokens{},
-		MCPURL:    testMCPURL,
-		Chats:     []*assistant.Chat{{ID: "fake-chat", Model: lookFirstModel{}, MaxSteps: 3, MaxTokens: 100, Daily: 2, Now: time.Now}},
-		ChatTools: fakeToolbox{},
-		Docs:      fakeDocs{},
+		Tokens: fakeTokens{},
+		MCPURL: testMCPURL,
 	}), desks
 }
 

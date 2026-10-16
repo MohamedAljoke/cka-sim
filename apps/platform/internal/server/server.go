@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 
@@ -15,15 +16,13 @@ import (
 )
 
 type Practice struct {
-	Tasks      []tasks.Task
-	Files      fs.FS
-	Exams      bool
-	Assistants []assistant.Provider
-	Tokens     assistant.Tokens
-	MCPURL     string
-	Chats      []*assistant.Chat
-	ChatTools  assistant.Toolbox
-	Docs       DocsSearch
+	Tasks        []tasks.Task
+	Files        fs.FS
+	Exams        bool
+	Assistants   []assistant.Provider
+	Tokens       assistant.Tokens
+	MCPURL       string
+	AssistantURL *url.URL
 }
 
 func New(desks *desk.Desks, practice Practice) http.Handler {
@@ -49,7 +48,7 @@ func New(desks *desk.Desks, practice Practice) http.Handler {
 	handle("POST /api/assistant/chat", a.chat)
 	assist("GET /api/assistant/task", a.currentTask)
 	assist("POST /api/assistant/inspect", a.inspect)
-	assist("POST /api/docs/search", a.searchDocs)
+	assist("GET /api/assistant/learner", a.learner)
 	handle("GET /api/lab", a.getLab)
 	handle("POST /api/lab", a.startLab)
 	handle("DELETE /api/lab", a.endLab)

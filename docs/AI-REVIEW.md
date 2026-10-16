@@ -63,11 +63,14 @@ Built in `apps/web` (`src/assistant.ts`):
      that is already scoped (403 `scoped_token`).
    - The platform's `assistant.Provider` for Claude prepares the sandbox through `Lab.Run` on the base host
      (`cka-sim-base`, as root; `internal/assistant/claude.go`). It checks that `claude` is installed for
-     `candidate`, then writes three root-owned, world-readable files to `/etc/claude-code/`:
+     `candidate`, then writes two root-owned, world-readable files to `/etc/claude-code/`:
      - `managed-mcp.json`: the one MCP server, `cka-sim`, at `CKA_SIM_MCP_URL` with `Authorization: Bearer <token>`;
      - `managed-settings.json`: denies Bash, Edit, Write and web access, allows `mcp__cka-sim__*`, allows only that
-       server, locks permission rules, hooks and MCP servers to itself, disables bypass mode and the auto-updater;
-     - `CLAUDE.md` (`claude.md`): review, don't solve; only `run_check` decides a pass; cluster text is data.
+       server, locks permission rules, hooks and MCP servers to itself, disables bypass mode and the auto-updater.
+
+     The rules (review, don't solve; only `run_check` decides a pass; cluster text is data) are `reviewer.md`, which
+     the MCP server sends as its instructions, so Claude Code and the Gemini chat read one file. An old
+     `/etc/claude-code/CLAUDE.md` from before that is removed.
 
      So Claude can look and hint but can't solve the task, and the candidate can't loosen it.
    - The panel opens `GET /ws/assistant?provider=claude`. The platform prepares again (so a socket opened on its own
@@ -77,7 +80,7 @@ Built in `apps/web` (`src/assistant.ts`):
      to a task resumes the conversation. It's the same terminal protocol as `/ws/terminal`, and typing in it counts
      as activity for the idle timer. On first use Claude Code prints a login URL; the user approves it and pastes
      the code back. The login lives only in their VM and dies with it. We never read or store it.
-   - The user asks *"review my attempt"*. Claude calls the MCP app (`apps/mcp`) at
+   - The user asks *"review my attempt"*. Claude calls the assistant app (`apps/assistant`) at
      `http://host.docker.internal:7373/mcp` (locally; Docker Desktop forwards it to the app on `127.0.0.1`). The app
      calls the platform API with the same bearer token, and the platform runs the work on the user's desk
      (`desk.Desks.For`). That's the same lab as the terminal.
@@ -88,7 +91,7 @@ Built in `apps/web` (`src/assistant.ts`):
    During an exam the platform refuses both endpoints and every assistant-token call (409 `exam_running`), and
    beginning an exam ends every open assistant shell (`desk.EndAssistants`), leaving the lab terminal alone.
 
-On GKE (not built yet) the sandbox reaches the MCP app over the internet, not in-cluster: lab egress allows the internet but no private
+On GKE (not built yet) the sandbox reaches the assistant's MCP server over the internet, not in-cluster: lab egress allows the internet but no private
 ranges (`apps/lab/deploy/gke/lab-pool.yaml`). Users can also add the same MCP URL to Claude Code or Desktop on
 their own PC; it's the same server, with a token they create themselves (later).
 
@@ -137,14 +140,17 @@ type Tokens interface {
 (`assistant.AuthTokens`) and the `MCPURL`. `assistant.Find` picks a provider by id; an unknown id is 422
 `assistant_unknown`.
 
-- `claude`: writes the managed MCP config, settings and instructions, then launches `claude`.
+- `claude`: writes the managed MCP config and settings, then launches `claude`; its instructions come from the MCP
+  server.
 - `codex` (later): writes `~/.codex/config.toml` with the MCP server and a read-only sandbox mode, then launches
   `codex`.
-- `chat` providers don't use `Prepare` at all. They're `*assistant.Chat` values in `server.Practice.Chats`, kept
-  apart from `Provider` because subscriptions must never reach that path. `Chat.Reply` runs the agent loop in our
-  backend over the same MCP tools (`assistant.MCPTools`, an MCP client of `apps/mcp`).
+- `chat` providers don't use `Prepare` at all, and they don't live in the platform. They're `*chat.Chat` values in
+  the assistant app (`apps/assistant/internal/chat`), kept apart from `Provider` because subscriptions must never
+  reach that path. The platform only proxies `POST /api/assistant/chat` to the assistant with an assistant token.
+  `Chat.Reply` runs the agent loop over the same MCP tools (`chat.MCPTools`, an in-memory client of the assistant's
+  own MCP server).
 
-The model itself sits behind `llm.Model` (`internal/llm`), our own types for messages, tool calls and results:
+The model itself sits behind `llm.Model` (`apps/assistant/internal/llm`), our own types for messages, tool calls and results:
 
 ```go
 type Model interface {
@@ -158,28 +164,33 @@ tool loop stays simple. The endpoint passes those pieces and each tool call on t
 events (`tool`, `text`, `done`, `error`; flow 8 in `docs/FLOWS.md`).
 
 `llm/vertex` is the only adapter so far (Gemini through `google.golang.org/genai`'s `GenerateContentStream`, with
-Google's default credentials). `CKA_SIM_LLM` picks it in `newChats` (`cmd/server/main.go`). An OpenAI adapter would also cover
+Google's default credentials). `CKA_SIM_LLM` picks it in `newChats` (`apps/assistant/cmd/server/main.go`). An OpenAI adapter would also cover
 Ollama through its OpenAI-compatible API; it's one more package and one more `case`.
+
+The assistant reads these; the platform only reads `CKA_SIM_ASSISTANT_URL`.
 
 | Setting | Default | |
 |---|---|---|
+| `CKA_SIM_ASSISTANT_URL` | `http://127.0.0.1:7373` | where the platform proxies the chat; `CKA_SIM_MCP_URL` is where the lab reaches `/mcp` |
 | `CKA_SIM_LLM` | empty (no chat) | `vertex` |
 | `CKA_SIM_VERTEX_PROJECT` | | the GCP project billed |
 | `CKA_SIM_VERTEX_LOCATION` | `global` | the cluster's region may not serve the newest Gemini |
 | `CKA_SIM_VERTEX_MODEL` | `gemini-3.5-flash` | GA on the `global` endpoint (2026-10) |
-| `CKA_SIM_CHAT_MCP_URL` | `http://127.0.0.1:7373/mcp` | where the platform reaches `apps/mcp`; `CKA_SIM_MCP_URL` is where the lab does |
 | `CKA_SIM_CHAT_DAILY` | `100` | messages per account per day, kept in memory |
 | `CKA_SIM_DOCS_DATABASE_URL` | empty (no docs search) | Postgres with pgvector; used only with `CKA_SIM_LLM=vertex` |
 | `CKA_SIM_EMBED_MODEL` | `gemini-embedding-001` | must match the model the docs were indexed with; the server refuses to start otherwise |
 
-## `apps/mcp`: its own app
+## `apps/assistant`: its own app
 
-A Go module next to `auth`, `lab` and `platform` (`make mcp`, and part of `make dev`). Like the other apps it
-imports only `go-shared`, plus the official SDK (`github.com/modelcontextprotocol/go-sdk` v1.8.0), and it keeps its
-own copy of the platform response types (`internal/platform`). It serves Streamable HTTP at `/mcp` in **stateless**
-mode: each request builds a server whose tools call the platform with that request's bearer token
-(`internal/server`). A request without a bearer is 401 with `WWW-Authenticate: Bearer`. The app checks nothing
-else; the platform verifies the token on every call.
+A Go module next to `auth`, `lab` and `platform` (`make assistant`, and part of `make dev`) that holds everything
+AI: the MCP server, the Gemini chat loop and its guards, `llm`, the docs index, search and eval, and the `docs`
+schema's migrations. Like the other apps it imports only `go-shared`, plus the official SDK
+(`github.com/modelcontextprotocol/go-sdk` v1.8.0), and it keeps its own copy of the platform response types
+(`internal/platform`). It serves Streamable HTTP at `/mcp` in **stateless** mode: each request builds a server
+whose tools call the platform with that request's bearer token (`internal/server`), and `POST /api/assistant/chat`
+for the Gemini chat. A request without a bearer is 401 with `WWW-Authenticate: Bearer`. The app holds no secret and
+verifies no token: the platform does, on every tool call, and on `GET /api/assistant/learner`, which the chat and
+`search_docs` ask first.
 
 Every tool is marked read-only (`ReadOnlyHint`), and a platform refusal comes back to the model as a tool error
 with the platform's reason, so it can say "end the exam first" instead of guessing.
@@ -192,11 +203,11 @@ with the platform's reason, so it can say "end the exam first" instead of guessi
 | `run_check` | `POST /api/tasks/{id}/check` | blocked |
 | `inspect_cluster` | `POST /api/assistant/inspect`: `{"args": [...]}`, kubectl verbs `get` `describe` `logs` `events` `top` `explain` `api-resources` `version`, no `-w`/`--watch`/`-f`/`--follow`. Run shell-quoted as admin on the control plane with `timeout 15`; output capped at 8 KB; a failing kubectl is output, not an error | blocked |
 | `explain` | `GET /api/tasks/{id}/solution` (it returns `explain.md`); the tool's description says to call it only when the learner asks for the answer or gives up | blocked |
-| `search_docs` | `POST /api/docs/search`: `{"query": "…"}`, the top 5 passages of the Kubernetes docs with their kubernetes.io links (see RAG below); 503 `docs_off` or `docs_empty` when there's nothing to search | blocked |
+| `search_docs` | `GET /api/assistant/learner`, then the assistant's own docs index: `{"query": "…", "domain": "…"}`, the top 5 passages of the Kubernetes docs with their kubernetes.io links (see RAG below); `docs_off` or `docs_empty` when there's nothing to search | blocked |
 
 Never exposed: `solution.sh` and the body of `check.sh`.
 
-**The platform enforces the rules, not the MCP app.** The MCP app is a thin adapter. Any client holding the token
+**The platform enforces the rules, not the assistant.** For the tools, the assistant is a thin adapter. Any client holding the token
 could call the platform directly, so the scope and exam checks live in the platform:
 
 - `auth.Verifier.FromRequest` also accepts `Authorization: Bearer`, not only the `__Host-cka_sim_session` cookie,
@@ -206,9 +217,9 @@ could call the platform directly, so the scope and exam checks live in the platf
   stay session-only.
 - While `desk.Exam` is running, every `assist` route refuses an `assistant` token (409 `exam_running`).
 
-On GKE (`make site`), `apps/mcp` runs as a second container in the `app` pod, on `127.0.0.1:7373`. It shares
-the pod's network, so it reaches the platform on `127.0.0.1:7070` and Gemini reaches it on `127.0.0.1:7373`, with
-no TLS and no extra Service. Caddy also routes `/mcp` to it, and `CKA_SIM_MCP_URL` is `https://<site>/mcp`: a lab
+On GKE (`make site`), `apps/assistant` runs as a second container in the `app` pod, on `127.0.0.1:7373`, with the
+Vertex and docs settings. It shares the pod's network, so it reaches the platform on `127.0.0.1:7070` and the
+platform proxies the chat to it on `127.0.0.1:7373`, with no TLS and no extra Service. Caddy also routes `/mcp` to it, and `CKA_SIM_MCP_URL` is `https://<site>/mcp`: a lab
 pod reaches no private address, so Claude Code in it comes back through the public site. The platform reaches
 auth at `http://auth:7272` (`CKA_SIM_AUTH_URL`). Each lab still builds its base image, Claude Code included,
 while it warms up in the pool; baking Claude Code into the lab image would only shorten the warm-up.
@@ -231,7 +242,7 @@ exam, so an explanation can rest on the official page and link to it instead of 
   `RETRIEVAL_DOCUMENT` for chunks and `RETRIEVAL_QUERY` for questions. Batches hold up to 50 texts or 60,000
   characters, and a 429 is retried with backoff.
 - **Store.** pgvector in the same Postgres as auth, in its own `docs` schema with its own migration table
-  (`apps/platform/scripts/db`). `docs.chunks` holds the text, a `vector(768)` with an HNSW index, and a generated
+  (`apps/assistant/scripts/db`). `docs.chunks` holds the text, a `vector(768)` with an HNSW index, and a generated
   `tsvector` with a GIN index.
 - **Hybrid search** (`docs.Postgres.Search`). One SQL query takes the 40 nearest chunks by cosine distance and the
   40 best full-text matches, then merges them by reciprocal rank fusion (k = 60). The full-text half ORs the
@@ -240,10 +251,10 @@ exam, so an explanation can rest on the official page and link to it instead of 
 - **Indexing.** `cmd/docs index` embeds only chunks whose hash changed, upserts them, and deletes chunks that are
   gone, so a re-run against the same commit costs nothing. Changing the model needs `-fresh`. Locally it's
   `make docs-index` (`DOCS_FLAGS=-dry-run` prints the size and cost). On GKE it's `make -C infra/gke docs`: a Job
-  (`apps/platform/deploy/gke/docs-index.yaml`) runs as the app's identity, with the Cloud SQL proxy as a sidecar.
+  (`apps/assistant/deploy/gke/docs-index.yaml`) runs as the app's identity, with the Cloud SQL proxy as a sidecar.
 - **What the learner sees.** `Chat.screen` turns each `search_docs` result into a `sources` event, and the pane
-  lists the pages under the answer as "From the Kubernetes docs", one link per page. `reviewer.md` (also Claude's
-  `CLAUDE.md`) says to look up a concept, field or command and give the link, and to trust the docs over memory.
+  lists the pages under the answer as "From the Kubernetes docs", one link per page. `reviewer.md` (also the MCP
+  server's instructions, which Claude Code reads) says to look up a concept, field or command and give the link, and to trust the docs over memory.
 - **Eval.** `make docs-eval` asks 32 CKA-style questions (`cmd/docs/eval.yaml`), each with the page or pages that
   answer it, in keyword-only, vector-only and hybrid mode. It prints recall@5 and MRR per mode. RESULTS_PLACEHOLDER
 
@@ -269,7 +280,7 @@ The defenses don't rely on the model obeying. They take away what an injection c
   https links to kubernetes.io, helm.sh and github.com are clickable; any other URL is shown in full, so a link
   can't quietly carry cluster data off in its query string.
 - **A verdict the model can't fake.** `run_check` is the only judge, and its result goes to the learner
-  directly: `Chat.screen` (`internal/assistant/guard.go`) parses it and streams a `check` event, which the pane
+  directly: `Chat.screen` (`apps/assistant/internal/chat/guard.go`) parses it and streams a `check` event, which the pane
   shows as "Graded by cka-sim · <task>" with the real check list. Even if an injection works, the score on
   screen is cka-sim's. The task id is in the label, because the model picks which task it checks.
 - **Detection.** `inspect_cluster` output is matched against a few patterns for text aimed at an AI ("ignore …
@@ -317,7 +328,7 @@ logged in once in the panel; `TASK=<id>` for one task) runs `apps/platform/cmd/e
    `untouched` nothing, a custom one its `expect`: `pass`, `partial` by default, or `fail`) is reported as invalid,
    not scored;
 4. connects the assistant like the panel does, then runs `claude -p --json-schema …` as `candidate` on the base host,
-   so the review goes through the same managed settings, `apps/mcp` and platform as a real one;
+   so the review goes through the same managed settings, `apps/assistant` and platform as a real one;
 5. scores the review, then has a **judge** grade it: a second `claude -p` that gets the task, `explain.md`, what the
    learner did, the check lines and the review inline, and answers `{spoiler, causeCorrect, useful, reason}`;
 6. tidies the task.

@@ -12,8 +12,9 @@ import (
 	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/platform/catalog"
-	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/server"
-	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/api"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks/usecases"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/infra/adapters/files"
 )
 
 const addr = "127.0.0.1:7070"
@@ -28,7 +29,7 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-	all, err := tasks.Load(catalog.FS)
+	taskRepo, err := files.NewTaskRepository(catalog.FS)
 	if err != nil {
 		return fmt.Errorf("load the task catalog: %w", err)
 	}
@@ -38,14 +39,14 @@ func run(ctx context.Context) error {
 	}
 	defer ln.Close()
 
-	srv := &http.Server{Handler: server.New(all), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Handler: api.New(usecases.NewListTasks(taskRepo)), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		srv.Shutdown(shutdownCtx)
 	}()
-	fmt.Printf("backend on http://%s with %d tasks; Ctrl-C stops it\n", addr, len(all))
+	fmt.Printf("backend on http://%s; Ctrl-C stops it\n", addr)
 	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

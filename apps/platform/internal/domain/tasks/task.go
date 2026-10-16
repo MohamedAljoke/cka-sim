@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 type Domain string
@@ -62,6 +63,8 @@ func (t Task) Validate() error {
 		return errors.New("weight must be more than 0")
 	case t.Host == "":
 		return errors.New("host is required")
+	case strings.TrimSpace(t.Question) == "":
+		return errors.New("question is required")
 	case t.Order != "" && t.Order != Last:
 		return errors.New(`order must be empty or "last"`)
 	}

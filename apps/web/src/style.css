@@ -96,12 +96,24 @@ main {
   padding: 0;
 }
 
+.task-list li {
+  border-top: 1px solid var(--rule);
+}
+
 .task {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 12px 0;
-  border-top: 1px solid var(--rule);
+  padding: 12px 8px;
+  margin: 0 -8px;
+  border-radius: var(--radius);
+  color: inherit;
+  text-decoration: none;
+}
+
+.task:hover,
+.task:focus-visible {
+  background: var(--chip);
 }
 
 .task-title {
@@ -125,4 +137,50 @@ main {
 .chip.domain {
   background: var(--accent-wash);
   color: var(--accent);
+}
+
+.back {
+  display: inline-block;
+  margin-bottom: 12px;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--ink);
+}
+
+.task-page h1 {
+  margin: 0 0 8px;
+  font-size: 1.6rem;
+  line-height: 1.25;
+}
+
+.host {
+  margin: 16px 0 0;
+}
+
+code {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.9em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--chip);
+}
+
+.markdown {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
+.markdown pre {
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--chip);
+  overflow-x: auto;
+}
+
+.markdown pre code {
+  padding: 0;
+  background: none;
 }

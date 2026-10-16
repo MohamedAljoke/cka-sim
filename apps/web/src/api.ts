@@ -9,12 +9,20 @@ export type Task = {
   order?: 'last'
 }
 
-export async function listTasks(): Promise<Task[]> {
-  return (await call('GET', '/api/tasks')).json()
+export type TaskDetail = Task & {
+  question: string
 }
 
-async function call(method: string, path: string): Promise<Response> {
-  const res = await fetch(path, { method })
+export async function listTasks(signal?: AbortSignal): Promise<Task[]> {
+  return (await call('GET', '/api/tasks', signal)).json()
+}
+
+export async function getTask(id: string, signal?: AbortSignal): Promise<TaskDetail> {
+  return (await call('GET', `/api/tasks/${encodeURIComponent(id)}`, signal)).json()
+}
+
+async function call(method: string, path: string, signal?: AbortSignal): Promise<Response> {
+  const res = await fetch(path, { method, signal })
   if (!res.ok) throw await failure(res, method, path)
   return res
 }

@@ -46,10 +46,3 @@ func TestListTasksIsUnavailableWhenTheRepositoryFails(t *testing.T) {
 		t.Errorf("got error %v", err)
 	}
 }
-
-type fakeRepository struct {
-	tasks []tasks.Task
-	err   error
-}
-
-func (r fakeRepository) List(context.Context) ([]tasks.Task, error) { return r.tasks, r.err }

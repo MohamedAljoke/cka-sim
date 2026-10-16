@@ -19,6 +19,11 @@ type taskView struct {
 	Order       tasks.Order  `json:"order,omitempty"`
 }
 
+type taskDetailView struct {
+	taskView
+	Question string `json:"question"`
+}
+
 func (a *api) getTasks(w http.ResponseWriter, r *http.Request) error {
 	all, err := a.listTasks.Execute(r.Context())
 	if err != nil {
@@ -29,6 +34,14 @@ func (a *api) getTasks(w http.ResponseWriter, r *http.Request) error {
 		views[i] = newTaskView(t)
 	}
 	return httpx.WriteJSON(w, http.StatusOK, views)
+}
+
+func (a *api) getTaskByID(w http.ResponseWriter, r *http.Request) error {
+	t, err := a.getTask.Execute(r.Context(), r.PathValue("id"))
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, taskDetailView{taskView: newTaskView(t), Question: t.Question})
 }
 
 func newTaskView(t tasks.Task) taskView {

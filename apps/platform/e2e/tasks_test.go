@@ -84,6 +84,43 @@ func TestACrossSiteWriteIsRefused(t *testing.T) {
 	}
 }
 
+func TestATaskOpensWithItsQuestion(t *testing.T) {
+	status, body := request(t, http.MethodGet, "/api/tasks/wl-scale", nil)
+	if status != http.StatusOK {
+		t.Fatalf("status %d: %s", status, body)
+	}
+
+	var got taskDetail
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if got.ID != "wl-scale" || got.Title != "Scale a Deployment" || got.DomainTitle != "Workloads and Scheduling" ||
+		!strings.HasPrefix(got.Question, "## Task") || !strings.Contains(got.Question, "Scale it to **4** replicas") {
+		t.Errorf("wl-scale = %+v", got)
+	}
+}
+
+func TestEveryListedTaskOpensWithAQuestion(t *testing.T) {
+	for _, task := range listTasks(t) {
+		status, body := request(t, http.MethodGet, "/api/tasks/"+task.ID, nil)
+		var got taskDetail
+		if err := json.Unmarshal(body, &got); status != http.StatusOK || err != nil || strings.TrimSpace(got.Question) == "" {
+			t.Errorf("%s: status %d, err %v, question %q", task.ID, status, err, got.Question)
+		}
+	}
+}
+
+func TestAnUnknownTaskIsNotFound(t *testing.T) {
+	for _, path := range []string{"/api/tasks/no-such-task", "/api/tasks/..%2Fcatalog", "/api/tasks/WL-SCALE"} {
+		status, body := request(t, http.MethodGet, path, nil)
+
+		if status != http.StatusNotFound || !strings.Contains(string(body), `"code":"task_not_found"`) {
+			t.Errorf("%s: status %d: %s", path, status, body)
+		}
+	}
+}
+
 type listedTask struct {
 	ID          string   `json:"id"`
 	Title       string   `json:"title"`
@@ -92,6 +129,11 @@ type listedTask struct {
 	Topics      []string `json:"topics"`
 	Weight      int      `json:"weight"`
 	Host        string   `json:"host"`
+}
+
+type taskDetail struct {
+	listedTask
+	Question string `json:"question"`
 }
 
 func listTasks(t *testing.T) []listedTask {

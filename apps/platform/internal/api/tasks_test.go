@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -14,7 +15,7 @@ import (
 )
 
 func TestListsTasksWithoutTheQuestion(t *testing.T) {
-	status, body := call(t, newAPI(t, wlScale), http.MethodGet, "/api/tasks")
+	status, body := call(t, newAPI(wlScale), http.MethodGet, "/api/tasks")
 
 	if status != http.StatusOK {
 		t.Fatalf("status %d: %s", status, body)
@@ -32,7 +33,7 @@ func TestATaskWithoutTopicsListsAnEmptyArray(t *testing.T) {
 	task := wlScale
 	task.Topics = nil
 
-	_, body := call(t, newAPI(t, task), http.MethodGet, "/api/tasks")
+	_, body := call(t, newAPI(task), http.MethodGet, "/api/tasks")
 
 	if !strings.Contains(body, `"topics":[]`) {
 		t.Errorf("body = %s, want topics as []", body)
@@ -40,7 +41,7 @@ func TestATaskWithoutTopicsListsAnEmptyArray(t *testing.T) {
 }
 
 func TestListsAnEmptyCatalogAsAnEmptyArray(t *testing.T) {
-	_, body := call(t, newAPI(t), http.MethodGet, "/api/tasks")
+	_, body := call(t, newAPI(), http.MethodGet, "/api/tasks")
 
 	if strings.TrimSpace(body) != "[]" {
 		t.Errorf("body = %s, want []", body)
@@ -48,7 +49,7 @@ func TestListsAnEmptyCatalogAsAnEmptyArray(t *testing.T) {
 }
 
 func TestTasksCannotBePosted(t *testing.T) {
-	status, _ := call(t, newAPI(t, wlScale), http.MethodPost, "/api/tasks")
+	status, _ := call(t, newAPI(wlScale), http.MethodPost, "/api/tasks")
 
 	if status != http.StatusMethodNotAllowed {
 		t.Errorf("status %d, want 405", status)
@@ -56,7 +57,7 @@ func TestTasksCannotBePosted(t *testing.T) {
 }
 
 func TestAFailedListIsUnavailableAndHidesTheCause(t *testing.T) {
-	h := New(usecases.NewListTasks(fakeRepository{err: errors.New("disk gone at /secret/path")}))
+	h := newAPIWith(fakeRepository{err: errors.New("disk gone at /secret/path")})
 
 	status, body := call(t, h, http.MethodGet, "/api/tasks")
 
@@ -68,11 +69,44 @@ func TestAFailedListIsUnavailableAndHidesTheCause(t *testing.T) {
 	}
 }
 
+func TestATaskComesWithItsQuestion(t *testing.T) {
+	status, body := call(t, newAPI(wlScale), http.MethodGet, "/api/tasks/wl-scale")
+
+	if status != http.StatusOK {
+		t.Fatalf("status %d: %s", status, body)
+	}
+	if !strings.Contains(body, `"id":"wl-scale"`) || !strings.Contains(body, `"domainTitle":"Workloads and Scheduling"`) ||
+		!strings.Contains(body, `"question":"Scale it to 4."`) {
+		t.Errorf("body = %s", body)
+	}
+}
+
+func TestAnUnknownTaskIsNotFound(t *testing.T) {
+	status, body := call(t, newAPI(wlScale), http.MethodGet, "/api/tasks/net-svc")
+
+	if status != http.StatusNotFound || !strings.Contains(body, `"code":"task_not_found"`) {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestAFailedGetIsUnavailableAndHidesTheCause(t *testing.T) {
+	h := newAPIWith(fakeRepository{err: errors.New("disk gone at /secret/path")})
+
+	status, body := call(t, h, http.MethodGet, "/api/tasks/wl-scale")
+
+	if status != http.StatusServiceUnavailable || strings.Contains(body, "secret") {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
 var wlScale = tasks.Task{ID: "wl-scale", Title: "Scale a Deployment", Domain: tasks.Workloads, Topics: []string{"deployments"}, Weight: 4, Host: "node-1", Question: "Scale it to 4."}
 
-func newAPI(t *testing.T, all ...tasks.Task) http.Handler {
-	t.Helper()
-	return New(usecases.NewListTasks(fakeRepository{tasks: all}))
+func newAPI(all ...tasks.Task) http.Handler {
+	return newAPIWith(fakeRepository{tasks: all})
+}
+
+func newAPIWith(repo usecases.TaskRepository) http.Handler {
+	return New(usecases.NewListTasks(repo), usecases.NewGetTask(repo))
 }
 
 type fakeRepository struct {
@@ -81,6 +115,17 @@ type fakeRepository struct {
 }
 
 func (r fakeRepository) List(context.Context) ([]tasks.Task, error) { return r.tasks, r.err }
+
+func (r fakeRepository) Get(_ context.Context, id string) (tasks.Task, error) {
+	if r.err != nil {
+		return tasks.Task{}, r.err
+	}
+	i := slices.IndexFunc(r.tasks, func(t tasks.Task) bool { return t.ID == id })
+	if i < 0 {
+		return tasks.Task{}, tasks.ErrNotFound
+	}
+	return r.tasks[i], nil
+}
 
 func call(t *testing.T, h http.Handler, method, path string) (int, string) {
 	t.Helper()

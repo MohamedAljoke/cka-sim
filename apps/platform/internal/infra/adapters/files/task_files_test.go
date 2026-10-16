@@ -2,6 +2,7 @@ package files
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -16,7 +17,7 @@ func TestParseReadsFrontmatterAndQuestion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := tasks.Task{ID: "wl-scale", Title: "A task", Domain: tasks.Workloads, Topics: []string{"deployments", "scaling"}, Weight: 4, Host: "node-1", Order: tasks.Last, Question: "## Task\n\nScale it."}
+	want := tasks.Task{ID: "wl-scale", Title: "A task", Domain: tasks.Workloads, Topics: []string{"deployments", "scaling"}, Weight: 4, Host: "node-1", Order: tasks.Last, Question: "Do the wl-scale task.\n\n## Task\n\nScale it."}
 	if task.ID != want.ID || task.Title != want.Title || task.Domain != want.Domain || !slices.Equal(task.Topics, want.Topics) ||
 		task.Weight != want.Weight || task.Host != want.Host || task.Order != want.Order || task.Question != want.Question {
 		t.Errorf("got %+v\nwant %+v", task, want)
@@ -79,7 +80,35 @@ func TestListIsACopy(t *testing.T) {
 	}
 }
 
-func TestNewTaskFilesRejects(t *testing.T) {
+func TestGetGivesTheTaskWithItsQuestion(t *testing.T) {
+	fsys := fstest.MapFS{}
+	addTask(fsys, "wl-scale")
+	repo, err := NewTaskRepository(fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := repo.Get(context.Background(), "wl-scale")
+
+	if err != nil || got.ID != "wl-scale" || got.Question != "Do the wl-scale task." {
+		t.Errorf("Get = %+v, %v", got, err)
+	}
+}
+
+func TestGetIsNotFoundForAnUnknownID(t *testing.T) {
+	repo, err := NewTaskRepository(fstest.MapFS{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = repo.Get(context.Background(), "wl-scale")
+
+	if !errors.Is(err, tasks.ErrNotFound) {
+		t.Errorf("got error %v, want ErrNotFound", err)
+	}
+}
+
+func TestNewTaskRepositoryRejects(t *testing.T) {
 	tests := []struct {
 		name    string
 		text    string
@@ -103,7 +132,7 @@ func TestNewTaskFilesRejects(t *testing.T) {
 }
 
 func taskMD(id, fields string) string {
-	return "---\nid: " + id + "\ntitle: A task\nhost: node-1\n" + fields + "\n---\n"
+	return "---\nid: " + id + "\ntitle: A task\nhost: node-1\n" + fields + "\n---\nDo the " + id + " task.\n"
 }
 
 func addTask(fsys fstest.MapFS, id string) {

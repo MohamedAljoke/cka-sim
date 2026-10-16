@@ -9,10 +9,6 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks"
 )
 
-type TaskRepository interface {
-	List(ctx context.Context) ([]tasks.Task, error)
-}
-
 type ListTasks struct {
 	repo TaskRepository
 }

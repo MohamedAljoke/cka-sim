@@ -38,6 +38,14 @@ func (r *TaskRepository) List(context.Context) ([]tasks.Task, error) {
 	return slices.Clone(r.tasks), nil
 }
 
+func (r *TaskRepository) Get(_ context.Context, id string) (tasks.Task, error) {
+	i := slices.IndexFunc(r.tasks, func(t tasks.Task) bool { return t.ID == id })
+	if i < 0 {
+		return tasks.Task{}, tasks.ErrNotFound
+	}
+	return r.tasks[i], nil
+}
+
 func loadTaskFile(fsys fs.FS, file string) (tasks.Task, error) {
 	text, err := fs.ReadFile(fsys, file)
 	if err != nil {

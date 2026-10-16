@@ -1,18 +1,22 @@
 import { listTasks, type Task } from './api'
-import { el, message } from './ui'
+import { taskPath } from './routes'
+import { chips, el, message } from './ui'
 
-export async function showTasks(pane: HTMLElement) {
+export async function showTasks(pane: HTMLElement, signal: AbortSignal) {
+  document.title = 'cka-sim'
   pane.replaceChildren(el('p', 'muted', 'Loading tasks…'))
   let tasks: Task[]
   try {
-    tasks = await listTasks()
+    tasks = await listTasks(signal)
   } catch (err) {
+    if (signal.aborted) return
     const retry = el('button', 'action', 'Retry')
     retry.type = 'button'
-    retry.onclick = () => showTasks(pane)
+    retry.onclick = () => showTasks(pane, signal)
     pane.replaceChildren(el('p', 'error', `Cannot load tasks: ${message(err)}`), retry)
     return
   }
+  if (signal.aborted) return
 
   const list = el('ol', 'task-list')
   if (tasks.length === 0) list.append(el('li', 'muted', 'The catalog has no tasks yet.'))
@@ -23,13 +27,10 @@ export async function showTasks(pane: HTMLElement) {
 }
 
 function taskItem(task: Task): HTMLElement {
-  const item = el('li', 'task')
-  item.append(el('span', 'task-title', task.title), chips(task))
+  const link = el('a', 'task')
+  link.href = taskPath(task.id)
+  link.append(el('span', 'task-title', task.title), chips(task))
+  const item = el('li')
+  item.append(link)
   return item
-}
-
-function chips(task: Task): HTMLElement {
-  const row = el('span', 'chips')
-  row.append(el('span', 'chip domain', task.domainTitle), ...task.topics.map((topic) => el('span', 'chip', topic)))
-  return row
 }

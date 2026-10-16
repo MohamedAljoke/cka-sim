@@ -36,11 +36,13 @@ e2e/                              end-to-end tests
 
 ## 5. Errors: the domain names them, the HTTP layer answers them
 
-- A failure the domain can name is a `go-shared/domainerr` error in its domain's `errors.go`
-  (`tasks.ErrUnavailable`). Its kind says what went wrong, never an HTTP status. `.AsFault()` also logs it.
+- A failure the domain can name is a sentinel in its domain's `errors.go`:
+  `domainerr.New("task_not_found", "no task has that id")`. Just a code and a message, never a status.
 - Use cases keep the cause: `fmt.Errorf("%w: %w", tasks.ErrUnavailable, err)`.
-- Only `httpx.Problems` turns errors into responses: kind → status, with the domain error's message. Anything
-  else is a 500 whose cause stays in the log.
+- Each handler maps its own use case's errors right after the call, with `errors.Is`:
+  `return httpx.NotFound(err)`, `httpx.Unavailable(err)`; anything else is returned as is.
+- `httpx.Problems` shows a domain error's code and message only when a handler gave it a status. Everything
+  else is a 500 that never describes itself, and every 5xx is logged with its cause.
 
 ## 6. Tests
 

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
@@ -30,7 +31,10 @@ type solutionView struct {
 
 func (a *api) getTasks(w http.ResponseWriter, r *http.Request) error {
 	all, err := a.listTasks.Execute(r.Context())
-	if err != nil {
+	switch {
+	case errors.Is(err, tasks.ErrUnavailable):
+		return httpx.Unavailable(err)
+	case err != nil:
 		return err
 	}
 	views := make([]taskView, len(all))
@@ -42,7 +46,12 @@ func (a *api) getTasks(w http.ResponseWriter, r *http.Request) error {
 
 func (a *api) getTaskByID(w http.ResponseWriter, r *http.Request) error {
 	t, err := a.getTask.Execute(r.Context(), r.PathValue("id"))
-	if err != nil {
+	switch {
+	case errors.Is(err, tasks.ErrNotFound):
+		return httpx.NotFound(err)
+	case errors.Is(err, tasks.ErrUnavailable):
+		return httpx.Unavailable(err)
+	case err != nil:
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, taskDetailView{taskView: newTaskView(t), Question: t.Question})
@@ -50,7 +59,12 @@ func (a *api) getTaskByID(w http.ResponseWriter, r *http.Request) error {
 
 func (a *api) getTaskSolution(w http.ResponseWriter, r *http.Request) error {
 	solution, err := a.getSolution.Execute(r.Context(), r.PathValue("id"))
-	if err != nil {
+	switch {
+	case errors.Is(err, tasks.ErrNotFound):
+		return httpx.NotFound(err)
+	case errors.Is(err, tasks.ErrUnavailable):
+		return httpx.Unavailable(err)
+	case err != nil:
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, solutionView{Solution: solution})

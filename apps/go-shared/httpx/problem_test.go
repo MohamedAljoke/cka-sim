@@ -13,59 +13,59 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 )
 
-func TestWriteMapsEveryDomainKind(t *testing.T) {
-	for _, tc := range []struct {
-		err    *domainerr.Error
-		status int
-	}{
-		{domainerr.NotFound("task_not_found", "no"), http.StatusNotFound},
-		{domainerr.Conflict("exam_running", "no"), http.StatusConflict},
-		{domainerr.Unauthorized("not_logged_in", "no"), http.StatusUnauthorized},
-		{domainerr.Forbidden("forbidden", "no"), http.StatusForbidden},
-		{domainerr.Gone("gone", "no"), http.StatusGone},
-		{domainerr.Unavailable("lab_failed", "no"), http.StatusServiceUnavailable},
-		{domainerr.Unprocessable("invalid_exam", "no"), http.StatusUnprocessableEntity},
-	} {
-		t.Run(tc.err.Code, func(t *testing.T) {
-			rec := httptest.NewRecorder()
+func TestADomainErrorWithAStatusShowsItsCodeAndMessage(t *testing.T) {
+	rec := httptest.NewRecorder()
 
-			if got := httpx.NewProblems().Write(rec, request(), tc.err); got != tc.status {
-				t.Fatalf("status = %d, want %d", got, tc.status)
-			}
+	got := problems(nil).Write(rec, request(), httpx.NotFound(fmt.Errorf("open: %w", errNotFound)))
 
-			p := writtenProblem(t, rec)
-			if p.Code != tc.err.Code || p.Detail != "no" || p.Instance != "/api/things" {
-				t.Fatalf("problem = %+v", p)
-			}
-		})
+	p := writtenProblem(t, rec)
+	if got != http.StatusNotFound || p.Status != http.StatusNotFound || p.Title != "Not Found" ||
+		p.Code != "task_not_found" || p.Detail != "no task has that id" || p.Instance != "/api/things" {
+		t.Fatalf("status %d, problem %+v", got, p)
 	}
 }
 
-func TestWriteReportsFaultsAndNotOrdinaryRefusals(t *testing.T) {
-	var reported []error
-	problems := httpx.NewProblems(httpx.WithReporter(func(_ *http.Request, err error) {
-		reported = append(reported, err)
-	}))
+func TestADomainErrorWithoutAStatusIsAnInternalErrorThatHidesItself(t *testing.T) {
+	rec := httptest.NewRecorder()
 
-	problems.Write(httptest.NewRecorder(), request(), domainerr.NotFound("task_not_found", "no"))
+	got := problems(nil).Write(rec, request(), domainerr.New("exam_running", "not during an exam"))
+
+	p := writtenProblem(t, rec)
+	if got != http.StatusInternalServerError || p.Code != "internal_error" || strings.Contains(p.Detail, "exam") {
+		t.Fatalf("status %d, problem %+v", got, p)
+	}
+}
+
+func TestAServerSideStatusIsReportedAndARefusalIsNot(t *testing.T) {
+	var reported []error
+	p := problems(&reported)
+
+	p.Write(httptest.NewRecorder(), request(), httpx.NotFound(errNotFound))
 	if len(reported) != 0 {
-		t.Fatalf("an ordinary refusal was reported: %v", reported)
+		t.Fatalf("a refusal was reported: %v", reported)
 	}
 
-	problems.Write(httptest.NewRecorder(), request(), domainerr.Unavailable("lab_failed", "no").AsFault())
-	if len(reported) != 1 {
-		t.Fatal("a fault was not reported")
+	p.Write(httptest.NewRecorder(), request(), httpx.Unavailable(fmt.Errorf("%w: %w", errUnavailable, errors.New("disk gone"))))
+	if len(reported) != 1 || !strings.Contains(reported[0].Error(), "disk gone") {
+		t.Fatalf("reported %v, want the 503 with its cause", reported)
+	}
+}
+
+func TestTheCauseStaysOutOfTheResponse(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	got := problems(nil).Write(rec, request(), httpx.Unavailable(fmt.Errorf("%w: %w", errUnavailable, errors.New("disk gone at /secret"))))
+
+	if got != http.StatusServiceUnavailable || strings.Contains(rec.Body.String(), "secret") {
+		t.Fatalf("status %d: %s", got, rec.Body)
 	}
 }
 
 func TestWriteNeverDescribesAnUnclassifiedFailure(t *testing.T) {
 	var reported []error
-	problems := httpx.NewProblems(httpx.WithReporter(func(_ *http.Request, err error) {
-		reported = append(reported, err)
-	}))
 	rec := httptest.NewRecorder()
 
-	got := problems.Write(rec, request(), errors.New(`pq: password authentication failed for user "cka_sim"`))
+	got := problems(&reported).Write(rec, request(), errors.New(`pq: password authentication failed for user "cka_sim"`))
 
 	if got != http.StatusInternalServerError {
 		t.Fatalf("status = %d", got)
@@ -78,9 +78,19 @@ func TestWriteNeverDescribesAnUnclassifiedFailure(t *testing.T) {
 	}
 }
 
+func TestAStatusOnAPlainErrorIsStillAnInternalError(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	got := problems(nil).Write(rec, request(), httpx.NotFound(errors.New("open /secret: no such file")))
+
+	if got != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "secret") {
+		t.Fatalf("status %d: %s", got, rec.Body)
+	}
+}
+
 func TestHandleAnswersAReturnedError(t *testing.T) {
-	handler := httpx.NewProblems().Handle(func(http.ResponseWriter, *http.Request) error {
-		return domainerr.NotFound("task_not_found", "no such task")
+	handler := problems(nil).Handle(func(http.ResponseWriter, *http.Request) error {
+		return httpx.NotFound(errNotFound)
 	})
 	rec := httptest.NewRecorder()
 
@@ -95,7 +105,7 @@ func TestHandleAnswersAReturnedError(t *testing.T) {
 }
 
 func TestHandleLeavesASuccessfulHandlerAlone(t *testing.T) {
-	handler := httpx.NewProblems().Handle(func(w http.ResponseWriter, _ *http.Request) error {
+	handler := problems(nil).Handle(func(w http.ResponseWriter, _ *http.Request) error {
 		return httpx.WriteJSON(w, http.StatusCreated, map[string]int{"n": 1})
 	})
 	rec := httptest.NewRecorder()
@@ -128,16 +138,29 @@ func TestWriteAnswersARefusedRequest(t *testing.T) {
 
 func TestParseProblemReadsWhatWriteWrote(t *testing.T) {
 	rec := httptest.NewRecorder()
-	httpx.NewProblems().Write(rec, request(), domainerr.Conflict("script_running", "a script is already running"))
+	problems(nil).Write(rec, request(), httpx.NotFound(errNotFound))
 
 	p, ok := httpx.ParseProblem(rec.Body.Bytes())
 
-	if !ok || p.Code != "script_running" || p.Detail != "a script is already running" {
+	if !ok || p.Code != "task_not_found" || p.Detail != "no task has that id" {
 		t.Fatalf("problem = %+v, ok = %v", p, ok)
 	}
 	if _, ok := httpx.ParseProblem([]byte("plain text")); ok {
 		t.Fatal("plain text parsed as a problem")
 	}
+}
+
+var (
+	errNotFound    = domainerr.New("task_not_found", "no task has that id")
+	errUnavailable = domainerr.New("tasks_unavailable", "the tasks can't be loaded right now")
+)
+
+func problems(reported *[]error) httpx.Problems {
+	return httpx.NewProblems(httpx.WithReporter(func(_ *http.Request, err error) {
+		if reported != nil {
+			*reported = append(*reported, err)
+		}
+	}))
 }
 
 func request() *http.Request {

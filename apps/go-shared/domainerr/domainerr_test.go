@@ -8,24 +8,27 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/domainerr"
 )
 
-var errUnavailable = domainerr.Conflict(
-	"lab_unavailable", "the lab is not reachable right now").AsFault()
+var errNotFound = domainerr.New("task_not_found", "no task has that id")
 
-func TestDomainErrorsExposeTheirCodeToAReporter(t *testing.T) {
-	var coded interface{ ErrorCode() string }
+func TestAWrappedErrorStillMatchesItsSentinel(t *testing.T) {
+	err := fmt.Errorf("%w: %w", errNotFound, errors.New("disk gone"))
 
-	if !errors.As(fmt.Errorf("reach the lab: %w", errUnavailable), &coded) {
-		t.Fatal("a wrapped domain error does not satisfy the reporter's interface")
-	}
-	if coded.ErrorCode() != "lab_unavailable" {
-		t.Fatalf("code = %q", coded.ErrorCode())
+	var found *domainerr.Error
+	if !errors.Is(err, errNotFound) || !errors.As(err, &found) || found.Code != "task_not_found" {
+		t.Fatalf("err = %v, found = %+v", err, found)
 	}
 }
 
-func TestDetailsDoNotChangeTheCode(t *testing.T) {
-	located := errUnavailable.With(map[string]any{"attempt": 3})
+func TestErrorsWithTheSameCodeAreStillDifferentSentinels(t *testing.T) {
+	other := domainerr.New("task_not_found", "no task has that id")
 
-	if located.ErrorCode() != errUnavailable.ErrorCode() {
-		t.Fatalf("code = %q, want %q", located.ErrorCode(), errUnavailable.ErrorCode())
+	if errors.Is(other, errNotFound) {
+		t.Fatal("a second error with the same code matched the first sentinel")
+	}
+}
+
+func TestTheTextIsTheCodeAndMessage(t *testing.T) {
+	if got := errNotFound.Error(); got != "task_not_found: no task has that id" {
+		t.Fatalf("Error() = %q", got)
 	}
 }

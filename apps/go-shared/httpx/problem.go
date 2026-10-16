@@ -11,29 +11,12 @@ import (
 const ProblemContentType = "application/problem+json"
 
 type Problem struct {
-	Type     string         `json:"type"`
-	Title    string         `json:"title"`
-	Status   int            `json:"status"`
-	Code     string         `json:"code"`
-	Detail   string         `json:"detail,omitempty"`
-	Instance string         `json:"instance"`
-	Details  map[string]any `json:"details,omitempty"`
-}
-
-type kindResponse struct {
-	status int
-	title  string
-}
-
-var kinds = map[domainerr.Kind]kindResponse{
-	domainerr.KindNotFound:      {http.StatusNotFound, "Not found"},
-	domainerr.KindConflict:      {http.StatusConflict, "Conflict"},
-	domainerr.KindUnauthorized:  {http.StatusUnauthorized, "Unauthorized"},
-	domainerr.KindForbidden:     {http.StatusForbidden, "Forbidden"},
-	domainerr.KindGone:          {http.StatusGone, "Gone"},
-	domainerr.KindUnavailable:   {http.StatusServiceUnavailable, "Service unavailable"},
-	domainerr.KindUnprocessable: {http.StatusUnprocessableEntity, "Unprocessable"},
-	domainerr.KindTooMany:       {http.StatusTooManyRequests, "Too many requests"},
+	Type     string `json:"type"`
+	Title    string `json:"title"`
+	Status   int    `json:"status"`
+	Code     string `json:"code"`
+	Detail   string `json:"detail,omitempty"`
+	Instance string `json:"instance"`
 }
 
 type Reporter func(r *http.Request, err error)
@@ -83,7 +66,25 @@ func TooLarge(detail string) error {
 	return &RequestError{http.StatusRequestEntityTooLarge, "request_body_too_large", "Payload too large", detail}
 }
 
-// An unclassified error is a 500 whose message never reaches the caller: nobody decided it was safe to show.
+type StatusError struct {
+	status int
+	err    error
+}
+
+func (e *StatusError) Error() string { return e.err.Error() }
+
+func (e *StatusError) Unwrap() error { return e.err }
+
+func NotFound(err error) error {
+	return &StatusError{http.StatusNotFound, err}
+}
+
+func Unavailable(err error) error {
+	return &StatusError{http.StatusServiceUnavailable, err}
+}
+
+// A domain error shows its code and message only once a handler gives it a status; anything else is a 500 that
+// never describes itself, because nobody decided it was safe to show.
 func (p Problems) Write(w http.ResponseWriter, r *http.Request, err error) int {
 	if requestError, ok := errors.AsType[*RequestError](err); ok {
 		return p.write(w, r, Problem{
@@ -93,23 +94,22 @@ func (p Problems) Write(w http.ResponseWriter, r *http.Request, err error) int {
 			Detail: requestError.detail,
 		})
 	}
-	var domainError *domainerr.Error
-	if !errors.As(err, &domainError) {
+	statusError, ok := errors.AsType[*StatusError](err)
+	if !ok {
 		return p.Internal(w, r, err)
 	}
-	if domainError.Fault {
+	domainError, ok := errors.AsType[*domainerr.Error](statusError)
+	if !ok {
+		return p.Internal(w, r, err)
+	}
+	if statusError.status >= http.StatusInternalServerError {
 		p.notify(r, err)
 	}
-	mapped, ok := kinds[domainError.Kind]
-	if !ok {
-		mapped = kindResponse{http.StatusInternalServerError, "Internal server error"}
-	}
 	return p.write(w, r, Problem{
-		Title:   mapped.title,
-		Status:  mapped.status,
-		Code:    domainError.Code,
-		Detail:  domainError.Message,
-		Details: domainError.Details,
+		Title:  http.StatusText(statusError.status),
+		Status: statusError.status,
+		Code:   domainError.Code,
+		Detail: domainError.Message,
 	})
 }
 

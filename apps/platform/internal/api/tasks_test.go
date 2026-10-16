@@ -48,6 +48,40 @@ func TestListsAnEmptyCatalogAsAnEmptyArray(t *testing.T) {
 	}
 }
 
+func TestFiltersTheListByDomainAndTopic(t *testing.T) {
+	netpol := tasks.Task{ID: "nw-netpol", Title: "Lock down", Domain: tasks.Networking, Topics: []string{"networkpolicy"}, Weight: 4, Host: "node-1"}
+	dns := tasks.Task{ID: "nw-dns", Title: "Fix DNS", Domain: tasks.Networking, Topics: []string{"dns"}, Weight: 4, Host: "node-1"}
+
+	status, body := call(t, newAPI(wlScale, netpol, dns), http.MethodGet, "/api/tasks?domain=networking&topic=networkpolicy&topic=egress")
+
+	if status != http.StatusOK || !strings.Contains(body, `"id":"nw-netpol"`) ||
+		strings.Contains(body, `"id":"nw-dns"`) || strings.Contains(body, `"id":"wl-scale"`) {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestAFilterMatchingNothingListsAnEmptyArray(t *testing.T) {
+	status, body := call(t, newAPI(wlScale), http.MethodGet, "/api/tasks?domain=storage")
+
+	if status != http.StatusOK || strings.TrimSpace(body) != "[]" {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestABadFilterIsABadRequest(t *testing.T) {
+	for _, tc := range []struct{ query, code string }{
+		{"domain=security", "unknown_domain"},
+		{"domain=", "unknown_domain"},
+		{"topic=Network%20Policy", "malformed_topic"},
+	} {
+		status, body := call(t, newAPI(wlScale), http.MethodGet, "/api/tasks?"+tc.query)
+
+		if status != http.StatusBadRequest || !strings.Contains(body, `"code":"`+tc.code+`"`) {
+			t.Errorf("%s: status %d: %s", tc.query, status, body)
+		}
+	}
+}
+
 func TestTasksCannotBePosted(t *testing.T) {
 	status, _ := call(t, newAPI(wlScale), http.MethodPost, "/api/tasks")
 

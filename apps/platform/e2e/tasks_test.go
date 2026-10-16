@@ -15,7 +15,7 @@ func TestTheTaskListHasEveryTaskInTheCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	listed := listTasks(t)
+	listed := listTasks(t, "")
 
 	if len(listed) != len(files) || len(listed) == 0 {
 		t.Errorf("listed %d tasks, the catalog has %d task.md files", len(listed), len(files))
@@ -26,7 +26,7 @@ func TestTheTaskListHasEveryTaskInTheCatalog(t *testing.T) {
 }
 
 func TestATaskIsListedWithWhatThePageShows(t *testing.T) {
-	listed := listTasks(t)
+	listed := listTasks(t, "")
 
 	i := slices.IndexFunc(listed, func(task listedTask) bool { return task.ID == "wl-scale" })
 	if i < 0 {
@@ -56,6 +56,51 @@ func TestTheTaskListNeverCarriesTheQuestion(t *testing.T) {
 		}
 		if string(task["topics"]) == "null" {
 			t.Errorf("task %s has null topics, want an array", task["id"])
+		}
+	}
+}
+
+func TestTheListFiltersByDomainAndTopic(t *testing.T) {
+	listed := listTasks(t, "?domain=networking&topic=networkpolicy")
+
+	if len(listed) == 0 {
+		t.Fatal("no networking task has the topic networkpolicy")
+	}
+	for _, task := range listed {
+		if task.Domain != "networking" || !slices.Contains(task.Topics, "networkpolicy") {
+			t.Errorf("%s does not match: %+v", task.ID, task)
+		}
+	}
+}
+
+func TestRepeatedDomainsKeepTasksInAnyOfThem(t *testing.T) {
+	listed := listTasks(t, "?domain=networking&domain=storage")
+
+	seen := map[string]bool{}
+	for _, task := range listed {
+		seen[task.Domain] = true
+	}
+	if len(seen) != 2 || !seen["networking"] || !seen["storage"] {
+		t.Errorf("domains listed: %v", seen)
+	}
+}
+
+func TestATopicNoTaskHasListsNothing(t *testing.T) {
+	if listed := listTasks(t, "?topic=no-such-topic"); len(listed) != 0 {
+		t.Errorf("listed %d tasks", len(listed))
+	}
+}
+
+func TestABadFilterIsRefused(t *testing.T) {
+	for _, tc := range []struct{ query, code string }{
+		{"?domain=security", "unknown_domain"},
+		{"?domain=Networking", "unknown_domain"},
+		{"?topic=Network%20Policy", "malformed_topic"},
+	} {
+		status, body := request(t, http.MethodGet, "/api/tasks"+tc.query, nil)
+
+		if status != http.StatusBadRequest || !strings.Contains(string(body), `"code":"`+tc.code+`"`) {
+			t.Errorf("%s: status %d: %s", tc.query, status, body)
 		}
 	}
 }
@@ -102,7 +147,7 @@ func TestATaskOpensWithItsQuestion(t *testing.T) {
 }
 
 func TestEveryListedTaskOpensWithAQuestion(t *testing.T) {
-	for _, task := range listTasks(t) {
+	for _, task := range listTasks(t, "") {
 		status, body := request(t, http.MethodGet, "/api/tasks/"+task.ID, nil)
 		var got taskDetail
 		if err := json.Unmarshal(body, &got); status != http.StatusOK || err != nil || strings.TrimSpace(got.Question) == "" {
@@ -146,7 +191,7 @@ func TestATaskShowsItsSolutionWhenAsked(t *testing.T) {
 }
 
 func TestEveryListedTaskHasASolution(t *testing.T) {
-	for _, task := range listTasks(t) {
+	for _, task := range listTasks(t, "") {
 		status, body := request(t, http.MethodGet, "/api/tasks/"+task.ID+"/solution", nil)
 		var got solution
 		if err := json.Unmarshal(body, &got); status != http.StatusOK || err != nil || strings.TrimSpace(got.Solution) == "" {
@@ -182,9 +227,9 @@ type solution struct {
 	Solution string `json:"solution"`
 }
 
-func listTasks(t *testing.T) []listedTask {
+func listTasks(t *testing.T, query string) []listedTask {
 	t.Helper()
-	status, body := request(t, http.MethodGet, "/api/tasks", nil)
+	status, body := request(t, http.MethodGet, "/api/tasks"+query, nil)
 	if status != http.StatusOK {
 		t.Fatalf("status %d: %s", status, body)
 	}

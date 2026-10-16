@@ -75,6 +75,10 @@ func (e *StatusError) Error() string { return e.err.Error() }
 
 func (e *StatusError) Unwrap() error { return e.err }
 
+func BadRequest(err error) error {
+	return &StatusError{http.StatusBadRequest, err}
+}
+
 func NotFound(err error) error {
 	return &StatusError{http.StatusNotFound, err}
 }

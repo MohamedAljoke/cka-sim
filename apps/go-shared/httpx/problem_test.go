@@ -25,6 +25,21 @@ func TestADomainErrorWithAStatusShowsItsCodeAndMessage(t *testing.T) {
 	}
 }
 
+func TestABadRequestShowsTheDomainErrorAndIsNotReported(t *testing.T) {
+	var reported []error
+	rec := httptest.NewRecorder()
+
+	got := problems(&reported).Write(rec, request(), httpx.BadRequest(fmt.Errorf("%w: %q", errUnknownDomain, "security")))
+
+	p := writtenProblem(t, rec)
+	if got != http.StatusBadRequest || p.Title != "Bad Request" || p.Code != "unknown_domain" || p.Detail != "no such domain" {
+		t.Fatalf("status %d, problem %+v", got, p)
+	}
+	if len(reported) != 0 {
+		t.Fatalf("a refusal was reported: %v", reported)
+	}
+}
+
 func TestADomainErrorWithoutAStatusIsAnInternalErrorThatHidesItself(t *testing.T) {
 	rec := httptest.NewRecorder()
 
@@ -151,8 +166,9 @@ func TestParseProblemReadsWhatWriteWrote(t *testing.T) {
 }
 
 var (
-	errNotFound    = domainerr.New("task_not_found", "no task has that id")
-	errUnavailable = domainerr.New("tasks_unavailable", "the tasks can't be loaded right now")
+	errNotFound      = domainerr.New("task_not_found", "no task has that id")
+	errUnavailable   = domainerr.New("tasks_unavailable", "the tasks can't be loaded right now")
+	errUnknownDomain = domainerr.New("unknown_domain", "no such domain")
 )
 
 func problems(reported *[]error) httpx.Problems {

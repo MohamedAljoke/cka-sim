@@ -34,6 +34,11 @@ var Titles = map[Domain]string{
 	Storage:         "Storage",
 }
 
+func (d Domain) Known() bool {
+	_, ok := Weights[d]
+	return ok
+}
+
 type Order string
 
 const Last Order = "last"
@@ -71,7 +76,7 @@ func (t Task) Validate() error {
 	case t.Order != "" && t.Order != Last:
 		return errors.New(`order must be empty or "last"`)
 	}
-	if _, ok := Weights[t.Domain]; !ok {
+	if !t.Domain.Known() {
 		return fmt.Errorf("unknown domain %q", t.Domain)
 	}
 	for _, topic := range t.Topics {

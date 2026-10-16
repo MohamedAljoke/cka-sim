@@ -13,8 +13,23 @@ export type TaskDetail = Task & {
   question: string
 }
 
-export async function listTasks(signal?: AbortSignal): Promise<Task[]> {
-  return (await call('GET', '/api/tasks', signal)).json()
+export type Filter = {
+  domains: string[]
+  topics: string[]
+}
+
+export const noFilter: Filter = { domains: [], topics: [] }
+
+export function filterQuery(filter: Filter): string {
+  const params = new URLSearchParams()
+  for (const domain of filter.domains) params.append('domain', domain)
+  for (const topic of filter.topics) params.append('topic', topic)
+  return params.toString()
+}
+
+export async function listTasks(filter: Filter, signal?: AbortSignal): Promise<Task[]> {
+  const query = filterQuery(filter)
+  return (await call('GET', query ? `/api/tasks?${query}` : '/api/tasks', signal)).json()
 }
 
 export async function getTask(id: string, signal?: AbortSignal): Promise<TaskDetail> {

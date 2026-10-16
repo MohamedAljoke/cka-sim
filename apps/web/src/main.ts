@@ -12,7 +12,7 @@ function show() {
   window.scrollTo(0, 0)
   const route = parseRoute(location.hash)
   if (route.page === 'task') showTask(pane, route.id, leaving.signal)
-  else showTasks(pane, leaving.signal)
+  else showTasks(pane, route.filter, leaving.signal)
 }
 
 window.addEventListener('hashchange', show)

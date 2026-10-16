@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"net/url"
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 
@@ -30,8 +31,10 @@ type solutionView struct {
 }
 
 func (a *api) getTasks(w http.ResponseWriter, r *http.Request) error {
-	all, err := a.listTasks.Execute(r.Context())
+	all, err := a.listTasks.Execute(r.Context(), filterOf(r.URL.Query()))
 	switch {
+	case errors.Is(err, tasks.ErrUnknownDomain), errors.Is(err, tasks.ErrMalformedTopic):
+		return httpx.BadRequest(err)
 	case errors.Is(err, tasks.ErrUnavailable):
 		return httpx.Unavailable(err)
 	case err != nil:
@@ -68,6 +71,14 @@ func (a *api) getTaskSolution(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, solutionView{Solution: solution})
+}
+
+func filterOf(query url.Values) tasks.Filter {
+	filter := tasks.Filter{Topics: query["topic"]}
+	for _, d := range query["domain"] {
+		filter.Domains = append(filter.Domains, tasks.Domain(d))
+	}
+	return filter
 }
 
 func newTaskView(t tasks.Task) taskView {

@@ -1,0 +1,128 @@
+:root {
+  --paper: oklch(97.4% 0.011 85);
+  --card: oklch(99.2% 0.005 85);
+  --ink: oklch(25% 0.035 265);
+  --ink-2: oklch(41% 0.03 265);
+  --rule: oklch(86.5% 0.018 85);
+  --accent: oklch(57% 0.18 33);
+  --accent-wash: oklch(92.5% 0.045 33);
+  --chip: oklch(94.8% 0.015 85);
+  --bad: oklch(52% 0.18 28);
+  --radius: 8px;
+  color-scheme: light;
+  font: 400 16px/1.55 'Segoe UI', system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: oklch(20% 0.015 265);
+    --card: oklch(24% 0.018 265);
+    --ink: oklch(93% 0.01 85);
+    --ink-2: oklch(75% 0.015 85);
+    --rule: oklch(34% 0.02 265);
+    --accent: oklch(70% 0.15 33);
+    --accent-wash: oklch(32% 0.06 33);
+    --chip: oklch(30% 0.02 265);
+    --bad: oklch(70% 0.16 28);
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.brand {
+  font-weight: 600;
+}
+
+.brand-mark {
+  color: var(--accent);
+  margin-right: 8px;
+}
+
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+}
+
+.card h2 {
+  margin: 0 0 4px;
+}
+
+.muted {
+  color: var(--ink-2);
+}
+
+.error {
+  color: var(--bad);
+}
+
+.action {
+  font: inherit;
+  padding: 6px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.task-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+
+.task {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.task-title {
+  font-weight: 500;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  font-size: 0.8rem;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--ink-2);
+}
+
+.chip.domain {
+  background: var(--accent-wash);
+  color: var(--accent);
+}

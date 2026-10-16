@@ -46,15 +46,17 @@ func (a *api) getTasks(w http.ResponseWriter, r *http.Request) error {
 	case err != nil:
 		return err
 	}
+
 	views := make([]taskView, len(all))
 	for i, t := range all {
 		views[i] = newTaskView(t)
 	}
+
 	return httpx.WriteJSON(w, http.StatusOK, views)
 }
 
 func (a *api) getTaskByID(w http.ResponseWriter, r *http.Request) error {
-	t, err := a.tasks.Get.Execute(r.Context(), r.PathValue("id"))
+	task, err := a.tasks.Get.Execute(r.Context(), r.PathValue("id"))
 	switch {
 	case errors.Is(err, tasks.ErrNotFound):
 		return httpx.NotFound(err)
@@ -63,7 +65,8 @@ func (a *api) getTaskByID(w http.ResponseWriter, r *http.Request) error {
 	case err != nil:
 		return err
 	}
-	return httpx.WriteJSON(w, http.StatusOK, taskDetailView{taskView: newTaskView(t), Question: t.Question})
+
+	return httpx.WriteJSON(w, http.StatusOK, taskDetailView{taskView: newTaskView(task), Question: task.Question})
 }
 
 func (a *api) getTaskSolution(w http.ResponseWriter, r *http.Request) error {
@@ -76,6 +79,7 @@ func (a *api) getTaskSolution(w http.ResponseWriter, r *http.Request) error {
 	case err != nil:
 		return err
 	}
+
 	return httpx.WriteJSON(w, http.StatusOK, solutionView{Solution: solution})
 }
 
@@ -84,22 +88,24 @@ func filterOf(query url.Values) tasks.Filter {
 	for _, d := range query["domain"] {
 		filter.Domains = append(filter.Domains, tasks.Domain(d))
 	}
+
 	return filter
 }
 
-func newTaskView(t tasks.Task) taskView {
-	topics := t.Topics
+func newTaskView(task tasks.Task) taskView {
+	topics := task.Topics
 	if topics == nil {
 		topics = []string{}
 	}
+
 	return taskView{
-		ID:          t.ID,
-		Title:       t.Title,
-		Domain:      t.Domain,
-		DomainTitle: tasks.Titles[t.Domain],
+		ID:          task.ID,
+		Title:       task.Title,
+		Domain:      task.Domain,
+		DomainTitle: tasks.Titles[task.Domain],
 		Topics:      topics,
-		Weight:      t.Weight,
-		Host:        t.Host,
-		Order:       t.Order,
+		Weight:      task.Weight,
+		Host:        task.Host,
+		Order:       task.Order,
 	}
 }

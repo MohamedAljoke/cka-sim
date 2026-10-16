@@ -20,5 +20,6 @@ func (uc *GetLab) Execute(ctx context.Context) (labs.Lab, error) {
 	if err != nil {
 		return labs.Lab{}, fmt.Errorf("%w: %w", labs.ErrUnavailable, err)
 	}
+
 	return lab, nil
 }

@@ -7,8 +7,9 @@ PLATFORM := apps/platform
 SHARED := apps/go-shared
 WEB := apps/web
 BUF := go run github.com/bufbuild/buf/cmd/buf@v1.74.0
+GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.0
 
-.PHONY: help serve web dev test e2e proto boundaries
+.PHONY: help serve web dev test e2e lint proto boundaries
 
 help:
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
@@ -34,6 +35,9 @@ test: boundaries $(WEB)/node_modules ## vet and test the Go code, type-check the
 
 e2e: ## run the platform's end-to-end tests against the real server binary
 	cd $(PLATFORM) && go test ./e2e -count=1 -v
+
+lint: ## lint every Go module with the rules in .golangci.yml
+	@for mod in apps/*/go.mod; do (cd $$(dirname $$mod) && $(GOLANGCI_LINT) run ./...) || exit 1; done
 
 proto: ## lint the contracts in apps/go-shared/contract and regenerate their Go code
 	cd $(SHARED) && $(BUF) lint && $(BUF) generate

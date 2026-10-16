@@ -30,6 +30,7 @@ func (p *Provider) Get(ctx context.Context) (labs.Lab, error) {
 	if err != nil {
 		return labs.Lab{}, refusal(err)
 	}
+
 	return labOf(res.GetCluster())
 }
 
@@ -38,6 +39,7 @@ func (p *Provider) Start(ctx context.Context) (labs.Lab, error) {
 	if err != nil {
 		return labs.Lab{}, refusal(err)
 	}
+
 	return labOf(res.GetCluster())
 }
 
@@ -46,6 +48,7 @@ func (p *Provider) Stop(ctx context.Context) (labs.Lab, error) {
 	if err != nil {
 		return labs.Lab{}, refusal(err)
 	}
+
 	return labOf(res.GetCluster())
 }
 
@@ -53,6 +56,7 @@ func refusal(err error) error {
 	if connect.CodeOf(err) == connect.CodeFailedPrecondition {
 		return fmt.Errorf("%w: %w", labs.ErrBusy, err)
 	}
+
 	return err
 }
 
@@ -64,17 +68,20 @@ var states = map[labv1.ClusterState]labs.State{
 	labv1.ClusterState_CLUSTER_STATE_FAILED:   labs.Failed,
 }
 
-func labOf(c *labv1.Cluster) (labs.Lab, error) {
-	state, ok := states[c.GetState()]
+func labOf(cluster *labv1.Cluster) (labs.Lab, error) {
+	state, ok := states[cluster.GetState()]
 	if !ok {
-		return labs.Lab{}, fmt.Errorf("the agent answered an unknown cluster state %v", c.GetState())
+		return labs.Lab{}, fmt.Errorf("the agent answered an unknown cluster state %v", cluster.GetState())
 	}
-	lab := labs.Lab{State: state, Step: c.GetStep(), Error: c.GetError()}
-	if c.GetStarted() != nil {
-		lab.StartedAt = c.GetStarted().AsTime()
+
+	lab := labs.Lab{State: state, Step: cluster.GetStep(), Error: cluster.GetError()}
+	if cluster.GetStarted() != nil {
+		lab.StartedAt = cluster.GetStarted().AsTime()
 	}
-	if c.GetReady() != nil {
-		lab.ReadyAt = c.GetReady().AsTime()
+
+	if cluster.GetReady() != nil {
+		lab.ReadyAt = cluster.GetReady().AsTime()
 	}
+
 	return lab, nil
 }

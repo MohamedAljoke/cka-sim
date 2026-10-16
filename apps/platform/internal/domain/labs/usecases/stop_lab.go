@@ -24,5 +24,6 @@ func (uc *StopLab) Execute(ctx context.Context) (labs.Lab, error) {
 	case err != nil:
 		return labs.Lab{}, fmt.Errorf("%w: %w", labs.ErrUnavailable, err)
 	}
+
 	return lab, nil
 }

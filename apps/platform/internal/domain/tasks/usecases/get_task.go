@@ -17,12 +17,14 @@ func NewGetTask(repo TaskRepository) *GetTask {
 }
 
 func (uc *GetTask) Execute(ctx context.Context, id string) (tasks.Task, error) {
-	t, err := uc.repo.Get(ctx, id)
+	task, err := uc.repo.Get(ctx, id)
 	if errors.Is(err, tasks.ErrNotFound) {
 		return tasks.Task{}, err
 	}
+
 	if err != nil {
 		return tasks.Task{}, fmt.Errorf("%w: %w", tasks.ErrUnavailable, err)
 	}
-	return t, nil
+
+	return task, nil
 }

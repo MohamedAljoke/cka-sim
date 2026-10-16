@@ -1,7 +1,7 @@
 package api
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
@@ -18,13 +18,14 @@ type api struct {
 type handleFunc func(pattern string, h httpx.Handler)
 
 func New(tasks usecases.UseCases, labs labusecases.UseCases) http.Handler {
-	a := &api{tasks: tasks, labs: labs}
+	handlers := &api{tasks: tasks, labs: labs}
 	problems := httpx.NewProblems(httpx.WithReporter(func(r *http.Request, err error) {
-		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
+		slog.Error("request failed", "method", r.Method, "path", r.URL.Path, "err", err)
 	}))
 	mux := http.NewServeMux()
 	handle := func(pattern string, h httpx.Handler) { mux.HandleFunc(pattern, problems.Handle(h)) }
-	a.taskRoutes(handle)
-	a.labRoutes(handle)
+	handlers.taskRoutes(handle)
+	handlers.labRoutes(handle)
+
 	return http.NewCrossOriginProtection().Handler(mux)
 }

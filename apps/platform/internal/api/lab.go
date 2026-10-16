@@ -32,6 +32,7 @@ func (a *api) getLabStatus(w http.ResponseWriter, r *http.Request) error {
 	case err != nil:
 		return err
 	}
+
 	return httpx.WriteJSON(w, http.StatusOK, newLabView(lab))
 }
 
@@ -45,6 +46,7 @@ func (a *api) postLab(w http.ResponseWriter, r *http.Request) error {
 	case err != nil:
 		return err
 	}
+
 	return httpx.WriteJSON(w, http.StatusAccepted, newLabView(lab))
 }
 
@@ -58,6 +60,7 @@ func (a *api) deleteLab(w http.ResponseWriter, r *http.Request) error {
 	case err != nil:
 		return err
 	}
+
 	return httpx.WriteJSON(w, http.StatusAccepted, newLabView(lab))
 }
 

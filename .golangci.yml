@@ -1,0 +1,84 @@
+version: "2"
+run:
+  concurrency: 4
+  timeout: 5m
+  issues-exit-code: 2
+  tests: false
+  allow-parallel-runners: true
+linters:
+  default: all
+  disable:
+    - depguard
+    - dupword
+    - embeddedstructfieldcheck
+    - err113
+    - exhaustruct
+    - funcorder
+    - funlen
+    - gochecknoglobals
+    - gochecknoinits
+    - godoclint
+    - godox
+    # Deprecated since golangci-lint v2.12.0; `gomodguard_v2` replaces it and stays enabled.
+    - gomodguard
+    - gosmopolitan
+    - inamedparam
+    - ireturn
+    - mnd
+    - nilnil
+    - nlreturn
+    - noinlineerr
+    - nonamedreturns
+    - perfsprint
+    - recvcheck
+    - tagalign
+    - tagliatelle
+    - wrapcheck
+    - wsl
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+    gocognit:
+      min-complexity: 20
+    gocyclo:
+      min-complexity: 20
+    cyclop:
+      max-complexity: 20
+    gosec:
+      severity: low
+      confidence: high
+      concurrency: 12
+    varnamelen:
+      ignore-decls:
+        - w http.ResponseWriter
+      ignore-names:
+        - i
+        - err
+        - id
+        - tx
+        - db
+        - wg
+        - r
+        - ok
+        - k
+        - s
+        - p
+        - d
+        - m
+        - fn
+    gomoddirectives:
+      replace-local: true
+    nolintlint:
+      allow-unused: true
+      require-explanation: true
+      require-specific: true
+    revive:
+      rules:
+        - name: unused-parameter
+          disabled: true
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
+      disable:
+        - assign

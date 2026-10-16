@@ -76,13 +76,16 @@ func (t Task) Validate() error {
 	case t.Order != "" && t.Order != Last:
 		return errors.New(`order must be empty or "last"`)
 	}
+
 	if !t.Domain.Known() {
 		return fmt.Errorf("unknown domain %q", t.Domain)
 	}
+
 	for _, topic := range t.Topics {
 		if !kebab.MatchString(topic) {
 			return fmt.Errorf("topic %q must be lowercase-kebab, like rolling-update", topic)
 		}
 	}
+
 	return nil
 }

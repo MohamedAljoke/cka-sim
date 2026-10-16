@@ -36,6 +36,7 @@ func NewProblems(options ...Option) Problems {
 	for _, option := range options {
 		option(&problems)
 	}
+
 	return problems
 }
 
@@ -106,17 +107,21 @@ func (p Problems) Write(w http.ResponseWriter, r *http.Request, err error) int {
 			Detail: requestError.detail,
 		})
 	}
+
 	statusError, ok := errors.AsType[*StatusError](err)
 	if !ok {
 		return p.Internal(w, r, err)
 	}
+
 	domainError, ok := errors.AsType[*domainerr.Error](statusError)
 	if !ok {
 		return p.Internal(w, r, err)
 	}
+
 	if statusError.status >= http.StatusInternalServerError {
 		p.notify(r, err)
 	}
+
 	return p.write(w, r, Problem{
 		Title:  http.StatusText(statusError.status),
 		Status: statusError.status,
@@ -127,6 +132,7 @@ func (p Problems) Write(w http.ResponseWriter, r *http.Request, err error) int {
 
 func (p Problems) Internal(w http.ResponseWriter, r *http.Request, err error) int {
 	p.notify(r, err)
+
 	return p.write(w, r, Problem{
 		Title:  "Internal server error",
 		Status: http.StatusInternalServerError,
@@ -138,11 +144,14 @@ func (p Problems) Internal(w http.ResponseWriter, r *http.Request, err error) in
 func (p Problems) write(w http.ResponseWriter, r *http.Request, problem Problem) int {
 	problem.Type = "about:blank"
 	problem.Instance = r.URL.Path
+
 	w.Header().Set("Content-Type", ProblemContentType)
 	w.WriteHeader(problem.Status)
+
 	if err := encode(w, problem); err != nil {
 		p.notify(r, err)
 	}
+
 	return problem.Status
 }
 
@@ -157,5 +166,6 @@ func ParseProblem(body []byte) (Problem, bool) {
 	if err := json.Unmarshal(body, &problem); err != nil || problem.Code == "" {
 		return Problem{}, false
 	}
+
 	return problem, true
 }

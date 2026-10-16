@@ -71,7 +71,7 @@ docs-index: db ## embed the Kubernetes docs for search_docs (spends Vertex credi
 	git -C $(DOCS_DIR) fetch --depth 1 origin $(DOCS_REF) && git -C $(DOCS_DIR) checkout -q FETCH_HEAD
 	cd $(PLATFORM) && $(DOCS_ENV) go run ./cmd/docs index -dir $(DOCS_DIR) -ref $$(git -C $(DOCS_DIR) rev-parse HEAD) $(DOCS_FLAGS)
 
-docs-eval: ## score search_docs on CKA-style questions, keyword vs vector vs hybrid (spends a little Vertex credit)
+docs-eval: ## score search_docs on hits and on staying quiet (first run fills the embedding cache; reruns need no Vertex)
 	cd $(PLATFORM) && $(DOCS_ENV) go run ./cmd/docs eval -dir $(DOCS_DIR)
 
 test: boundaries ## vet and test the Go code

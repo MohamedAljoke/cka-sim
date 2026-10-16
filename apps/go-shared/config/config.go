@@ -72,10 +72,19 @@ func set(lookup Lookup, field reflect.Value, definition reflect.StructField, key
 		if err != nil {
 			return fmt.Errorf("%s must be a whole number", key)
 		}
-		if err := withinBounds(definition, key, parsed); err != nil {
+		if err := withinBounds(definition, key, float64(parsed)); err != nil {
 			return err
 		}
 		field.SetInt(int64(parsed))
+	case reflect.Float64:
+		parsed, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			return fmt.Errorf("%s must be a number such as 0.65", key)
+		}
+		if err := withinBounds(definition, key, parsed); err != nil {
+			return err
+		}
+		field.SetFloat(parsed)
 	case reflect.Int64:
 		if field.Type() != reflect.TypeFor[time.Duration]() {
 			return fmt.Errorf("%s: config cannot load into a %s", key, field.Kind())
@@ -107,23 +116,23 @@ func withinLength(definition reflect.StructField, key, value string) error {
 	return nil
 }
 
-func withinBounds(definition reflect.StructField, key string, value int) error {
+func withinBounds(definition reflect.StructField, key string, value float64) error {
 	if raw, ok := definition.Tag.Lookup("min"); ok {
-		bound, err := strconv.Atoi(raw)
+		bound, err := strconv.ParseFloat(raw, 64)
 		if err != nil {
 			return fmt.Errorf("%s has an unreadable min tag %q", key, raw)
 		}
 		if value < bound {
-			return fmt.Errorf("%s must be at least %d", key, bound)
+			return fmt.Errorf("%s must be at least %g", key, bound)
 		}
 	}
 	if raw, ok := definition.Tag.Lookup("max"); ok {
-		bound, err := strconv.Atoi(raw)
+		bound, err := strconv.ParseFloat(raw, 64)
 		if err != nil {
 			return fmt.Errorf("%s has an unreadable max tag %q", key, raw)
 		}
 		if value > bound {
-			return fmt.Errorf("%s must be at most %d", key, bound)
+			return fmt.Errorf("%s must be at most %g", key, bound)
 		}
 	}
 	return nil

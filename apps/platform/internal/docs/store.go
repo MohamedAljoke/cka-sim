@@ -27,9 +27,10 @@ const (
 )
 
 type Result struct {
-	Title string `json:"title"`
-	URL   string `json:"url"`
-	Text  string `json:"text"`
+	Title      string  `json:"title"`
+	URL        string  `json:"url"`
+	Text       string  `json:"text"`
+	Similarity float64 `json:"similarity"`
 }
 
 type Postgres struct {
@@ -101,7 +102,7 @@ func (p Postgres) SetMeta(ctx context.Context, key, value string) error {
 }
 
 // The keyword half ORs the query's words: a learner's question rarely has every word on the page that answers it.
-func (p Postgres) Search(ctx context.Context, vector []float32, query string, k int, mode Mode) ([]Result, error) {
+func (p Postgres) Search(ctx context.Context, vector []float32, query string, k int, mode Mode, minSimilarity float64) ([]Result, error) {
 	vectorLimit, keywordLimit := candidates, candidates
 	switch mode {
 	case ModeVector:
@@ -122,8 +123,11 @@ func (p Postgres) Search(ctx context.Context, vector []float32, query string, k 
 		), fused as (
 			select id, sum(1.0 / ($5 + rank)) as score from (select * from vec union all select * from kw) ranked group by id
 		)
-		select c.title, c.url, c.text from fused join docs.chunks c using (id) order by fused.score desc, c.id limit $6`,
-		vectorText(vector), query, vectorLimit, keywordLimit, rrfK, k)
+		select c.title, c.url, c.text, 1 - (c.embedding <=> $1::vector) as similarity
+		from fused join docs.chunks c using (id)
+		where 1 - (c.embedding <=> $1::vector) >= $7
+		order by fused.score desc, c.id limit $6`,
+		vectorText(vector), query, vectorLimit, keywordLimit, rrfK, k, minSimilarity)
 	if err != nil {
 		return nil, fmt.Errorf("search the docs: %w", err)
 	}
@@ -132,6 +136,14 @@ func (p Postgres) Search(ctx context.Context, vector []float32, query string, k 
 		return nil, fmt.Errorf("search the docs: %w", err)
 	}
 	return results, nil
+}
+
+func (p Postgres) Empty(ctx context.Context) (bool, error) {
+	var empty bool
+	if err := p.Pool.QueryRow(ctx, `select not exists (select 1 from docs.chunks)`).Scan(&empty); err != nil {
+		return false, fmt.Errorf("count the docs chunks: %w", err)
+	}
+	return empty, nil
 }
 
 func vectorText(v []float32) string {

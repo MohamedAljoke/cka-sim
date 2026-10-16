@@ -22,7 +22,8 @@ var (
 )
 
 type Store interface {
-	Search(ctx context.Context, vector []float32, query string, k int, mode Mode) ([]Result, error)
+	Search(ctx context.Context, vector []float32, query string, k int, mode Mode, minSimilarity float64) ([]Result, error)
+	Empty(ctx context.Context) (bool, error)
 }
 
 type Index interface {
@@ -32,8 +33,9 @@ type Index interface {
 }
 
 type Search struct {
-	Embedder llm.Embedder
-	Store    Store
+	Embedder      llm.Embedder
+	Store         Store
+	MinSimilarity float64
 }
 
 func (s Search) Find(ctx context.Context, query string) ([]Result, error) {
@@ -49,14 +51,18 @@ func (s Search) FindBy(ctx context.Context, query string, k int, mode Mode) ([]R
 	if err != nil {
 		return nil, domainerr.Unavailable("docs_embed", fmt.Sprintf("%s failed: %v", s.Embedder.Name(), err)).AsFault()
 	}
-	results, err := s.Store.Search(ctx, vectors[0], query, k, mode)
+	results, err := s.Store.Search(ctx, vectors[0], query, k, mode, s.MinSimilarity)
+	if err != nil || len(results) > 0 {
+		return results, err
+	}
+	empty, err := s.Store.Empty(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if len(results) == 0 && mode != ModeKeyword {
+	if empty {
 		return nil, ErrEmpty
 	}
-	return results, nil
+	return []Result{}, nil
 }
 
 type Counts struct {

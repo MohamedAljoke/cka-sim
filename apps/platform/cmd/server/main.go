@@ -50,6 +50,7 @@ type settings struct {
 	ChatDaily  int           `key:"CKA_SIM_CHAT_DAILY" default:"100" min:"1"`
 	DocsDB     string        `key:"CKA_SIM_DOCS_DATABASE_URL" default:""`
 	EmbedModel string        `key:"CKA_SIM_EMBED_MODEL" default:"gemini-embedding-001"`
+	DocsMin    float64       `key:"CKA_SIM_DOCS_MIN_SIMILARITY" default:"0.65" min:"0" max:"1"`
 }
 
 func main() {
@@ -183,7 +184,7 @@ func newDocs(ctx context.Context, cfg settings) (server.DocsSearch, func(), erro
 		pool.Close()
 		return nil, nil, err
 	}
-	return docs.Search{Embedder: embedder, Store: store}, pool.Close, nil
+	return docs.Search{Embedder: embedder, Store: store, MinSimilarity: cfg.DocsMin}, pool.Close, nil
 }
 
 var accountID = regexp.MustCompile(`^[0-9A-Za-z-]+$`)

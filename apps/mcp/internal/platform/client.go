@@ -58,9 +58,10 @@ type Inspection struct {
 }
 
 type DocsPassage struct {
-	Title string `json:"title"`
-	URL   string `json:"url"`
-	Text  string `json:"text"`
+	Title      string  `json:"title"`
+	URL        string  `json:"url"`
+	Text       string  `json:"text"`
+	Similarity float64 `json:"similarity"`
 }
 
 type DocsResults struct {

@@ -12,6 +12,7 @@ type testConfig struct {
 	CookieSecure bool          `key:"TEST_COOKIE_SECURE" default:"false"`
 	Timeout      time.Duration `key:"TEST_TIMEOUT" default:"5m"`
 	BatchSize    int           `key:"TEST_BATCH_SIZE" default:"10" min:"1" max:"100"`
+	Ratio        float64       `key:"TEST_RATIO" default:"0.5" min:"0" max:"1"`
 	Signing      string        `key:"TEST_SIGNING_SECRET" minLength:"32"`
 	Ignored      string
 }
@@ -25,6 +26,22 @@ func TestLoadValidatesIntegerBounds(t *testing.T) {
 	err := Load(&cfg)
 	if err == nil || !strings.Contains(err.Error(), "TEST_BATCH_SIZE must be at most 100") {
 		t.Fatalf("load error = %v", err)
+	}
+}
+
+func TestLoadReadsAFloatWithinBounds(t *testing.T) {
+	t.Setenv("TEST_DATABASE_URL", "postgres://localhost/db")
+	t.Setenv("TEST_SIGNING_SECRET", strings.Repeat("a", 32))
+
+	t.Setenv("TEST_RATIO", "0.65")
+	var cfg testConfig
+	if err := Load(&cfg); err != nil || cfg.Ratio != 0.65 {
+		t.Fatalf("ratio = %v, err = %v", cfg.Ratio, err)
+	}
+
+	t.Setenv("TEST_RATIO", "1.2")
+	if err := Load(&cfg); err == nil || !strings.Contains(err.Error(), "TEST_RATIO must be at most 1") {
+		t.Errorf("load error = %v", err)
 	}
 }
 

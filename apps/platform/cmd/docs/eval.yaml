@@ -62,3 +62,21 @@
   want: [docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/]
 - query: print only the node names with kubectl jsonpath
   want: [docs/reference/kubectl/jsonpath/]
+- query: write a Helm post-install hook that runs a database migration
+  want: []
+- query: add a managed node group to an EKS cluster in the AWS console
+  want: []
+- query: make one Docker Compose service wait for another with depends_on
+  want: []
+- query: Terraform says the state is locked, how do I release the lock
+  want: []
+- query: order Argo CD resources with sync waves
+  want: []
+- query: retry failed requests with an Istio VirtualService
+  want: []
+- query: squash my last three commits with git rebase
+  want: []
+- query: route critical alerts to a different receiver in Alertmanager
+  want: []
+- query: how do I write a list comprehension in Python
+  want: []

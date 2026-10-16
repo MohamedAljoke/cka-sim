@@ -57,11 +57,31 @@ func TestFindRefusesAnEmptyOrHugeQuery(t *testing.T) {
 	}
 }
 
+func TestFindPassesTheThresholdToTheStore(t *testing.T) {
+	store := &fakeStore{results: []Result{{Title: "Pods", Similarity: 0.8}}}
+
+	if _, err := (Search{Embedder: &fakeEmbedder{}, Store: store, MinSimilarity: 0.65}).Find(context.Background(), "pods"); err != nil {
+		t.Fatal(err)
+	}
+
+	if store.min != 0.65 {
+		t.Errorf("searched with min %v", store.min)
+	}
+}
+
 func TestFindWithNothingIndexedSaysSo(t *testing.T) {
-	_, err := Search{Embedder: &fakeEmbedder{}, Store: &fakeStore{}}.Find(context.Background(), "pods")
+	_, err := Search{Embedder: &fakeEmbedder{}, Store: &fakeStore{empty: true}}.Find(context.Background(), "pods")
 
 	if !errors.Is(err, ErrEmpty) {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestFindWithNoGoodMatchReturnsAnEmptyList(t *testing.T) {
+	got, err := Search{Embedder: &fakeEmbedder{}, Store: &fakeStore{}}.Find(context.Background(), "helm post-install hook")
+
+	if err != nil || got == nil || len(got) != 0 {
+		t.Errorf("got %#v, err = %v", got, err)
 	}
 }
 
@@ -84,16 +104,20 @@ func (f *fakeEmbedder) Embed(_ context.Context, texts []string, purpose llm.Purp
 
 type fakeStore struct {
 	results []Result
+	empty   bool
 	vector  []float32
 	query   string
 	k       int
 	mode    Mode
+	min     float64
 }
 
-func (f *fakeStore) Search(_ context.Context, vector []float32, query string, k int, mode Mode) ([]Result, error) {
-	f.vector, f.query, f.k, f.mode = vector, query, k, mode
+func (f *fakeStore) Search(_ context.Context, vector []float32, query string, k int, mode Mode, minSimilarity float64) ([]Result, error) {
+	f.vector, f.query, f.k, f.mode, f.min = vector, query, k, mode, minSimilarity
 	return f.results, nil
 }
+
+func (f *fakeStore) Empty(context.Context) (bool, error) { return f.empty, nil }
 
 type fakeIndex struct {
 	hashes   map[string]string

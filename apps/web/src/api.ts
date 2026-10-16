@@ -139,9 +139,12 @@ export type ChatMessage = {
   text: string
 }
 
+export type ChatHint = { diagnosis: string; next_step: string; doc_url: string }
+
 export type ChatTurn = {
   text: string
   tools: string[]
+  hint?: ChatHint
 }
 
 export type ChatCheck = Result & { task: string }
@@ -158,8 +161,15 @@ export type ChatProgress = {
 
 type ChatEvent = {
   event: string
-  data: { text?: string; name?: string; tool?: string; detail?: string; tools?: string[]; sources?: ChatSource[] } &
-    Partial<ChatCheck>
+  data: {
+    text?: string
+    name?: string
+    tool?: string
+    detail?: string
+    tools?: string[]
+    sources?: ChatSource[]
+    hint?: ChatHint
+  } & Partial<ChatCheck>
 }
 
 export async function chatAssistant(
@@ -167,8 +177,9 @@ export async function chatAssistant(
   messages: ChatMessage[],
   signal: AbortSignal,
   on: ChatProgress,
+  kind?: 'hint',
 ): Promise<ChatTurn> {
-  const res = await call('POST', '/api/assistant/chat', { provider, messages }, signal)
+  const res = await call('POST', '/api/assistant/chat', { provider, kind, messages }, signal)
   const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader()
   let text = ''
   let buffer = ''
@@ -188,7 +199,7 @@ export async function chatAssistant(
         else if (event === 'warning') on.warning(data.tool ?? '')
         else if (event === 'sources') on.sources(data.sources ?? [])
         else if (event === 'error') throw new Error(data.detail)
-        else if (event === 'done') return { text: data.text ?? text, tools: data.tools ?? [] }
+        else if (event === 'done') return { text: data.text ?? text, tools: data.tools ?? [], hint: data.hint }
       }
     }
   } finally {

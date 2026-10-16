@@ -40,11 +40,22 @@ type Result struct {
 	Failed bool
 }
 
+type Thinking string
+
+const (
+	ThinkingDefault Thinking = ""
+	ThinkingLow     Thinking = "low"
+	ThinkingHigh    Thinking = "high"
+)
+
 type Request struct {
-	System    string
-	Messages  []Message
-	Tools     []Tool
-	MaxTokens int
+	System      string
+	Messages    []Message
+	Tools       []Tool
+	MaxTokens   int
+	Schema      json.RawMessage
+	Temperature *float32
+	Thinking    Thinking
 }
 
 type Usage struct {

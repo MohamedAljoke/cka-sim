@@ -14,7 +14,7 @@ import (
 )
 
 func TestConfigDeclaresEachToolWithItsSchema(t *testing.T) {
-	cfg, err := toConfig(llm.Request{
+	cfg, err := toConfig("gemini-3.5-flash", llm.Request{
 		System:    "be kind",
 		MaxTokens: 512,
 		Tools: []llm.Tool{{
@@ -38,10 +38,66 @@ func TestConfigDeclaresEachToolWithItsSchema(t *testing.T) {
 }
 
 func TestConfigRefusesABrokenSchema(t *testing.T) {
-	_, err := toConfig(llm.Request{Tools: []llm.Tool{{Name: "x", Schema: json.RawMessage(`{`)}}})
+	_, err := toConfig("gemini-3.5-flash", llm.Request{Tools: []llm.Tool{{Name: "x", Schema: json.RawMessage(`{`)}}})
 
 	if err == nil || !strings.Contains(err.Error(), "schema of x") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestConfigAsksForJSONMatchingTheResponseSchema(t *testing.T) {
+	cfg, err := toConfig("gemini-3.5-flash", llm.Request{Schema: json.RawMessage(`{"type":"object","required":["diagnosis"]}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	schema, _ := cfg.ResponseJsonSchema.(map[string]any)
+	if cfg.ResponseMIMEType != "application/json" || schema["type"] != "object" {
+		t.Errorf("config = %+v", cfg)
+	}
+}
+
+func TestConfigWithoutAResponseSchemaLeavesTheAnswerFree(t *testing.T) {
+	cfg, err := toConfig("gemini-3.5-flash", llm.Request{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.ResponseMIMEType != "" || cfg.ResponseJsonSchema != nil || cfg.ThinkingConfig != nil || cfg.Temperature != nil {
+		t.Errorf("config = %+v", cfg)
+	}
+}
+
+func TestConfigRefusesABrokenResponseSchema(t *testing.T) {
+	_, err := toConfig("gemini-3.5-flash", llm.Request{Schema: json.RawMessage(`{`)})
+
+	if err == nil || !strings.Contains(err.Error(), "response schema") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestConfigSetsTheThinkingLevel(t *testing.T) {
+	cfg, err := toConfig("gemini-3.5-flash", llm.Request{Thinking: llm.ThinkingLow})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.ThinkingConfig == nil || cfg.ThinkingConfig.ThinkingLevel != genai.ThinkingLevelLow {
+		t.Errorf("thinking = %+v", cfg.ThinkingConfig)
+	}
+}
+
+func TestConfigKeepsGemini3AtItsDefaultTemperature(t *testing.T) {
+	low := float32(0.2)
+	for model, want := range map[string]*float32{"gemini-3.5-flash": nil, "gemini-3-pro": nil, "gemini-2.5-flash": &low} {
+		cfg, err := toConfig(model, llm.Request{Temperature: &low})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if cfg.Temperature != want {
+			t.Errorf("%s: temperature = %v, want %v", model, cfg.Temperature, want)
+		}
 	}
 }
 

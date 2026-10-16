@@ -24,7 +24,8 @@ const (
 
 var (
 	errChatOff = domainerr.Unavailable("assistant_off", "no chat assistant is set up on this server")
-	errBadChat = httpx.Malformed(fmt.Sprintf(`the body must be JSON like {"provider": "gemini", "messages": [{"role": "user", "text": "…"}]}`+
+	errBadChat = httpx.Malformed(fmt.Sprintf(`the body must be JSON like {"provider": "gemini", "kind": "hint", "messages": [{"role": "user", "text": "…"}]}`+
+		` with kind empty or "hint",`+
 		` with 1 to %d messages, each up to %d bytes, alternating user and model and ending with user`, chatMessages, chatMessageMax))
 )
 
@@ -34,8 +35,16 @@ type chatServer struct {
 	toolbox     chat.Toolbox
 }
 
+type chatKind string
+
+const (
+	chatAnswer chatKind = ""
+	chatHint   chatKind = "hint"
+)
+
 type chatRequest struct {
 	Provider string        `json:"provider"`
+	Kind     chatKind      `json:"kind"`
 	Messages []chatMessage `json:"messages"`
 }
 
@@ -45,8 +54,9 @@ type chatMessage struct {
 }
 
 type chatDone struct {
-	Text  string   `json:"text"`
-	Tools []string `json:"tools"`
+	Text  string     `json:"text"`
+	Tools []string   `json:"tools"`
+	Hint  *chat.Hint `json:"hint,omitempty"`
 }
 
 func (h *chatServer) reply(w http.ResponseWriter, r *http.Request) error {
@@ -60,7 +70,7 @@ func (h *chatServer) reply(w http.ResponseWriter, r *http.Request) error {
 		return errBadChat
 	}
 	history, ok := chatHistory(req.Messages)
-	if !ok {
+	if !ok || req.Kind != chatAnswer && req.Kind != chatHint {
 		return errBadChat
 	}
 	c, ok := chat.FindChat(h.list, req.Provider)
@@ -82,7 +92,11 @@ func (h *chatServer) reply(w http.ResponseWriter, r *http.Request) error {
 	}
 	defer tools.Close()
 	stream := &eventStream{w: w}
-	turn, err := c.Reply(ctx, account, tools, history, func(e chat.Event) {
+	answer := c.Reply
+	if req.Kind == chatHint {
+		answer = c.Hint
+	}
+	turn, err := answer(ctx, account, tools, history, func(e chat.Event) {
 		switch e.Kind {
 		case chat.EventTool:
 			stream.send("tool", map[string]string{"name": e.Text})
@@ -104,7 +118,7 @@ func (h *chatServer) reply(w http.ResponseWriter, r *http.Request) error {
 		stream.send("error", map[string]string{"detail": shownDetail(err)})
 		return nil
 	}
-	stream.send("done", chatDone{Text: turn.Text, Tools: turn.Tools})
+	stream.send("done", chatDone{Text: turn.Text, Tools: turn.Tools, Hint: turn.Hint})
 	return nil
 }
 

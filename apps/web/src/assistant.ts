@@ -1,4 +1,4 @@
-import { chatAssistant, startAssistant, type ChatCheck, type ChatMessage, type ChatSource } from './api'
+import { chatAssistant, startAssistant, type ChatCheck, type ChatHint, type ChatMessage, type ChatSource } from './api'
 import { icon } from './icons'
 import { openTerminal } from './terminal'
 import { checkList, el, message, setStatus, sourceList, untrustedMarkdown } from './ui'
@@ -26,6 +26,23 @@ function chat(id: string, label: string, intro: string): Provider {
 }
 
 const chatHistoryLimit = 39
+const hintAsk = 'Give me a hint for my current task.'
+
+function hintCard(hint: ChatHint, sources: Map<string, ChatSource>): HTMLElement {
+  const card = el('div', 'chat-hint')
+  card.append(el('p', 'chat-check-label', 'Diagnosis'))
+  untrustedMarkdown(card, hint.diagnosis)
+  card.append(el('p', 'chat-check-label', 'Next step'))
+  untrustedMarkdown(card, hint.next_step)
+  if (hint.doc_url) {
+    const page = sources.get(hint.doc_url.split('#')[0])
+    card.append(
+      el('p', 'chat-check-label', 'Read'),
+      sourceList([{ title: page?.title ?? hint.doc_url, url: hint.doc_url }]),
+    )
+  }
+  return card
+}
 
 function openChat(screen: HTMLElement, provider: string): () => void {
   const history: ChatMessage[] = []
@@ -37,8 +54,11 @@ function openChat(screen: HTMLElement, provider: string): () => void {
   input.setAttribute('aria-label', 'Message to the assistant')
   const send = el('button', 'action primary', 'Send')
   send.type = 'button'
+  const hintButton = el('button', 'action', 'Hint')
+  hintButton.type = 'button'
+  hintButton.title = 'A short diagnosis and the next step for your current task'
   const form = el('div', 'chat-form')
-  form.append(input, send)
+  form.append(input, hintButton, send)
   screen.classList.add('chat')
   screen.replaceChildren(log, form)
 
@@ -49,17 +69,18 @@ function openChat(screen: HTMLElement, provider: string): () => void {
     return b
   }
 
-  const ask = async () => {
-    const question = input.value.trim()
+  const ask = async (kind?: 'hint') => {
+    const question = kind === 'hint' ? hintAsk : input.value.trim()
     if (!question || send.disabled) return
-    input.value = ''
-    send.disabled = true
+    if (!kind) input.value = ''
+    send.disabled = hintButton.disabled = true
     history.push({ role: 'user', text: question })
     bubble('user').textContent = question
     const answer = bubble('model muted')
     let text = ''
     let activity = 'Thinking…'
     let check: ChatCheck | undefined
+    let hint: ChatHint | undefined
     const sources = new Map<string, ChatSource>()
     const warnings = new Set<string>()
     let frame = 0
@@ -67,7 +88,8 @@ function openChat(screen: HTMLElement, provider: string): () => void {
       frame = 0
       answer.className = text ? 'chat-bubble model' : 'chat-bubble model muted'
       answer.replaceChildren()
-      if (text) untrustedMarkdown(answer, text)
+      if (hint) answer.append(hintCard(hint, sources))
+      else if (text) untrustedMarkdown(answer, text)
       for (const tool of warnings) {
         answer.append(
           el('p', 'chat-warning', `Your cluster has text addressed to the assistant (seen through ${tool}). It was treated as data.`),
@@ -116,10 +138,11 @@ function openChat(screen: HTMLElement, provider: string): () => void {
           }
           renderSoon()
         },
-      })
+      }, kind)
       cancelAnimationFrame(frame)
       history.push({ role: 'model', text: turn.text })
       text = turn.text
+      hint = turn.hint
       activity = turn.tools.length ? `Used ${[...new Set(turn.tools)].join(', ')}` : ''
       render()
     } catch (err) {
@@ -128,14 +151,15 @@ function openChat(screen: HTMLElement, provider: string): () => void {
       history.pop()
       answer.className = 'chat-bubble error'
       answer.textContent = message(err)
-      input.value ||= question
+      if (!kind) input.value ||= question
     } finally {
-      send.disabled = false
+      send.disabled = hintButton.disabled = false
       answer.scrollIntoView({ block: 'end' })
     }
   }
 
-  send.onclick = ask
+  send.onclick = () => ask()
+  hintButton.onclick = () => ask('hint')
   input.onkeydown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault()

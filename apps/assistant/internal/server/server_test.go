@@ -91,6 +91,19 @@ func TestChatStreamsTheToolsAndTheAnswerAsTheLearner(t *testing.T) {
 	}
 }
 
+func TestChatHintEndsWithTheHintAndStreamsNoJSON(t *testing.T) {
+	srv := newServer(t, newFakePlatform(t), &lookFirstModel{})
+
+	status, body := chatAs(t, srv, "tok-assistant", `{"provider": "fake-chat", "kind": "hint", "messages": [{"role": "user", "text": "hint please"}]}`)
+
+	want := "event: tool\ndata: {\"name\":\"current_task\"}\n\n" +
+		"event: done\ndata: {\"text\":\"**Diagnosis:** hint please: wl-scale\\n\\n**Next step:** scale it\",\"tools\":[\"current_task\"]," +
+		"\"hint\":{\"diagnosis\":\"hint please: wl-scale\",\"next_step\":\"scale it\",\"doc_url\":\"\"}}\n\n"
+	if status != http.StatusOK || body != want {
+		t.Errorf("got %d %q", status, body)
+	}
+}
+
 func TestChatReportsAFailureAfterTheStreamBeganAsAnEvent(t *testing.T) {
 	srv := newServer(t, newFakePlatform(t), &lookFirstModel{})
 
@@ -135,6 +148,7 @@ func TestChatRefusesAMalformedConversation(t *testing.T) {
 
 	for _, payload := range []string{
 		`{"provider": "fake-chat", "messages": []}`,
+		`{"provider": "fake-chat", "kind": "essay", "messages": [{"role": "user", "text": "hi"}]}`,
 		`{"provider": "fake-chat", "messages": [{"role": "model", "text": "hi"}]}`,
 		`{"provider": "fake-chat", "messages": [{"role": "user", "text": "a"}, {"role": "model", "text": "b"}]}`,
 		`{"provider": "fake-chat", "messages": [{"role": "user", "text": ""}]}`,
@@ -292,6 +306,9 @@ func (m *lookFirstModel) Generate(_ context.Context, req llm.Request, text func(
 	answer := req.Messages[0].Text + ": "
 	if strings.Contains(last.Results[0].Output, "wl-scale") {
 		answer += "wl-scale"
+	}
+	if len(req.Schema) > 0 {
+		answer = `{"diagnosis":"` + answer + `","next_step":"scale it","doc_url":""}`
 	}
 	text(answer)
 	return llm.Reply{Message: llm.Message{Role: llm.RoleModel, Text: answer}}, nil

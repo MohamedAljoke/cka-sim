@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"strings"
 
 	"google.golang.org/genai"
 
@@ -49,17 +50,37 @@ func (m *Model) Generate(ctx context.Context, req llm.Request, text func(delta s
 	if err != nil {
 		return llm.Reply{}, err
 	}
-	cfg, err := toConfig(req)
+	cfg, err := toConfig(m.model, req)
 	if err != nil {
 		return llm.Reply{}, err
 	}
 	return collect(m.client.Models.GenerateContentStream(ctx, m.model, contents, cfg), text)
 }
 
-func toConfig(req llm.Request) (*genai.GenerateContentConfig, error) {
+var thinkingLevels = map[llm.Thinking]genai.ThinkingLevel{
+	llm.ThinkingLow:  genai.ThinkingLevelLow,
+	llm.ThinkingHigh: genai.ThinkingLevelHigh,
+}
+
+func toConfig(model string, req llm.Request) (*genai.GenerateContentConfig, error) {
 	cfg := &genai.GenerateContentConfig{MaxOutputTokens: int32(req.MaxTokens)}
 	if req.System != "" {
 		cfg.SystemInstruction = genai.NewContentFromText(req.System, genai.RoleUser)
+	}
+	if len(req.Schema) > 0 {
+		var schema any
+		if err := json.Unmarshal(req.Schema, &schema); err != nil {
+			return nil, fmt.Errorf("response schema: %w", err)
+		}
+		cfg.ResponseMIMEType = "application/json"
+		cfg.ResponseJsonSchema = schema
+	}
+	if level, ok := thinkingLevels[req.Thinking]; ok {
+		cfg.ThinkingConfig = &genai.ThinkingConfig{ThinkingLevel: level}
+	}
+	// Google advises leaving Gemini 3 at its default temperature: lower values can make it loop.
+	if req.Temperature != nil && !strings.HasPrefix(model, "gemini-3") {
+		cfg.Temperature = req.Temperature
 	}
 	if len(req.Tools) > 0 {
 		decls := make([]*genai.FunctionDeclaration, len(req.Tools))

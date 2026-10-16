@@ -101,7 +101,7 @@ func docsSources(output string) []Source {
 	var sources []Source
 	seen := map[string]bool{}
 	for _, r := range found.Results {
-		page, _, _ := strings.Cut(r.URL, "#")
+		page := docsPage(r.URL)
 		if r.URL == "" || seen[page] {
 			continue
 		}
@@ -109,6 +109,11 @@ func docsSources(output string) []Source {
 		sources = append(sources, r)
 	}
 	return sources
+}
+
+func docsPage(url string) string {
+	page, _, _ := strings.Cut(url, "#")
+	return page
 }
 
 func docsTexts(output string) []string {

@@ -100,8 +100,26 @@ func TestChunksGiveEachChunkItsOwnIDAndSkipWhatTheExamDoesNotNeed(t *testing.T) 
 		t.Fatalf("chunks = %+v", chunks)
 	}
 	if chunks[0].URL != "https://kubernetes.io/docs/concepts/workloads/pods/#part" ||
-		chunks[0].ID != "docs/concepts/workloads/pods/_index.md#0" {
+		chunks[0].ID != "docs/concepts/workloads/pods/_index.md#0" || chunks[0].Domain != "workloads" {
 		t.Errorf("first chunk = %+v", chunks[0])
+	}
+}
+
+func TestDomainOfTakesTheLongestMatchingPrefix(t *testing.T) {
+	for page, want := range map[string]string{
+		"docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/":                          "architecture",
+		"docs/tasks/administer-cluster/dns-debugging-resolution/":                         "networking",
+		"docs/tasks/administer-cluster/manage-resources/memory-default-namespace/":        "workloads",
+		"docs/tasks/configure-pod-container/configure-persistent-volume-storage/":         "storage",
+		"docs/tasks/configure-pod-container/configure-service-account/":                   "architecture",
+		"docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/": "workloads",
+		"docs/tasks/debug/debug-application/":                                             "troubleshooting",
+		"docs/reference/kubectl/jsonpath/":                                                "",
+		"docs/reference/glossary/":                                                        "",
+	} {
+		if got := domainOf(Site + page + "#a-section"); got != want {
+			t.Errorf("domainOf(%s) = %q, want %q", page, got, want)
+		}
 	}
 }
 

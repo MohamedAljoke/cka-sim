@@ -102,9 +102,14 @@ func (c *Client) Inspect(ctx context.Context, args []string) (Inspection, error)
 	return i, c.do(ctx, http.MethodPost, "/api/assistant/inspect", map[string][]string{"args": args}, &i)
 }
 
-func (c *Client) SearchDocs(ctx context.Context, query string) (DocsResults, error) {
+type docsQuery struct {
+	Query  string `json:"query"`
+	Domain string `json:"domain,omitempty"`
+}
+
+func (c *Client) SearchDocs(ctx context.Context, query, domain string) (DocsResults, error) {
 	var r DocsResults
-	return r, c.do(ctx, http.MethodPost, "/api/docs/search", map[string]string{"query": query}, &r)
+	return r, c.do(ctx, http.MethodPost, "/api/docs/search", docsQuery{Query: query, Domain: domain}, &r)
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body, out any) error {

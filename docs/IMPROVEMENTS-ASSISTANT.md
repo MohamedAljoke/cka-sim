@@ -131,8 +131,11 @@ takes an optional tag filter.
 
 ### Test it
 
-- Add `domain` to some `eval.yaml` questions and compare recall and MRR with and without the filter.
+- Add `domain` to some `eval.yaml` questions and compare recall and MRR with and without the filter: `make
+  docs-eval` prints a `hybrid ≥ 0.65 + domain` row under the unfiltered ones. A miss only that row has points at
+  the prefix table in `internal/docs/chunk.go`.
 - Make sure the filter is off by default in `eval`, so the existing numbers stay comparable.
+- After the migration, `make docs-index` prints `retagged N` and embeds nothing; a second run prints `retagged 0`.
 
 ## 5. The assistant forgets what each learner got wrong
 

@@ -147,6 +147,30 @@ func TestChatSendsTheDocsPagesItLookedUpOncePerPage(t *testing.T) {
 	}
 }
 
+func TestChatMarksADocsQuoteThatTheSearchDidNotReturn(t *testing.T) {
+	etcd := "https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/"
+	search := `{"results":[{"title":"Operating etcd clusters","url":"` + etcd + `","text":"Use etcdctl snapshot save to take a snapshot."}]}`
+	for quote, want := range map[string]string{
+		"> Use etcdctl snapshot save to take a snapshot.": "> Use etcdctl snapshot save to take a snapshot.",
+		"> Use etcdctl backup create to take a snapshot.": "_(paraphrase)_ Use etcdctl backup create to take a snapshot.",
+	} {
+		model := &fakeModel{replies: []llm.Message{
+			{Role: llm.RoleModel, Calls: []llm.Call{{Name: "search_docs", Args: json.RawMessage(`{"query":"back up etcd"}`)}}},
+			{Role: llm.RoleModel, Text: "From " + etcd + ":\n\n" + quote},
+		}}
+		tools := &fakeTools{out: map[string]string{"search_docs": search}}
+
+		turn, err := newChat(model, 10).Reply(context.Background(), "a", tools, nil, ignore)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if turn.Text != "From "+etcd+":\n\n"+want {
+			t.Errorf("text = %q", turn.Text)
+		}
+	}
+}
+
 func TestChatWarnsAboutClusterTextAimedAtTheAssistant(t *testing.T) {
 	model := &fakeModel{replies: []llm.Message{
 		{Role: llm.RoleModel, Calls: []llm.Call{{ID: "c1", Name: "inspect_cluster", Args: json.RawMessage(`{"args":["describe","svc","web"]}`)}}},

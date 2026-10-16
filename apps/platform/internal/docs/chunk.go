@@ -24,6 +24,43 @@ const (
 
 var skipped = []string{"docs/contribute/", "docs/reference/kubernetes-api/", "docs/reference/config-api/"}
 
+var domains = map[string]string{
+	"concepts/storage/": "storage",
+	"tasks/configure-pod-container/configure-persistent-volume-storage/": "storage",
+	"tasks/configure-pod-container/configure-projected-volume-storage/":  "storage",
+	"tasks/configure-pod-container/configure-volume-storage/":            "storage",
+	"concepts/services-networking/":                                      "networking",
+	"tasks/network/":                                                     "networking",
+	"tasks/access-application-cluster/":                                  "networking",
+	"tasks/administer-cluster/coredns/":                                  "networking",
+	"tasks/administer-cluster/dns-":                                      "networking",
+	"tasks/administer-cluster/declare-network-policy/":                   "networking",
+	"concepts/workloads/":                                                "workloads",
+	"concepts/scheduling-eviction/":                                      "workloads",
+	"concepts/configuration/":                                            "workloads",
+	"concepts/policy/":                                                   "workloads",
+	"tasks/run-application/":                                             "workloads",
+	"tasks/configure-pod-container/":                                     "workloads",
+	"tasks/inject-data-application/":                                     "workloads",
+	"tasks/configmap-secret/":                                            "workloads",
+	"tasks/job/":                                                         "workloads",
+	"tasks/administer-cluster/manage-resources/":                         "workloads",
+	"setup/":                           "architecture",
+	"concepts/architecture/":           "architecture",
+	"concepts/security/":               "architecture",
+	"concepts/extend-kubernetes/":      "architecture",
+	"concepts/cluster-administration/": "architecture",
+	"reference/access-authn-authz/":    "architecture",
+	"reference/setup-tools/":           "architecture",
+	"tasks/administer-cluster/":        "architecture",
+	"tasks/extend-kubernetes/":         "architecture",
+	"tasks/tls/":                       "architecture",
+	"tasks/manage-kubernetes-objects/": "architecture",
+	"tasks/configure-pod-container/configure-service-account/":             "architecture",
+	"tasks/access-application-cluster/configure-access-multiple-clusters/": "architecture",
+	"tasks/debug/": "troubleshooting",
+}
+
 var (
 	shortcode   = regexp.MustCompile(`\{\{[<%]\s*(/?)\s*([\w-]+)((?:[^}]|\}[^}])*?)\s*[>%]\}\}`)
 	argument    = regexp.MustCompile(`(?:([\w-]+)=)?(?:"([^"]*)"|([^\s"]+))`)
@@ -54,11 +91,12 @@ func pair(name string) *regexp.Regexp {
 }
 
 type Chunk struct {
-	ID    string
-	URL   string
-	Title string
-	Text  string
-	Hash  string
+	ID     string
+	URL    string
+	Title  string
+	Text   string
+	Hash   string
+	Domain string
 }
 
 type page struct {
@@ -113,6 +151,7 @@ func pageChunks(root fs.FS, name string, raw []byte) ([]Chunk, error) {
 		return nil, nil
 	}
 	url := pageURL(name)
+	domain := domainOf(url)
 	var chunks []Chunk
 	for _, s := range sections(meta.Title, clean(root, body)) {
 		for _, piece := range pieces(s.body) {
@@ -120,10 +159,11 @@ func pageChunks(root fs.FS, name string, raw []byte) ([]Chunk, error) {
 				continue
 			}
 			c := Chunk{
-				ID:    fmt.Sprintf("%s#%d", name, len(chunks)),
-				URL:   url,
-				Title: meta.Title,
-				Text:  s.trail + "\n\n" + piece,
+				ID:     fmt.Sprintf("%s#%d", name, len(chunks)),
+				URL:    url,
+				Title:  meta.Title,
+				Text:   s.trail + "\n\n" + piece,
+				Domain: domain,
 			}
 			if s.anchor != "" {
 				c.URL += "#" + s.anchor
@@ -134,6 +174,17 @@ func pageChunks(root fs.FS, name string, raw []byte) ([]Chunk, error) {
 		}
 	}
 	return chunks, nil
+}
+
+func domainOf(url string) string {
+	page := strings.TrimPrefix(url, Site+"docs/")
+	best, domain := "", ""
+	for prefix, d := range domains {
+		if strings.HasPrefix(page, prefix) && len(prefix) > len(best) {
+			best, domain = prefix, d
+		}
+	}
+	return domain
 }
 
 func frontMatter(raw []byte) (page, string, error) {

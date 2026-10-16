@@ -60,16 +60,32 @@ func (p Postgres) Upsert(ctx context.Context, chunks []Chunk, vectors [][]float3
 		batch := &pgx.Batch{}
 		for i := start; i < end; i++ {
 			c := chunks[i]
-			batch.Queue(`insert into docs.chunks (id, url, title, text, hash, embedding) values ($1, $2, $3, $4, $5, $6::vector)
+			batch.Queue(`insert into docs.chunks (id, url, title, text, hash, embedding, domain)
+				values ($1, $2, $3, $4, $5, $6::vector, nullif($7, ''))
 				on conflict (id) do update set url = excluded.url, title = excluded.title, text = excluded.text,
-				hash = excluded.hash, embedding = excluded.embedding`,
-				c.ID, c.URL, c.Title, c.Text, c.Hash, vectorText(vectors[i]))
+				hash = excluded.hash, embedding = excluded.embedding, domain = excluded.domain`,
+				c.ID, c.URL, c.Title, c.Text, c.Hash, vectorText(vectors[i]), c.Domain)
 		}
 		if err := p.Pool.SendBatch(ctx, batch).Close(); err != nil {
 			return fmt.Errorf("store chunks: %w", err)
 		}
 	}
 	return nil
+}
+
+func (p Postgres) Retag(ctx context.Context, chunks []Chunk) (int, error) {
+	ids := make([]string, len(chunks))
+	domains := make([]string, len(chunks))
+	for i, c := range chunks {
+		ids[i], domains[i] = c.ID, c.Domain
+	}
+	tag, err := p.Pool.Exec(ctx, `update docs.chunks c set domain = nullif(v.domain, '')
+		from unnest($1::text[], $2::text[]) v(id, domain)
+		where c.id = v.id and c.domain is distinct from nullif(v.domain, '')`, ids, domains)
+	if err != nil {
+		return 0, fmt.Errorf("tag chunks with their domain: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
 }
 
 func (p Postgres) Prune(ctx context.Context, keep []string) (int, error) {
@@ -102,36 +118,45 @@ func (p Postgres) SetMeta(ctx context.Context, key, value string) error {
 }
 
 // The keyword half ORs the query's words: a learner's question rarely has every word on the page that answers it.
-func (p Postgres) Search(ctx context.Context, vector []float32, query string, k int, mode Mode, minSimilarity float64) ([]Result, error) {
+// Iterative scan keeps the HNSW index reading past rows of other domains, or a domain filter would leave too few.
+func (p Postgres) Search(ctx context.Context, vector []float32, q Query, minSimilarity float64) ([]Result, error) {
 	vectorLimit, keywordLimit := candidates, candidates
-	switch mode {
+	switch q.Mode {
 	case ModeVector:
 		keywordLimit = 0
 	case ModeKeyword:
 		vectorLimit = 0
 	}
-	rows, err := p.Pool.Query(ctx, `
-		with vec as (
-			select id, row_number() over (order by distance) as rank
-			from (select id, embedding <=> $1::vector as distance from docs.chunks order by distance limit $3) nearest
-		), q as (
-			select nullif(replace(plainto_tsquery('english', $2)::text, '&', '|'), '')::tsquery as words
-		), kw as (
-			select id, row_number() over (order by score desc) as rank
-			from (select id, ts_rank_cd(tsv, q.words) as score from docs.chunks, q
-			      where tsv @@ q.words order by score desc limit $4) matching
-		), fused as (
-			select id, sum(1.0 / ($5 + rank)) as score from (select * from vec union all select * from kw) ranked group by id
-		)
-		select c.title, c.url, c.text, 1 - (c.embedding <=> $1::vector) as similarity
-		from fused join docs.chunks c using (id)
-		where 1 - (c.embedding <=> $1::vector) >= $7
-		order by fused.score desc, c.id limit $6`,
-		vectorText(vector), query, vectorLimit, keywordLimit, rrfK, k, minSimilarity)
-	if err != nil {
-		return nil, fmt.Errorf("search the docs: %w", err)
-	}
-	results, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Result])
+	var results []Result
+	err := pgx.BeginFunc(ctx, p.Pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `set local hnsw.iterative_scan = relaxed_order`); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `
+			with vec as (
+				select id, row_number() over (order by distance) as rank
+				from (select id, embedding <=> $1::vector as distance from docs.chunks
+				      where $8 = '' or domain is null or domain = $8 order by distance limit $3) nearest
+			), q as (
+				select nullif(replace(plainto_tsquery('english', $2)::text, '&', '|'), '')::tsquery as words
+			), kw as (
+				select id, row_number() over (order by score desc) as rank
+				from (select id, ts_rank_cd(tsv, q.words) as score from docs.chunks, q
+				      where tsv @@ q.words and ($8 = '' or domain is null or domain = $8) order by score desc limit $4) matching
+			), fused as (
+				select id, sum(1.0 / ($5 + rank)) as score from (select * from vec union all select * from kw) ranked group by id
+			)
+			select c.title, c.url, c.text, 1 - (c.embedding <=> $1::vector) as similarity
+			from fused join docs.chunks c using (id)
+			where 1 - (c.embedding <=> $1::vector) >= $7
+			order by fused.score desc, c.id limit $6`,
+			vectorText(vector), q.Text, vectorLimit, keywordLimit, rrfK, q.K, minSimilarity, q.Domain)
+		if err != nil {
+			return err
+		}
+		results, err = pgx.CollectRows(rows, pgx.RowToStructByPos[Result])
+		return err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("search the docs: %w", err)
 	}

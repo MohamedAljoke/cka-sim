@@ -1,82 +1,120 @@
 - query: how do I back up etcd with a snapshot and restore it
   want: [docs/tasks/administer-cluster/configure-upgrade-etcd/]
+  domain: architecture
 - query: upgrade the control plane of a kubeadm cluster to the next minor version
   want: [docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/]
+  domain: architecture
 - query: take a node out of service for maintenance without breaking the apps
   want: [docs/tasks/administer-cluster/safely-drain-node/]
+  domain: troubleshooting
 - query: deny all ingress traffic to the pods in a namespace
   want: [docs/concepts/services-networking/network-policies/]
+  domain: networking
 - query: let a user list pods in one namespace only
   want: [docs/reference/access-authn-authz/rbac/]
+  domain: architecture
 - query: my pod stays Pending because the node has a taint
   want: [docs/concepts/scheduling-eviction/taint-and-toleration/]
+  domain: workloads
 - query: run a pod only on nodes with the label disktype=ssd
   want: [docs/concepts/scheduling-eviction/assign-pod-node/]
+  domain: workloads
 - query: PersistentVolumeClaim stuck in Pending, no volume binds to it
   want: [docs/concepts/storage/persistent-volumes/, docs/concepts/storage/storage-classes/]
+  domain: storage
 - query: mount a ConfigMap as files inside a container
   want: [docs/tasks/configure-pod-container/configure-pod-configmap/]
+  domain: workloads
 - query: expose a deployment on a port of every node
   want: [docs/concepts/services-networking/service/]
+  domain: networking
 - query: route /api to one service and / to another by URL path
   want: [docs/concepts/services-networking/ingress/, docs/concepts/services-networking/gateway/]
+  domain: networking
 - query: HTTPRoute with a parentRef to a Gateway
   want: [docs/concepts/services-networking/gateway/]
+  domain: networking
 - query: restart the container when the app stops answering on /healthz
   want: [docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/]
+  domain: workloads
 - query: set cpu and memory requests and limits on a container
   want: [docs/concepts/configuration/manage-resources-containers/]
+  domain: workloads
 - query: cap the total cpu and memory a namespace may use
   want: [docs/concepts/policy/resource-quotas/]
+  domain: workloads
 - query: give every container in a namespace a default memory limit
   want: [docs/concepts/policy/limit-range/, docs/tasks/administer-cluster/manage-resources/]
+  domain: workloads
 - query: roll back a deployment to the previous revision
   want: [docs/concepts/workloads/controllers/deployment/]
+  domain: workloads
 - query: run one copy of a pod on every node
   want: [docs/concepts/workloads/controllers/daemonset/]
+  domain: workloads
 - query: scale a deployment automatically on cpu usage
   want: [docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/, docs/tasks/run-application/horizontal-pod-autoscale-walkthrough/]
+  domain: workloads
 - query: pod in CrashLoopBackOff, how do I find out why
   want: [docs/tasks/debug/debug-application/]
+  domain: troubleshooting
 - query: a node is NotReady and the kubelet is not running
   want: [docs/tasks/debug/debug-cluster/]
+  domain: troubleshooting
 - query: pods can't resolve service names, check CoreDNS
   want: [docs/tasks/administer-cluster/dns-debugging-resolution/]
+  domain: networking
 - query: stop a pod from mounting its service account token
   want: [docs/tasks/configure-pod-container/configure-service-account/, docs/concepts/security/service-accounts/]
+  domain: architecture
 - query: where does the kubelet read static pod manifests from
   want: [docs/tasks/configure-pod-container/static-pod/]
+  domain: troubleshooting
 - query: patch a deployment with kustomize overlays
   want: [docs/tasks/manage-kubernetes-objects/kustomization/]
+  domain: architecture
 - query: a sidecar container that starts before the app container and keeps running
   want: [docs/concepts/workloads/pods/sidecar-containers/]
+  domain: workloads
 - query: wait for a service to exist before the app container starts
   want: [docs/concepts/workloads/pods/init-containers/]
+  domain: workloads
 - query: kubectl create secret generic from literal values
   want: [docs/tasks/configmap-secret/managing-secret-using-kubectl/]
+  domain: workloads
 - query: approve a CertificateSigningRequest for a new user
   want: [docs/reference/access-authn-authz/certificate-signing-requests/]
+  domain: architecture
 - query: a high priority pod evicts lower priority pods to get scheduled
   want: [docs/concepts/scheduling-eviction/pod-priority-preemption/]
+  domain: workloads
 - query: create a CustomResourceDefinition
   want: [docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/]
+  domain: architecture
 - query: print only the node names with kubectl jsonpath
   want: [docs/reference/kubectl/jsonpath/]
+  domain: troubleshooting
 - query: write a Helm post-install hook that runs a database migration
   want: []
+  domain: architecture
 - query: add a managed node group to an EKS cluster in the AWS console
   want: []
+  domain: architecture
 - query: make one Docker Compose service wait for another with depends_on
   want: []
+  domain: workloads
 - query: Terraform says the state is locked, how do I release the lock
   want: []
 - query: order Argo CD resources with sync waves
   want: []
+  domain: workloads
 - query: retry failed requests with an Istio VirtualService
   want: []
+  domain: networking
 - query: squash my last three commits with git rebase
   want: []
 - query: route critical alerts to a different receiver in Alertmanager
   want: []
+  domain: troubleshooting
 - query: how do I write a list comprehension in Python
   want: []

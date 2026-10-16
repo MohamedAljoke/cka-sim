@@ -18,11 +18,12 @@ var (
 )
 
 type DocsSearch interface {
-	Find(ctx context.Context, query string) ([]docs.Result, error)
+	Find(ctx context.Context, query, domain string) ([]docs.Result, error)
 }
 
 type docsRequest struct {
-	Query string `json:"query"`
+	Query  string `json:"query"`
+	Domain string `json:"domain"`
 }
 
 type docsReply struct {
@@ -37,7 +38,7 @@ func (a *api) searchDocs(w http.ResponseWriter, r *http.Request) error {
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, docsBody)).Decode(&req); err != nil {
 		return errBadDocs
 	}
-	results, err := a.Docs.Find(r.Context(), req.Query)
+	results, err := a.Docs.Find(r.Context(), req.Query, req.Domain)
 	if err != nil {
 		return err
 	}

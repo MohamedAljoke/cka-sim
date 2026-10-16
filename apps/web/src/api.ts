@@ -188,7 +188,7 @@ export async function chatAssistant(
         else if (event === 'warning') on.warning(data.tool ?? '')
         else if (event === 'sources') on.sources(data.sources ?? [])
         else if (event === 'error') throw new Error(data.detail)
-        else if (event === 'done') return { text, tools: data.tools ?? [] }
+        else if (event === 'done') return { text: data.text ?? text, tools: data.tools ?? [] }
       }
     }
   } finally {

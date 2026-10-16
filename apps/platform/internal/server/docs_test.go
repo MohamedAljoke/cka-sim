@@ -23,6 +23,18 @@ func TestDocsSearchAnswersTheAssistantWithPassagesAndLinks(t *testing.T) {
 	}
 }
 
+func TestDocsSearchPassesTheTasksDomainOn(t *testing.T) {
+	srv := newAPI(t, &fakeRunner{})
+
+	_, body := asAssistant(t, srv, http.MethodPost, "/api/docs/search", `{"query": "back up etcd", "domain": "architecture"}`)
+
+	var reply docsReply
+	if err := json.Unmarshal([]byte(body), &reply); err != nil || len(reply.Results) != 1 ||
+		reply.Results[0].Text != "about back up etcd in architecture" {
+		t.Errorf("got %q", body)
+	}
+}
+
 func TestDocsSearchRefusesAMalformedBody(t *testing.T) {
 	srv := newAPI(t, &fakeRunner{})
 
@@ -57,9 +69,13 @@ const etcdDocs = "https://kubernetes.io/docs/tasks/administer-cluster/configure-
 
 type fakeDocs struct{}
 
-func (fakeDocs) Find(_ context.Context, query string) ([]docs.Result, error) {
+func (fakeDocs) Find(_ context.Context, query, domain string) ([]docs.Result, error) {
 	if query == "nothing indexed" {
 		return nil, docs.ErrEmpty
 	}
-	return []docs.Result{{Title: "Operating etcd clusters", URL: etcdDocs, Text: "about " + query}}, nil
+	text := "about " + query
+	if domain != "" {
+		text += " in " + domain
+	}
+	return []docs.Result{{Title: "Operating etcd clusters", URL: etcdDocs, Text: text}}, nil
 }

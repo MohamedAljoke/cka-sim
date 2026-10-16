@@ -92,6 +92,18 @@ func TestSearchDocsSendsTheQuery(t *testing.T) {
 	}
 }
 
+func TestSearchDocsSendsTheTasksDomain(t *testing.T) {
+	session, p := connect(t)
+	p.reply("POST /api/docs/search", `{"results":[]}`)
+
+	var got platform.DocsResults
+	call(t, session, "search_docs", map[string]any{"query": "port", "domain": "storage"}, &got)
+
+	if body := p.body("POST /api/docs/search"); body != `{"query":"port","domain":"storage"}` {
+		t.Errorf("platform got %s", body)
+	}
+}
+
 func TestAPlatformRefusalReachesTheModelAsAToolError(t *testing.T) {
 	session, p := connect(t)
 	p.fail("GET /api/tasks", http.StatusConflict, `{"title":"Conflict","status":409,"code":"exam_running","detail":"not during an exam"}`)

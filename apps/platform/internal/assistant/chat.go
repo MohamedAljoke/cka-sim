@@ -66,6 +66,7 @@ func (c *Chat) Reply(ctx context.Context, account string, tools Tools, history [
 	turn := Turn{Tools: []string{}}
 	var text strings.Builder
 	var usage llm.Usage
+	var passages []string
 	for step := 1; step <= c.MaxSteps; step++ {
 		newStep := true
 		write := func(s string) {
@@ -95,7 +96,11 @@ func (c *Chat) Reply(ctx context.Context, account string, tools Tools, history [
 			if reply.Message.Text == "" {
 				return Turn{}, domainerr.Unavailable("assistant_model", c.Model.Name()+" gave an empty answer; ask again")
 			}
-			turn.Text = text.String()
+			grounded, unverified := ground(text.String(), passages)
+			if unverified > 0 {
+				log.Printf("assistant %s: account %s, %d quotes not in the docs passages", c.ID, account, unverified)
+			}
+			turn.Text = grounded
 			return turn, nil
 		}
 		messages = append(messages, reply.Message)
@@ -106,6 +111,8 @@ func (c *Chat) Reply(ctx context.Context, account string, tools Tools, history [
 			out, err := tools.Call(ctx, call.Name, call.Args)
 			if err != nil {
 				out = err.Error()
+			} else if call.Name == docsTool {
+				passages = append(passages, docsTexts(out)...)
 			}
 			out = c.screen(account, call, out, err != nil, events)
 			results.Results = append(results.Results, llm.Result{CallID: call.ID, Name: call.Name, Output: out, Failed: err != nil})

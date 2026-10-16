@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/llm"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/tasks"
 )
 
 func TestReindexEmbedsOnlyWhatChangedAndPrunesWhatIsGone(t *testing.T) {
@@ -20,7 +21,7 @@ func TestReindexEmbedsOnlyWhatChangedAndPrunesWhatIsGone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if counts != (Counts{Chunks: 3, Embedded: 2, Pruned: 1}) {
+	if counts != (Counts{Chunks: 3, Embedded: 2, Retagged: 3, Pruned: 1}) {
 		t.Errorf("counts = %+v", counts)
 	}
 	if !slices.Equal(embedder.texts, []string{"b", "c"}) || embedder.purpose != llm.PurposeDocument {
@@ -35,12 +36,12 @@ func TestFindEmbedsTheQueryAndSearchesBothWays(t *testing.T) {
 	store := &fakeStore{results: []Result{{Title: "Pods", URL: Site + "docs/concepts/workloads/pods/"}}}
 	embedder := &fakeEmbedder{}
 
-	got, err := Search{Embedder: embedder, Store: store}.Find(context.Background(), "  what is a pod  ")
+	got, err := Search{Embedder: embedder, Store: store}.Find(context.Background(), "  what is a pod  ", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(got) != 1 || store.query != "what is a pod" || store.k != shown || store.mode != ModeHybrid {
+	if len(got) != 1 || store.query != (Query{Text: "what is a pod", K: shown, Mode: ModeHybrid}) {
 		t.Errorf("got %+v; searched %+v", got, store)
 	}
 	if embedder.purpose != llm.PurposeQuery || len(store.vector) != 1 {
@@ -51,7 +52,7 @@ func TestFindEmbedsTheQueryAndSearchesBothWays(t *testing.T) {
 func TestFindRefusesAnEmptyOrHugeQuery(t *testing.T) {
 	search := Search{Embedder: &fakeEmbedder{}, Store: &fakeStore{}}
 	for _, query := range []string{" ", strings.Repeat("x", queryChars+1)} {
-		if _, err := search.Find(context.Background(), query); !errors.Is(err, errQuery) {
+		if _, err := search.Find(context.Background(), query, ""); !errors.Is(err, errQuery) {
 			t.Errorf("Find(%d chars) err = %v", len(query), err)
 		}
 	}
@@ -60,7 +61,7 @@ func TestFindRefusesAnEmptyOrHugeQuery(t *testing.T) {
 func TestFindPassesTheThresholdToTheStore(t *testing.T) {
 	store := &fakeStore{results: []Result{{Title: "Pods", Similarity: 0.8}}}
 
-	if _, err := (Search{Embedder: &fakeEmbedder{}, Store: store, MinSimilarity: 0.65}).Find(context.Background(), "pods"); err != nil {
+	if _, err := (Search{Embedder: &fakeEmbedder{}, Store: store, MinSimilarity: 0.65}).Find(context.Background(), "pods", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -70,7 +71,7 @@ func TestFindPassesTheThresholdToTheStore(t *testing.T) {
 }
 
 func TestFindWithNothingIndexedSaysSo(t *testing.T) {
-	_, err := Search{Embedder: &fakeEmbedder{}, Store: &fakeStore{empty: true}}.Find(context.Background(), "pods")
+	_, err := Search{Embedder: &fakeEmbedder{}, Store: &fakeStore{empty: true}}.Find(context.Background(), "pods", "")
 
 	if !errors.Is(err, ErrEmpty) {
 		t.Errorf("err = %v", err)
@@ -78,10 +79,58 @@ func TestFindWithNothingIndexedSaysSo(t *testing.T) {
 }
 
 func TestFindWithNoGoodMatchReturnsAnEmptyList(t *testing.T) {
-	got, err := Search{Embedder: &fakeEmbedder{}, Store: &fakeStore{}}.Find(context.Background(), "helm post-install hook")
+	got, err := Search{Embedder: &fakeEmbedder{}, Store: &fakeStore{}}.Find(context.Background(), "helm post-install hook", "")
 
 	if err != nil || got == nil || len(got) != 0 {
 		t.Errorf("got %#v, err = %v", got, err)
+	}
+}
+
+func TestFindNarrowsToTheTasksDomain(t *testing.T) {
+	store := &fakeStore{results: []Result{{Title: "Volumes"}}}
+
+	if _, err := (Search{Embedder: &fakeEmbedder{}, Store: store}).Find(context.Background(), "port", "storage"); err != nil {
+		t.Fatal(err)
+	}
+
+	if store.query.Domain != "storage" {
+		t.Errorf("searched %+v", store.query)
+	}
+}
+
+func TestFindSearchesEveryPageForATroubleshootingTask(t *testing.T) {
+	store := &fakeStore{results: []Result{{Title: "Services"}}}
+
+	if _, err := (Search{Embedder: &fakeEmbedder{}, Store: store}).Find(context.Background(), "port", "troubleshooting"); err != nil {
+		t.Fatal(err)
+	}
+
+	if store.query.Domain != "" {
+		t.Errorf("searched %+v", store.query)
+	}
+}
+
+func TestFindRefusesAnUnknownDomain(t *testing.T) {
+	_, err := Search{Embedder: &fakeEmbedder{}, Store: &fakeStore{}}.Find(context.Background(), "port", "security")
+
+	if !errors.Is(err, errDomain) {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestDomainsAreTheTaskDomains(t *testing.T) {
+	if len(Domains) != len(tasks.Weights) {
+		t.Errorf("Domains = %q, tasks have %v", Domains, tasks.Weights)
+	}
+	for _, d := range Domains {
+		if _, ok := tasks.Weights[tasks.Domain(d)]; !ok {
+			t.Errorf("%q is not a task domain", d)
+		}
+	}
+	for _, d := range domains {
+		if !slices.Contains(Domains, d) {
+			t.Errorf("a page is tagged %q", d)
+		}
 	}
 }
 
@@ -106,14 +155,12 @@ type fakeStore struct {
 	results []Result
 	empty   bool
 	vector  []float32
-	query   string
-	k       int
-	mode    Mode
+	query   Query
 	min     float64
 }
 
-func (f *fakeStore) Search(_ context.Context, vector []float32, query string, k int, mode Mode, minSimilarity float64) ([]Result, error) {
-	f.vector, f.query, f.k, f.mode, f.min = vector, query, k, mode, minSimilarity
+func (f *fakeStore) Search(_ context.Context, vector []float32, q Query, minSimilarity float64) ([]Result, error) {
+	f.vector, f.query, f.min = vector, q, minSimilarity
 	return f.results, nil
 }
 
@@ -122,6 +169,7 @@ func (f *fakeStore) Empty(context.Context) (bool, error) { return f.empty, nil }
 type fakeIndex struct {
 	hashes   map[string]string
 	upserted []Chunk
+	tagged   []Chunk
 	kept     []string
 }
 
@@ -130,6 +178,11 @@ func (f *fakeIndex) Hashes(context.Context) (map[string]string, error) { return 
 func (f *fakeIndex) Upsert(_ context.Context, chunks []Chunk, _ [][]float32) error {
 	f.upserted = append(f.upserted, chunks...)
 	return nil
+}
+
+func (f *fakeIndex) Retag(_ context.Context, chunks []Chunk) (int, error) {
+	f.tagged = chunks
+	return len(chunks), nil
 }
 
 func (f *fakeIndex) Prune(_ context.Context, keep []string) (int, error) {

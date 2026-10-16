@@ -25,7 +25,8 @@ type inspectArgs struct {
 }
 
 type docsArgs struct {
-	Query string `json:"query" jsonschema:"what to look up, in plain words, such as \"back up etcd with a snapshot\""`
+	Query  string `json:"query" jsonschema:"what to look up, in plain words, such as \"back up etcd with a snapshot\""`
+	Domain string `json:"domain,omitempty" jsonschema:"optional: the open task's domain from current_task, such as storage"`
 }
 
 type taskList struct {
@@ -95,11 +96,12 @@ func New(c *platform.Client) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "search_docs",
 		Description: "Search the Kubernetes v1.37 docs on kubernetes.io, the pages allowed in the CKA exam. Returns the best " +
-			"passages with their links and similarity; cite the link when you explain a concept, field or command. An empty " +
-			"result means the exam docs don't cover this: say so and don't cite a link.",
+			"passages with their links and similarity; cite the link when you explain a concept, field or command. Pass the " +
+			"open task's domain; if that finds nothing, search again without it. An empty result means the exam docs don't " +
+			"cover this: say so and don't cite a link.",
 		Annotations: readOnly,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in docsArgs) (*mcp.CallToolResult, platform.DocsResults, error) {
-		r, err := c.SearchDocs(ctx, in.Query)
+		r, err := c.SearchDocs(ctx, in.Query, in.Domain)
 		return nil, r, err
 	})
 

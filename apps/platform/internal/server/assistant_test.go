@@ -266,7 +266,7 @@ func TestChatStreamsTheToolsAndTheAnswerWithTheAssistantToken(t *testing.T) {
 
 	want := "event: tool\ndata: {\"name\":\"current_task\"}\n\n" +
 		"event: text\ndata: {\"text\":\"review my attempt: current task for tok-assistant\"}\n\n" +
-		"event: done\ndata: {\"tools\":[\"current_task\"]}\n\n"
+		"event: done\ndata: {\"text\":\"review my attempt: current task for tok-assistant\",\"tools\":[\"current_task\"]}\n\n"
 	if status != http.StatusOK || body != want {
 		t.Errorf("got %d %q", status, body)
 	}

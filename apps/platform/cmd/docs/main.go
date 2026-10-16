@@ -47,8 +47,9 @@ type settings struct {
 }
 
 type question struct {
-	Query string   `json:"query"`
-	Want  []string `json:"want"`
+	Query  string   `json:"query"`
+	Want   []string `json:"want"`
+	Domain string   `json:"domain,omitempty"`
 }
 
 func main() {
@@ -139,7 +140,7 @@ func index(ctx context.Context, root fs.FS, ref string, dryRun, fresh bool) erro
 			return err
 		}
 	}
-	fmt.Printf("indexed %d chunks: %d embedded, %d removed\n", counts.Chunks, counts.Embedded, counts.Pruned)
+	fmt.Printf("indexed %d chunks: %d embedded, %d retagged, %d removed\n", counts.Chunks, counts.Embedded, counts.Retagged, counts.Pruned)
 	return nil
 }
 
@@ -176,36 +177,44 @@ func evaluate(ctx context.Context, root fs.FS, cachePath string) error {
 
 	ungated := docs.Search{Embedder: cache, Store: store}
 	gated := docs.Search{Embedder: cache, Store: store, MinSimilarity: cfg.MinSimilarity}
+	gate := fmt.Sprintf("hybrid ≥ %.2f", cfg.MinSimilarity)
 	rows := []struct {
-		label  string
-		search docs.Search
-		mode   docs.Mode
+		label   string
+		search  docs.Search
+		mode    docs.Mode
+		gated   bool
+		domains bool
 	}{
-		{"keyword", ungated, docs.ModeKeyword},
-		{"vector", ungated, docs.ModeVector},
-		{"hybrid", ungated, docs.ModeHybrid},
-		{fmt.Sprintf("hybrid ≥ %.2f", cfg.MinSimilarity), gated, docs.ModeHybrid},
+		{"keyword", ungated, docs.ModeKeyword, false, false},
+		{"vector", ungated, docs.ModeVector, false, false},
+		{"hybrid", ungated, docs.ModeHybrid, false, false},
+		{gate, gated, docs.ModeHybrid, true, false},
+		{gate + " + domain", gated, docs.ModeHybrid, true, true},
 	}
-	fmt.Printf("%d questions, top %d\n%-13s  %8s  %5s\n", len(questions), evalTop, "mode", "recall", "MRR")
-	var last tally
+	fmt.Printf("%d questions, top %d\n%-22s  %8s  %5s\n", len(questions), evalTop, "mode", "recall", "MRR")
 	for _, row := range rows {
 		var t tally
 		for _, q := range questions {
-			results, err := row.search.FindBy(ctx, q.Query, evalTop, row.mode)
+			query := docs.Query{Text: q.Query, K: evalTop, Mode: row.mode}
+			if row.domains {
+				query.Domain = q.Domain
+			}
+			results, err := row.search.FindBy(ctx, query)
 			if err != nil {
 				return fmt.Errorf("%s %q: %w", row.label, q.Query, err)
 			}
 			t.add(q, results)
 		}
-		fmt.Printf("%-13s  %3d / %2d  %5.2f\n", row.label, t.hits, t.answerable, t.mrr())
+		fmt.Printf("%-22s  %3d / %2d  %5.2f\n", row.label, t.hits, t.answerable, t.mrr())
 		for _, m := range t.missed {
-			fmt.Printf("               missed: %s\n", m)
+			fmt.Printf("%24smissed: %s\n", "", m)
 		}
-		last = t
-	}
-	fmt.Printf("quiet when it should be: %d / %d\n", last.quiet, last.unanswerable)
-	for _, n := range last.noisy {
-		fmt.Printf("               noisy: %s\n", n)
+		if row.gated {
+			fmt.Printf("%24squiet when it should be: %d / %d\n", "", t.quiet, t.unanswerable)
+			for _, n := range t.noisy {
+				fmt.Printf("%24snoisy: %s\n", "", n)
+			}
+		}
 	}
 	return nearThreshold(ctx, ungated, questions, cfg.MinSimilarity)
 }
@@ -247,7 +256,7 @@ func (t tally) mrr() float64 {
 func nearThreshold(ctx context.Context, search docs.Search, questions []question, threshold float64) error {
 	fmt.Printf("near the threshold (%.2f ± %.2f), by vector similarity:\n", threshold, nearMargin)
 	for _, q := range questions {
-		results, err := search.FindBy(ctx, q.Query, nearTop, docs.ModeVector)
+		results, err := search.FindBy(ctx, docs.Query{Text: q.Query, K: nearTop, Mode: docs.ModeVector})
 		if err != nil {
 			return fmt.Errorf("near %q: %w", q.Query, err)
 		}

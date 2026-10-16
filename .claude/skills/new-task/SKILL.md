@@ -95,6 +95,8 @@ order: last                        # optional, see below
 
 - Explain **why** the fix works: which controller or component does what. Name the trap.
 - Then show the commands in a `sh` block, the faster exam alternative, and how to verify.
+- Link to the kubernetes.io page instead of quoting it. If you do quote, copy the line word for word from the page
+  you link.
 
 ## 3. Prove it
 

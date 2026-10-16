@@ -200,8 +200,13 @@ func (a *api) chat(w http.ResponseWriter, r *http.Request) error {
 		stream.send("error", map[string]string{"detail": shownDetail(err)})
 		return nil
 	}
-	stream.send("done", map[string][]string{"tools": turn.Tools})
+	stream.send("done", chatDone{Text: turn.Text, Tools: turn.Tools})
 	return nil
+}
+
+type chatDone struct {
+	Text  string   `json:"text"`
+	Tools []string `json:"tools"`
 }
 
 type eventStream struct {

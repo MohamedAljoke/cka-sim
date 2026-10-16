@@ -13,7 +13,7 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/llm"
 )
 
-func TestEvalQuestionsParseAndIncludeSomeWithNoAnswer(t *testing.T) {
+func TestEvalQuestionsParseWithKnownDomainsAndIncludeSomeWithNoAnswer(t *testing.T) {
 	var questions []question
 	if err := yaml.Unmarshal(evalYAML, &questions); err != nil {
 		t.Fatal(err)
@@ -26,6 +26,9 @@ func TestEvalQuestionsParseAndIncludeSomeWithNoAnswer(t *testing.T) {
 		}
 		if len(q.Want) == 0 {
 			unanswerable++
+		}
+		if q.Domain != "" && !slices.Contains(docs.Domains, q.Domain) {
+			t.Errorf("%q has an unknown domain %q", q.Query, q.Domain)
 		}
 	}
 	if unanswerable == 0 || unanswerable == len(questions) {

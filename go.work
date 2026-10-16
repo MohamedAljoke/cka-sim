@@ -2,5 +2,6 @@ go 1.26.9
 
 use (
 	./apps/go-shared
+	./apps/lab
 	./apps/platform
 )

@@ -79,8 +79,16 @@ func BadRequest(err error) error {
 	return &StatusError{http.StatusBadRequest, err}
 }
 
+func Unauthorized(err error) error {
+	return &StatusError{http.StatusUnauthorized, err}
+}
+
 func NotFound(err error) error {
 	return &StatusError{http.StatusNotFound, err}
+}
+
+func Conflict(err error) error {
+	return &StatusError{http.StatusConflict, err}
 }
 
 func Unavailable(err error) error {

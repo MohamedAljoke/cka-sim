@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package lab.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/lab/v1;labv1";
+
+// LabService is served by the agent inside a lab and called by the platform. Every call needs
+// "Authorization: Bearer <token>"; a wrong or missing token fails with UNAUTHENTICATED.
+service LabService {
+  rpc GetCluster(GetClusterRequest) returns (GetClusterResponse);
+  // CreateCluster starts building the cluster and returns at once; poll GetCluster until it is
+  // READY or FAILED. A cluster already CREATING or READY is left as it is. FAILED_PRECONDITION
+  // while it is DELETING.
+  rpc CreateCluster(CreateClusterRequest) returns (CreateClusterResponse);
+  // DeleteCluster starts deleting the cluster and returns at once. An ABSENT or DELETING cluster
+  // is left as it is. FAILED_PRECONDITION while it is CREATING.
+  rpc DeleteCluster(DeleteClusterRequest) returns (DeleteClusterResponse);
+}
+
+enum ClusterState {
+  CLUSTER_STATE_UNSPECIFIED = 0;
+  CLUSTER_STATE_ABSENT = 1;
+  CLUSTER_STATE_CREATING = 2;
+  CLUSTER_STATE_READY = 3;
+  CLUSTER_STATE_DELETING = 4;
+  CLUSTER_STATE_FAILED = 5;
+}
+
+message Cluster {
+  ClusterState state = 1;
+  // What the build is doing while CREATING, like "Preparing nodes".
+  string step = 2;
+  google.protobuf.Timestamp started = 3;
+  google.protobuf.Timestamp ready = 4;
+  // What went wrong while FAILED. The cause stays in the lab's log.
+  string error = 5;
+}
+
+message GetClusterRequest {}
+
+message GetClusterResponse {
+  Cluster cluster = 1;
+}
+
+message CreateClusterRequest {}
+
+message CreateClusterResponse {
+  Cluster cluster = 1;
+}
+
+message DeleteClusterRequest {}
+
+message DeleteClusterResponse {
+  Cluster cluster = 1;
+}

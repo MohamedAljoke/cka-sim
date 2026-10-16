@@ -40,6 +40,23 @@ func TestABadRequestShowsTheDomainErrorAndIsNotReported(t *testing.T) {
 	}
 }
 
+func TestEachWrapperGivesItsStatus(t *testing.T) {
+	for _, tc := range []struct {
+		err    error
+		status int
+	}{
+		{httpx.BadRequest(errNotFound), http.StatusBadRequest},
+		{httpx.Unauthorized(errNotFound), http.StatusUnauthorized},
+		{httpx.NotFound(errNotFound), http.StatusNotFound},
+		{httpx.Conflict(errNotFound), http.StatusConflict},
+		{httpx.Unavailable(errNotFound), http.StatusServiceUnavailable},
+	} {
+		if got := problems(nil).Write(httptest.NewRecorder(), request(), tc.err); got != tc.status {
+			t.Errorf("got %d, want %d", got, tc.status)
+		}
+	}
+}
+
 func TestADomainErrorWithoutAStatusIsAnInternalErrorThatHidesItself(t *testing.T) {
 	rec := httptest.NewRecorder()
 

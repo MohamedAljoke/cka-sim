@@ -1,0 +1,9 @@
+version: v2
+modules:
+  - path: contract
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE

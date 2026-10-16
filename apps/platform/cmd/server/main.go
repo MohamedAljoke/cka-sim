@@ -51,10 +51,7 @@ func run(ctx context.Context) error {
 	defer ln.Close()
 
 	lab := labagent.NewProvider(cfg.LabURL, cfg.AgentToken)
-	handler := api.New(
-		usecases.NewListTasks(taskRepo), usecases.NewGetTask(taskRepo), usecases.NewGetSolution(taskRepo),
-		labusecases.NewGetLab(lab), labusecases.NewStartLab(lab), labusecases.NewStopLab(lab),
-	)
+	handler := api.New(usecases.New(taskRepo), labusecases.New(lab))
 	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()

@@ -30,8 +30,14 @@ type solutionView struct {
 	Solution string `json:"solution"`
 }
 
+func (a *api) taskRoutes(handle handleFunc) {
+	handle("GET /api/tasks", a.getTasks)
+	handle("GET /api/tasks/{id}", a.getTaskByID)
+	handle("GET /api/tasks/{id}/solution", a.getTaskSolution)
+}
+
 func (a *api) getTasks(w http.ResponseWriter, r *http.Request) error {
-	all, err := a.listTasks.Execute(r.Context(), filterOf(r.URL.Query()))
+	all, err := a.tasks.List.Execute(r.Context(), filterOf(r.URL.Query()))
 	switch {
 	case errors.Is(err, tasks.ErrUnknownDomain), errors.Is(err, tasks.ErrMalformedTopic):
 		return httpx.BadRequest(err)
@@ -48,7 +54,7 @@ func (a *api) getTasks(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) getTaskByID(w http.ResponseWriter, r *http.Request) error {
-	t, err := a.getTask.Execute(r.Context(), r.PathValue("id"))
+	t, err := a.tasks.Get.Execute(r.Context(), r.PathValue("id"))
 	switch {
 	case errors.Is(err, tasks.ErrNotFound):
 		return httpx.NotFound(err)
@@ -61,7 +67,7 @@ func (a *api) getTaskByID(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) getTaskSolution(w http.ResponseWriter, r *http.Request) error {
-	solution, err := a.getSolution.Execute(r.Context(), r.PathValue("id"))
+	solution, err := a.tasks.Solution.Execute(r.Context(), r.PathValue("id"))
 	switch {
 	case errors.Is(err, tasks.ErrNotFound):
 		return httpx.NotFound(err)

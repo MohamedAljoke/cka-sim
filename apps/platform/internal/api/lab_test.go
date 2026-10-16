@@ -86,7 +86,5 @@ func (p *fakeLabProvider) Stop(context.Context) (labs.Lab, error) {
 }
 
 func newLabAPI(p labusecases.LabProvider) http.Handler {
-	repo := fakeRepository{}
-	return New(usecases.NewListTasks(repo), usecases.NewGetTask(repo), usecases.NewGetSolution(repo),
-		labusecases.NewGetLab(p), labusecases.NewStartLab(p), labusecases.NewStopLab(p))
+	return New(usecases.UseCases{}, labusecases.New(p))
 }

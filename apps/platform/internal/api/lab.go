@@ -18,8 +18,14 @@ type labView struct {
 	Error     string     `json:"error,omitempty"`
 }
 
+func (a *api) labRoutes(handle handleFunc) {
+	handle("GET /api/lab", a.getLabStatus)
+	handle("POST /api/lab", a.postLab)
+	handle("DELETE /api/lab", a.deleteLab)
+}
+
 func (a *api) getLabStatus(w http.ResponseWriter, r *http.Request) error {
-	lab, err := a.getLab.Execute(r.Context())
+	lab, err := a.labs.Get.Execute(r.Context())
 	switch {
 	case errors.Is(err, labs.ErrUnavailable):
 		return httpx.Unavailable(err)
@@ -30,7 +36,7 @@ func (a *api) getLabStatus(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) postLab(w http.ResponseWriter, r *http.Request) error {
-	lab, err := a.startLab.Execute(r.Context())
+	lab, err := a.labs.Start.Execute(r.Context())
 	switch {
 	case errors.Is(err, labs.ErrBusy):
 		return httpx.Conflict(err)
@@ -43,7 +49,7 @@ func (a *api) postLab(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) deleteLab(w http.ResponseWriter, r *http.Request) error {
-	lab, err := a.stopLab.Execute(r.Context())
+	lab, err := a.labs.Stop.Execute(r.Context())
 	switch {
 	case errors.Is(err, labs.ErrBusy):
 		return httpx.Conflict(err)

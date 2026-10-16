@@ -165,8 +165,7 @@ func newAPI(all ...tasks.Task) http.Handler {
 }
 
 func newAPIWith(repo usecases.TaskRepository) http.Handler {
-	return New(usecases.NewListTasks(repo), usecases.NewGetTask(repo), usecases.NewGetSolution(repo),
-		labusecases.NewGetLab(&fakeLabProvider{}), labusecases.NewStartLab(&fakeLabProvider{}), labusecases.NewStopLab(&fakeLabProvider{}))
+	return New(usecases.New(repo), labusecases.UseCases{})
 }
 
 type fakeRepository struct {

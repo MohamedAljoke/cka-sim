@@ -11,29 +11,20 @@ import (
 )
 
 type api struct {
-	listTasks   *usecases.ListTasks
-	getTask     *usecases.GetTask
-	getSolution *usecases.GetSolution
-	getLab      *labusecases.GetLab
-	startLab    *labusecases.StartLab
-	stopLab     *labusecases.StopLab
+	tasks usecases.UseCases
+	labs  labusecases.UseCases
 }
 
-func New(
-	listTasks *usecases.ListTasks, getTask *usecases.GetTask, getSolution *usecases.GetSolution,
-	getLab *labusecases.GetLab, startLab *labusecases.StartLab, stopLab *labusecases.StopLab,
-) http.Handler {
-	a := &api{listTasks: listTasks, getTask: getTask, getSolution: getSolution, getLab: getLab, startLab: startLab, stopLab: stopLab}
+type handleFunc func(pattern string, h httpx.Handler)
+
+func New(tasks usecases.UseCases, labs labusecases.UseCases) http.Handler {
+	a := &api{tasks: tasks, labs: labs}
 	problems := httpx.NewProblems(httpx.WithReporter(func(r *http.Request, err error) {
 		log.Printf("%s %s: %v", r.Method, r.URL.Path, err)
 	}))
 	mux := http.NewServeMux()
 	handle := func(pattern string, h httpx.Handler) { mux.HandleFunc(pattern, problems.Handle(h)) }
-	handle("GET /api/tasks", a.getTasks)
-	handle("GET /api/tasks/{id}", a.getTaskByID)
-	handle("GET /api/tasks/{id}/solution", a.getTaskSolution)
-	handle("GET /api/lab", a.getLabStatus)
-	handle("POST /api/lab", a.postLab)
-	handle("DELETE /api/lab", a.deleteLab)
+	a.taskRoutes(handle)
+	a.labRoutes(handle)
 	return http.NewCrossOriginProtection().Handler(mux)
 }

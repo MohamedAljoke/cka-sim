@@ -5,6 +5,7 @@ A Kubernetes study environment anyone can install on their own machine.
 Being rebuilt from scratch. The first implementation is kept on the
 [`archive/v1`](https://github.com/MohamedAljoke/cka-sim/tree/archive/v1) branch for reference.
 <img width="1914" height="907" alt="image" src="https://github.com/user-attachments/assets/82056248-e7ed-4b20-8e41-5b037f1e30f0" />
+<img width="1915" height="908" alt="image" src="https://github.com/user-attachments/assets/c624cf4c-6b74-4a78-9f07-b58476f65eac" />
 
 You get a real 3-node Kubernetes cluster in your browser, with a terminal on an exam-style base host. Practise
 CKA tasks one at a time and press **Check** to grade them, or take a timed mock exam scored against the 66%

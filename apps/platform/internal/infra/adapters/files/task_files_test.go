@@ -30,10 +30,10 @@ func TestParseRejects(t *testing.T) {
 		text    string
 		wantErr string
 	}{
-		{"no taskFrontmatter", "## Task\n", "missing taskFrontmatter"},
-		{"unclosed taskFrontmatter", "---\nid: x\n", "no closing ---"},
+		{"no frontmatter", "## Task\n", "missing frontmatter"},
+		{"unclosed frontmatter", "---\nid: x\n", "no closing ---"},
 		{"unknown key", taskMD("x", "domain: workloads\nweight: 1\ncluster: a"), "unknown field"},
-		{"wrong type", taskMD("x", "domain: workloads\nweight: many"), "taskFrontmatter:"},
+		{"wrong type", taskMD("x", "domain: workloads\nweight: many"), "frontmatter:"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -80,7 +80,7 @@ func TestListIsACopy(t *testing.T) {
 	}
 }
 
-func TestGetGivesTheTaskWithItsQuestion(t *testing.T) {
+func TestGetGivesTheTaskWithItsQuestionAndSolution(t *testing.T) {
 	fsys := fstest.MapFS{}
 	addTask(fsys, "wl-scale")
 	repo, err := NewTaskRepository(fsys)
@@ -90,7 +90,7 @@ func TestGetGivesTheTaskWithItsQuestion(t *testing.T) {
 
 	got, err := repo.Get(context.Background(), "wl-scale")
 
-	if err != nil || got.ID != "wl-scale" || got.Question != "Do the wl-scale task." {
+	if err != nil || got.ID != "wl-scale" || got.Question != "Do the wl-scale task." || got.Solution != "Solve wl-scale." {
 		t.Errorf("Get = %+v, %v", got, err)
 	}
 }
@@ -114,13 +114,13 @@ func TestNewTaskRepositoryRejects(t *testing.T) {
 		text    string
 		wantErr string
 	}{
-		{"bad taskFrontmatter names the file", "## Task\n", "wl-scale/task.md: missing taskFrontmatter"},
+		{"bad frontmatter names the file", "## Task\n", "wl-scale/task.md: missing frontmatter"},
 		{"id differs from folder", taskMD("wl-other", "domain: workloads\nweight: 1"), `id "wl-other" must match its folder "wl-scale"`},
 		{"a broken task rule names the file", taskMD("wl-scale", "domain: security\nweight: 1"), `wl-scale/task.md: unknown domain "security"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fsys := fstest.MapFS{"wl-scale/task.md": &fstest.MapFile{Data: []byte(tt.text)}}
+			fsys := fstest.MapFS{"wl-scale/task.md": &fstest.MapFile{Data: []byte(tt.text)}, "wl-scale/explain.md": &fstest.MapFile{Data: []byte("Solve it.\n")}}
 
 			_, err := NewTaskRepository(fsys)
 
@@ -131,10 +131,21 @@ func TestNewTaskRepositoryRejects(t *testing.T) {
 	}
 }
 
+func TestNewTaskRepositoryNeedsASolutionFile(t *testing.T) {
+	fsys := fstest.MapFS{"wl-scale/task.md": &fstest.MapFile{Data: []byte(taskMD("wl-scale", "domain: workloads\nweight: 1"))}}
+
+	_, err := NewTaskRepository(fsys)
+
+	if err == nil || err.Error() != "wl-scale/task.md: missing explain.md" {
+		t.Errorf("got error %v", err)
+	}
+}
+
 func taskMD(id, fields string) string {
 	return "---\nid: " + id + "\ntitle: A task\nhost: node-1\n" + fields + "\n---\nDo the " + id + " task.\n"
 }
 
 func addTask(fsys fstest.MapFS, id string) {
 	fsys[id+"/task.md"] = &fstest.MapFile{Data: []byte(taskMD(id, "domain: workloads\nweight: 1"))}
+	fsys[id+"/explain.md"] = &fstest.MapFile{Data: []byte("Solve " + id + ".\n")}
 }

@@ -24,8 +24,8 @@ func TestListsTasksWithoutTheQuestion(t *testing.T) {
 		!strings.Contains(body, `"domainTitle":"Workloads and Scheduling"`) {
 		t.Errorf("body misses the task: %s", body)
 	}
-	if strings.Contains(body, "Scale it to 4") {
-		t.Errorf("body leaks the question: %s", body)
+	if strings.Contains(body, "Scale it to 4") || strings.Contains(body, "kubectl scale") {
+		t.Errorf("body leaks the question or solution: %s", body)
 	}
 }
 
@@ -81,6 +81,30 @@ func TestATaskComesWithItsQuestion(t *testing.T) {
 	}
 }
 
+func TestATaskDoesNotGiveAwayItsSolution(t *testing.T) {
+	_, body := call(t, newAPI(wlScale), http.MethodGet, "/api/tasks/wl-scale")
+
+	if strings.Contains(body, "kubectl scale") {
+		t.Errorf("body leaks the solution: %s", body)
+	}
+}
+
+func TestASolutionComesOnlyWhenAskedFor(t *testing.T) {
+	status, body := call(t, newAPI(wlScale), http.MethodGet, "/api/tasks/wl-scale/solution")
+
+	if status != http.StatusOK || strings.TrimSpace(body) != `{"solution":"Run kubectl scale."}` {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestTheSolutionOfAnUnknownTaskIsNotFound(t *testing.T) {
+	status, body := call(t, newAPI(wlScale), http.MethodGet, "/api/tasks/net-svc/solution")
+
+	if status != http.StatusNotFound || !strings.Contains(body, `"code":"task_not_found"`) {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
 func TestAnUnknownTaskIsNotFound(t *testing.T) {
 	status, body := call(t, newAPI(wlScale), http.MethodGet, "/api/tasks/net-svc")
 
@@ -99,14 +123,14 @@ func TestAFailedGetIsUnavailableAndHidesTheCause(t *testing.T) {
 	}
 }
 
-var wlScale = tasks.Task{ID: "wl-scale", Title: "Scale a Deployment", Domain: tasks.Workloads, Topics: []string{"deployments"}, Weight: 4, Host: "node-1", Question: "Scale it to 4."}
+var wlScale = tasks.Task{ID: "wl-scale", Title: "Scale a Deployment", Domain: tasks.Workloads, Topics: []string{"deployments"}, Weight: 4, Host: "node-1", Question: "Scale it to 4.", Solution: "Run kubectl scale."}
 
 func newAPI(all ...tasks.Task) http.Handler {
 	return newAPIWith(fakeRepository{tasks: all})
 }
 
 func newAPIWith(repo usecases.TaskRepository) http.Handler {
-	return New(usecases.NewListTasks(repo), usecases.NewGetTask(repo))
+	return New(usecases.NewListTasks(repo), usecases.NewGetTask(repo), usecases.NewGetSolution(repo))
 }
 
 type fakeRepository struct {

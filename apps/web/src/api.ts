@@ -21,6 +21,11 @@ export async function getTask(id: string, signal?: AbortSignal): Promise<TaskDet
   return (await call('GET', `/api/tasks/${encodeURIComponent(id)}`, signal)).json()
 }
 
+export async function getSolution(id: string, signal?: AbortSignal): Promise<string> {
+  const reply: { solution: string } = await (await call('GET', `/api/tasks/${encodeURIComponent(id)}/solution`, signal)).json()
+  return reply.solution
+}
+
 async function call(method: string, path: string, signal?: AbortSignal): Promise<Response> {
   const res = await fetch(path, { method, signal })
   if (!res.ok) throw await failure(res, method, path)

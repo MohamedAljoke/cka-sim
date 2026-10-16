@@ -184,3 +184,18 @@ code {
   padding: 0;
   background: none;
 }
+
+.action:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.solution-panel {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+
+.solution {
+  margin-top: 12px;
+}

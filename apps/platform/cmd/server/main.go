@@ -40,7 +40,7 @@ func run(ctx context.Context, addr string) error {
 	}
 	defer ln.Close()
 
-	srv := &http.Server{Handler: api.New(usecases.NewListTasks(taskRepo), usecases.NewGetTask(taskRepo)), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Handler: api.New(usecases.NewListTasks(taskRepo), usecases.NewGetTask(taskRepo), usecases.NewGetSolution(taskRepo)), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

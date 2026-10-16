@@ -121,6 +121,48 @@ func TestAnUnknownTaskIsNotFound(t *testing.T) {
 	}
 }
 
+func TestATaskOpensWithoutItsSolution(t *testing.T) {
+	status, body := request(t, http.MethodGet, "/api/tasks/wl-scale", nil)
+
+	if status != http.StatusOK || strings.Contains(string(body), "solution") || strings.Contains(string(body), "kubectl -n wl-scale scale") {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestATaskShowsItsSolutionWhenAsked(t *testing.T) {
+	status, body := request(t, http.MethodGet, "/api/tasks/wl-scale/solution", nil)
+	if status != http.StatusOK {
+		t.Fatalf("status %d: %s", status, body)
+	}
+
+	var got solution
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(got.Solution, "kubectl -n wl-scale scale deployment web --replicas=4") {
+		t.Errorf("solution = %q", got.Solution)
+	}
+}
+
+func TestEveryListedTaskHasASolution(t *testing.T) {
+	for _, task := range listTasks(t) {
+		status, body := request(t, http.MethodGet, "/api/tasks/"+task.ID+"/solution", nil)
+		var got solution
+		if err := json.Unmarshal(body, &got); status != http.StatusOK || err != nil || strings.TrimSpace(got.Solution) == "" {
+			t.Errorf("%s: status %d, err %v, solution %q", task.ID, status, err, got.Solution)
+		}
+	}
+}
+
+func TestTheSolutionOfAnUnknownTaskIsNotFound(t *testing.T) {
+	status, body := request(t, http.MethodGet, "/api/tasks/no-such-task/solution", nil)
+
+	if status != http.StatusNotFound || !strings.Contains(string(body), `"code":"task_not_found"`) {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
 type listedTask struct {
 	ID          string   `json:"id"`
 	Title       string   `json:"title"`
@@ -134,6 +176,10 @@ type listedTask struct {
 type taskDetail struct {
 	listedTask
 	Question string `json:"question"`
+}
+
+type solution struct {
+	Solution string `json:"solution"`
 }
 
 func listTasks(t *testing.T) []listedTask {

@@ -55,9 +55,15 @@ func loadTaskFile(fsys fs.FS, file string) (tasks.Task, error) {
 	if err != nil {
 		return tasks.Task{}, err
 	}
-	if dir := path.Dir(file); t.ID != dir {
+	dir := path.Dir(file)
+	if t.ID != dir {
 		return tasks.Task{}, fmt.Errorf("id %q must match its folder %q", t.ID, dir)
 	}
+	solution, err := fs.ReadFile(fsys, path.Join(dir, "explain.md"))
+	if err != nil {
+		return tasks.Task{}, errors.New("missing explain.md")
+	}
+	t.Solution = strings.TrimSpace(string(solution))
 	return t, t.Validate()
 }
 
@@ -74,15 +80,15 @@ type taskFrontmatter struct {
 func parseTaskFile(text string) (tasks.Task, error) {
 	rest, ok := strings.CutPrefix(text, "---\n")
 	if !ok {
-		return tasks.Task{}, errors.New("missing taskFrontmatter: the file must start with ---")
+		return tasks.Task{}, errors.New("missing frontmatter: the file must start with ---")
 	}
 	head, body, ok := strings.Cut(rest, "\n---\n")
 	if !ok {
-		return tasks.Task{}, errors.New("taskFrontmatter has no closing ---")
+		return tasks.Task{}, errors.New("frontmatter has no closing ---")
 	}
 	var fm taskFrontmatter
 	if err := yaml.UnmarshalStrict([]byte(head), &fm); err != nil {
-		return tasks.Task{}, fmt.Errorf("taskFrontmatter: %w", err)
+		return tasks.Task{}, fmt.Errorf("frontmatter: %w", err)
 	}
 	return tasks.Task{
 		ID:       fm.ID,

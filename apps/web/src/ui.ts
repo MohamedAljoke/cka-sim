@@ -1,7 +1,7 @@
 import { marked } from 'marked'
 import type { Task } from './api'
 
-// Questions come from the bundled catalog, not from users, so their markdown renders as is.
+// Questions and solutions come from the bundled catalog, not from users, so their markdown renders as is.
 export function markdown(target: HTMLElement, text: string) {
   target.insertAdjacentHTML('beforeend', marked.parse(text, { async: false }))
 }

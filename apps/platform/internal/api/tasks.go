@@ -24,6 +24,10 @@ type taskDetailView struct {
 	Question string `json:"question"`
 }
 
+type solutionView struct {
+	Solution string `json:"solution"`
+}
+
 func (a *api) getTasks(w http.ResponseWriter, r *http.Request) error {
 	all, err := a.listTasks.Execute(r.Context())
 	if err != nil {
@@ -42,6 +46,14 @@ func (a *api) getTaskByID(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, taskDetailView{taskView: newTaskView(t), Question: t.Question})
+}
+
+func (a *api) getTaskSolution(w http.ResponseWriter, r *http.Request) error {
+	solution, err := a.getSolution.Execute(r.Context(), r.PathValue("id"))
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, solutionView{Solution: solution})
 }
 
 func newTaskView(t tasks.Task) taskView {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks/usecases"
 )
 
 type taskView struct {
@@ -38,11 +39,27 @@ type setupView struct {
 	Output   string `json:"output,omitempty"`
 }
 
+// A check that printed no PASS or FAIL line broke, so the page gets its exit code and output instead.
+type gradeView struct {
+	Earned   int         `json:"earned"`
+	Total    int         `json:"total"`
+	Checks   []checkView `json:"checks"`
+	ExitCode int         `json:"exitCode,omitempty"`
+	Output   string      `json:"output,omitempty"`
+}
+
+type checkView struct {
+	Passed      bool   `json:"passed"`
+	Points      int    `json:"points"`
+	Description string `json:"description"`
+}
+
 func (a *api) taskRoutes(handle handleFunc) {
 	handle("GET /api/tasks", a.getTasks)
 	handle("GET /api/tasks/{id}", a.getTaskByID)
 	handle("GET /api/tasks/{id}/solution", a.getTaskSolution)
 	handle("POST /api/tasks/{id}/start", a.startTask)
+	handle("POST /api/tasks/{id}/check", a.checkTask)
 }
 
 func (a *api) getTasks(w http.ResponseWriter, r *http.Request) error {
@@ -108,6 +125,37 @@ func (a *api) startTask(w http.ResponseWriter, r *http.Request) error {
 	view := setupView{Passed: result.Passed(), ExitCode: result.ExitCode, Output: result.Output}
 
 	return httpx.WriteJSON(w, http.StatusOK, view)
+}
+
+func (a *api) checkTask(w http.ResponseWriter, r *http.Request) error {
+	checked, err := a.tasks.Check.Execute(r.Context(), r.PathValue("id"))
+	switch {
+	case errors.Is(err, tasks.ErrNotFound):
+		return httpx.NotFound(err)
+	case errors.Is(err, labs.ErrNotReady):
+		return httpx.Conflict(err)
+	case errors.Is(err, tasks.ErrUnavailable), errors.Is(err, labs.ErrUnavailable):
+		return httpx.Unavailable(err)
+	case err != nil:
+		return err
+	}
+
+	return httpx.WriteJSON(w, http.StatusOK, newGradeView(checked))
+}
+
+func newGradeView(checked usecases.Checked) gradeView {
+	grade := checked.Grade
+	view := gradeView{Earned: grade.Earned, Total: grade.Total, Checks: make([]checkView, len(grade.Checks))}
+
+	for i, c := range grade.Checks {
+		view.Checks[i] = checkView{Passed: c.Passed, Points: c.Points, Description: c.Description}
+	}
+
+	if len(grade.Checks) == 0 {
+		view.ExitCode, view.Output = checked.Script.ExitCode, checked.Script.Output
+	}
+
+	return view
 }
 
 func filterOf(query url.Values) tasks.Filter {

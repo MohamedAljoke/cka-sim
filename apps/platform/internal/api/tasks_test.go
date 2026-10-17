@@ -213,6 +213,62 @@ func TestStartingAnUnknownTaskIsNotFound(t *testing.T) {
 	}
 }
 
+func TestCheckingATaskAnswersItsGrade(t *testing.T) {
+	r := &fakeRunner{result: labs.ScriptResult{Output: "deployment.apps/web\nPASS 2 web has 4 replicas\nFAIL 1 web is Ready\n"}}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/wl-scale/check")
+
+	want := `{"earned":2,"total":3,"checks":[{"passed":true,"points":2,"description":"web has 4 replicas"},` +
+		`{"passed":false,"points":1,"description":"web is Ready"}]}`
+	if status != http.StatusOK || strings.TrimSpace(body) != want {
+		t.Errorf("status %d: %s", status, body)
+	}
+	if r.host != "node-1" || r.script != wlScale.Check {
+		t.Errorf("ran %q on %q", r.script, r.host)
+	}
+}
+
+func TestACheckThatPrintsNoResultAnswersItsExitCodeAndOutput(t *testing.T) {
+	r := &fakeRunner{result: labs.ScriptResult{Output: "bash: jq: command not found\n", ExitCode: 127}}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/wl-scale/check")
+
+	want := `{"earned":0,"total":0,"checks":[],"exitCode":127,"output":"bash: jq: command not found\n"}`
+	if status != http.StatusOK || strings.TrimSpace(body) != want {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestCheckingATaskWhileTheLabIsNotReadyIsAConflict(t *testing.T) {
+	r := &fakeRunner{err: fmt.Errorf("%w: the cluster is creating", labs.ErrNotReady)}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/wl-scale/check")
+
+	if status != http.StatusConflict || !strings.Contains(body, `"code":"lab_not_ready"`) {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestCheckingATaskOnALabThatDoesNotAnswerIsUnavailableAndHidesTheCause(t *testing.T) {
+	r := &fakeRunner{err: errors.New("dial tcp 127.0.0.1:7171: connection refused")}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/wl-scale/check")
+
+	if status != http.StatusServiceUnavailable || !strings.Contains(body, `"code":"lab_unavailable"`) || strings.Contains(body, "7171") {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestCheckingAnUnknownTaskIsNotFound(t *testing.T) {
+	r := &fakeRunner{}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/net-svc/check")
+
+	if status != http.StatusNotFound || !strings.Contains(body, `"code":"task_not_found"`) || r.host != "" {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
 var wlScale = tasks.Task{ID: "wl-scale", Title: "Scale a Deployment", Domain: tasks.Workloads, Topics: []string{"deployments"}, Weight: 4, Host: "node-1", Question: "Scale it to 4.", Solution: "Run kubectl scale.", Setup: "fresh_ns wl-scale\n", Check: "check 1 \"scaled\" true\n"}
 
 func newAPI(all ...tasks.Task) http.Handler {

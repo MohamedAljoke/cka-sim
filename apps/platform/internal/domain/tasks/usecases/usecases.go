@@ -5,6 +5,7 @@ type UseCases struct {
 	Get      *GetTask
 	Solution *GetSolution
 	Start    *StartTask
+	Check    *CheckTask
 }
 
 func New(repo TaskRepository, runner ScriptRunner) UseCases {
@@ -13,5 +14,6 @@ func New(repo TaskRepository, runner ScriptRunner) UseCases {
 		Get:      NewGetTask(repo),
 		Solution: NewGetSolution(repo),
 		Start:    NewStartTask(repo, runner),
+		Check:    NewCheckTask(repo, runner),
 	}
 }

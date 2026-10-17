@@ -1,7 +1,7 @@
 # cka-sim
 
-A practice simulator for the CKA exam: pick a task, get a real Kubernetes cluster, solve it in a root shell in
-your browser.
+A practice simulator for the CKA exam: pick a task, get a real Kubernetes cluster, solve it in a terminal in
+your browser, the way the exam does: start on a host, `ssh` to a node.
 
 Not a mock. Every cluster is a real kubeadm cluster with a real etcd, static pods and kubelets, so you can
 break a control plane and fix it the way the exam asks you to.
@@ -23,6 +23,7 @@ cka-sim down        # stop it; the downloaded images stay
 cka-sim up          # start it again
 cka-sim status      # what is running
 cka-sim logs lab    # follow one part's logs: lab or app
+cka-sim shell       # the page's terminal, in yours
 cka-sim update      # get the latest cka-sim and restart it
 cka-sim uninstall   # delete it and everything it stored
 ```
@@ -34,7 +35,7 @@ lab, and `make dev` runs the page with hot reload on http://localhost:5173.
 
 ## How it works
 
-![The lab container runs its own dockerd, which runs the kind nodes](docs/img/lab-container.svg)
+![The lab container runs its own dockerd, which runs the base host and the kind nodes](docs/img/lab-container.svg)
 
 - **A whole cluster in one container.** The lab container runs its own Docker, and [kind](https://kind.sigs.k8s.io)
   turns each node into a container inside it. Three levels deep: your Docker → the lab's Docker → the cluster's
@@ -42,18 +43,21 @@ lab, and `make dev` runs the page with hot reload on http://localhost:5173.
 - **kind as a Go library, not a CLI.** The agent drives cluster creation in-process and turns kind's logger
   calls into live progress, with no log scraping. Config is embedded in the binary, and a cgroup v1 patch is
   added only when the host needs it.
+- **An exam-like base host.** The terminal lands on a host with no kubectl, as `candidate`. Each task says
+  which node to `ssh` to, and every node has candidate's key, a kubeconfig and passwordless `sudo`. The node
+  image adds sshd, vim and `k` completion on top of `kindest/node`.
 - **A browser terminal that is a real shell.** Keystrokes travel WebSocket → platform → a bidirectional Connect
-  stream → a pty on the agent → `docker exec -it` → bash on the control-plane node. What you see is bash's
-  echo coming back; resizes are copied down to the node's terminal so `vim` and `top` draw correctly.
+  stream → a pty on the agent → `docker exec -it` → bash on the base host. What you see is bash's echo coming
+  back; resizes are copied down, through `ssh` too, so `vim` and `top` draw correctly.
 - **The platform never touches Docker.** It only knows the agent's contract
   ([`lab.proto`](apps/go-shared/contract/lab/v1/lab.proto)), so a lab could later run on a VM or GKE without the
   platform changing.
-- **Clean ends.** Killing `docker exec` leaves bash running in the node, so each shell is tagged in its
+- **Clean ends.** Killing `docker exec` leaves bash running on the base host, so each shell is tagged in its
   environment and the agent hunts down every tagged process on close.
 
-![One keystroke from xterm.js to bash on the control-plane node and back](docs/img/terminal.svg)
+![One keystroke from xterm.js to bash on the base host and back](docs/img/terminal.svg)
 
-The full walkthrough, from Docker-in-Docker quirks to how HTTP/2 streams both ways, is in
+The full walkthrough, from Docker-in-Docker quirks to the base host's ssh setup and how HTTP/2 streams both ways, is in
 [docs/LAB-INTERNALS.md](docs/LAB-INTERNALS.md).
 
 ## The code
@@ -74,5 +78,5 @@ end-to-end tests against the real binary. The rules are in [AGENTS.md](AGENTS.md
 ## Status
 
 Being rebuilt step by step on this branch; [docs/REBUILD-STATUS.md](docs/REBUILD-STATUS.md) tracks what has
-landed and [docs/REBUILD-IN-STEPS.md](docs/REBUILD-IN-STEPS.md) what comes next. Next up: an exam-like base
-host you `ssh` from, then a killer.sh-style exam mode.
+landed and [docs/REBUILD-IN-STEPS.md](docs/REBUILD-IN-STEPS.md) what comes next. Next up: a killer.sh-style exam
+mode.

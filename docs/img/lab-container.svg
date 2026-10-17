@@ -1,17 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 468" role="img" aria-label="The kind cluster runs on a private Docker inside the lab container" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 520" role="img" aria-label="The kind cluster and the base host run on a private Docker inside the lab container" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
   <style>
     .ink { fill: #1f2328; }
     .quiet { fill: #59636e; font-size: 11.5px; }
+    .label { fill: #59636e; font-size: 11px; }
     .edge { fill: none; stroke: #8c959f; stroke-width: 1.25; }
     .head { fill: #8c959f; }
     .node { fill: #0969da; fill-opacity: 0.12; stroke: #0969da; stroke-width: 2; }
+    .base { fill: #1a7f37; fill-opacity: 0.12; stroke: #1a7f37; stroke-width: 2; }
     .b { font-weight: 600; }
     @media (prefers-color-scheme: dark) {
       .ink { fill: #e6edf3; }
-      .quiet { fill: #9198a1; }
+      .quiet, .label { fill: #9198a1; }
       .edge { stroke: #6e7681; }
       .head { fill: #6e7681; }
       .node { fill: #4493f8; stroke: #4493f8; }
+      .base { fill: #3fb950; stroke: #3fb950; }
     }
   </style>
   <defs>
@@ -19,9 +22,9 @@
       <path class="head" d="M0 0L10 5L0 10z"/>
     </marker>
   </defs>
-  <text class="ink b" x="24" y="34" font-size="15">The kind cluster runs on a private Docker inside the lab container</text>
+  <text class="ink b" x="24" y="34" font-size="15">The kind cluster and the base host run on a private Docker inside the lab container</text>
 
-  <rect class="edge" x="24" y="56" width="712" height="388" rx="8" stroke-width="1" stroke-dasharray="4 4"/>
+  <rect class="edge" x="24" y="56" width="712" height="440" rx="8" stroke-width="1" stroke-dasharray="4 4"/>
   <text class="ink b" x="40" y="80">Your machine</text>
 
   <rect class="edge" x="48" y="96" width="240" height="72" rx="8"/>
@@ -32,9 +35,9 @@
   <rect class="edge" x="488" y="96" width="200" height="72" rx="8"/>
   <text class="ink b" x="588" y="120" text-anchor="middle">lab-docker volume</text>
   <text class="quiet" x="588" y="136" text-anchor="middle">survives cka-sim down</text>
-  <text class="quiet" x="588" y="152" text-anchor="middle">keeps the 1 GB node image</text>
+  <text class="quiet" x="588" y="152" text-anchor="middle">keeps the node and base images</text>
 
-  <rect class="edge" x="48" y="200" width="664" height="228" rx="8"/>
+  <rect class="edge" x="48" y="200" width="664" height="280" rx="8"/>
   <text class="ink b" x="304" y="224">lab container</text>
   <text class="quiet" x="410" y="224">privileged, docker:dind</text>
 
@@ -43,22 +46,33 @@
   <text class="quiet" x="182" y="288" text-anchor="middle">:7171, LabService over Connect</text>
   <text class="quiet" x="182" y="304" text-anchor="middle">bearer token on every call</text>
   <text class="quiet" x="182" y="320" text-anchor="middle">kind as a Go library</text>
-  <text class="quiet" x="182" y="336" text-anchor="middle">shells: pty + docker exec</text>
+  <text class="quiet" x="182" y="336" text-anchor="middle">shells: pty + docker exec into base</text>
 
-  <rect class="edge" x="324" y="248" width="364" height="164" rx="8"/>
+  <rect class="edge" x="324" y="248" width="364" height="216" rx="8"/>
   <text class="ink b" x="506" y="272" text-anchor="middle">inner dockerd</text>
   <text class="quiet" x="506" y="288" text-anchor="middle">Unix socket only, started by lab-start.sh</text>
-  <text class="quiet" x="340" y="336">kind nodes, one container each</text>
-  <rect class="node" x="340" y="348" width="100" height="48" rx="8"/>
-  <rect class="node" x="456" y="348" width="100" height="48" rx="8"/>
-  <rect class="node" x="572" y="348" width="100" height="48" rx="8"/>
-  <text class="ink" x="390" y="376" text-anchor="middle" font-size="11.5">control-plane</text>
-  <text class="ink" x="506" y="376" text-anchor="middle" font-size="11.5">worker</text>
-  <text class="ink" x="622" y="376" text-anchor="middle" font-size="11.5">worker2</text>
+
+  <rect class="edge" x="340" y="304" width="332" height="144" rx="6" stroke-dasharray="4 4"/>
+  <text class="quiet" x="356" y="324">the kind network</text>
+
+  <rect class="base" x="356" y="334" width="300" height="44" rx="8"/>
+  <text class="ink b" x="372" y="361">base</text>
+  <text class="quiet" x="410" y="361">the terminal, as candidate; no kubectl</text>
+
+  <rect class="node" x="356" y="396" width="92" height="40" rx="8"/>
+  <rect class="node" x="460" y="396" width="92" height="40" rx="8"/>
+  <rect class="node" x="564" y="396" width="92" height="40" rx="8"/>
+  <text class="ink" x="402" y="420" text-anchor="middle" font-size="11.5">control-plane</text>
+  <text class="ink" x="506" y="420" text-anchor="middle" font-size="11.5">worker</text>
+  <text class="ink" x="610" y="420" text-anchor="middle" font-size="11.5">worker2</text>
+  <path class="edge" d="M402 378V392" marker-end="url(#arrow)"/>
+  <path class="edge" d="M506 378V392" marker-end="url(#arrow)"/>
+  <path class="edge" d="M610 378V392" marker-end="url(#arrow)"/>
 
   <path class="edge" d="M200 168V248" marker-end="url(#arrow)"/>
   <path class="edge" d="M292 300H324" marker-end="url(#arrow)"/>
   <path class="edge" d="M588 168V248" marker-end="url(#arrow)"/>
   <text class="quiet" x="212" y="190">LabService calls</text>
   <text class="quiet" x="576" y="190" text-anchor="end">mounted at /var/lib/docker</text>
+  <text class="label" x="412" y="390">ssh</text>
 </svg>

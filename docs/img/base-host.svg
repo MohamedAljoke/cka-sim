@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 352" role="img" aria-label="The terminal lands on the base host as candidate and reaches each node with ssh; the agent runs task scripts as root on the nodes" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
+  <style>
+    .ink { fill: #1f2328; }
+    .quiet { fill: #59636e; font-size: 11.5px; }
+    .label { fill: #59636e; font-size: 11px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+    .edge { fill: none; stroke: #8c959f; stroke-width: 1.25; }
+    .head { fill: #8c959f; }
+    .node { fill: #0969da; fill-opacity: 0.12; stroke: #0969da; stroke-width: 2; }
+    .base { fill: #1a7f37; fill-opacity: 0.12; stroke: #1a7f37; stroke-width: 2; }
+    .b { font-weight: 600; }
+    @media (prefers-color-scheme: dark) {
+      .ink { fill: #e6edf3; }
+      .quiet, .label { fill: #9198a1; }
+      .edge { stroke: #6e7681; }
+      .head { fill: #6e7681; }
+      .node { fill: #4493f8; stroke: #4493f8; }
+      .base { fill: #3fb950; stroke: #3fb950; }
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path class="head" d="M0 0L10 5L0 10z"/>
+    </marker>
+  </defs>
+  <text class="ink b" x="24" y="34" font-size="15">Like the exam: start on a host with no cluster access, ssh to a node</text>
+
+  <rect class="base" x="24" y="64" width="240" height="152" rx="8"/>
+  <text class="ink b" x="40" y="90">cka-sim-base</text>
+  <text class="quiet" x="40" y="108">ubuntu:24.04, on the kind network</text>
+  <text class="ink" x="40" y="136" font-size="12">user candidate, no sudo</text>
+  <text class="ink" x="40" y="156" font-size="12">no kubectl</text>
+  <text class="ink" x="40" y="176" font-size="12">holds the ssh key pair</text>
+  <text class="quiet" x="40" y="200">where every terminal lands</text>
+
+  <rect class="edge" x="400" y="64" width="336" height="200" rx="8"/>
+  <text class="ink b" x="416" y="88">every node</text>
+  <text class="quiet" x="496" y="88">cka-sim/node, built on kindest/node</text>
+  <rect class="node" x="416" y="100" width="96" height="32" rx="6"/>
+  <rect class="node" x="520" y="100" width="96" height="32" rx="6"/>
+  <rect class="node" x="624" y="100" width="96" height="32" rx="6"/>
+  <text class="ink" x="464" y="120" text-anchor="middle" font-size="11.5">control-plane</text>
+  <text class="ink" x="568" y="120" text-anchor="middle" font-size="11.5">worker</text>
+  <text class="ink" x="672" y="120" text-anchor="middle" font-size="11.5">worker2</text>
+  <text class="ink" x="416" y="160" font-size="12">sshd, password logins off</text>
+  <text class="ink" x="416" y="180" font-size="12">candidate: base's public key, a kubeconfig</text>
+  <text class="ink" x="416" y="200" font-size="12">candidate: sudo with no password</text>
+  <text class="ink" x="416" y="220" font-size="12">root: a kubeconfig, for task scripts</text>
+  <text class="ink" x="416" y="240" font-size="12">k, kubectl completion, vim</text>
+
+  <path class="edge" d="M264 140H396" marker-end="url(#arrow)"/>
+  <text class="mono ink" x="330" y="132" text-anchor="middle">ssh worker</text>
+
+  <rect class="edge" x="24" y="248" width="240" height="56" rx="8"/>
+  <text class="ink b" x="40" y="272">cka-sim-agent</text>
+  <text class="quiet" x="40" y="290">RunScript: setup.sh and check.sh</text>
+  <path class="edge" d="M264 276H568V268" marker-end="url(#arrow)"/>
+  <text class="label" x="416" y="292" text-anchor="middle">bash as root on a node; never on base</text>
+
+  <text class="quiet" x="24" y="336">After the cluster is Ready, the agent starts base, makes its key, and copies the public key and the admin kubeconfig to every node.</text>
+</svg>

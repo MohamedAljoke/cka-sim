@@ -243,6 +243,12 @@ code {
   background: none;
 }
 
+.action.primary {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
 .action:disabled {
   cursor: progress;
   opacity: 0.7;
@@ -452,19 +458,55 @@ body[data-page='task'] main {
 }
 
 .setup-panel[data-state='running'] .lab-dot,
-.check-panel[data-state='running'] .lab-dot {
+.check-result[data-state='running'] .lab-dot {
   background: var(--accent);
   animation: pulse 1.2s ease-in-out infinite;
 }
 
 .setup-panel[data-state='done'] .lab-dot,
-.check-panel[data-state='done'] .lab-dot {
+.check-result[data-state='done'] .lab-dot {
   background: var(--good);
 }
 
 .setup-panel[data-state='failed'] .lab-dot,
-.check-panel[data-state='failed'] .lab-dot {
+.check-result[data-state='failed'] .lab-dot {
   background: var(--bad);
+}
+
+.task-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.task-bar .lab-panel {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.check-result {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+
+.check-result[hidden] {
+  display: none;
+}
+
+.check-result h2 {
+  margin: 0;
+  font-size: 1.1rem;
 }
 
 .check-list {

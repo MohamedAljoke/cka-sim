@@ -1,57 +1,61 @@
 import { checkTask, type Grade, type Lab } from './api'
 import { el, message } from './ui'
 
-type CheckState = 'waiting' | 'idle' | 'running' | 'done' | 'failed'
+type CheckState = 'running' | 'done' | 'failed'
 
-const waiting = 'Start the lab, then check your work here.'
+// The button sits with the task's actions beside the terminal; the result sits under the question it grades.
+export function checkTool(id: string, signal: AbortSignal): { button: HTMLButtonElement; result: HTMLElement; follow: (lab: Lab) => void } {
+  const button = el('button', 'action primary', 'Check')
+  button.type = 'button'
+  button.hidden = true
 
-export function checkPanel(id: string, signal: AbortSignal): { panel: HTMLElement; follow: (lab: Lab) => void } {
   const dot = el('span', 'lab-dot')
   const text = el('span')
   const line = el('p', 'lab-line')
   line.append(dot, text)
-  const action = el('button', 'action')
-  action.type = 'button'
   const list = el('ul', 'check-list')
   const output = el('pre', 'setup-output')
-  const panel = el('section', 'lab-panel check-panel')
-  panel.setAttribute('aria-live', 'polite')
-  panel.append(line, action, list, output)
+  const result = el('section', 'check-result')
+  result.setAttribute('aria-live', 'polite')
+  result.append(el('h2', '', 'Your result'), line, list, output)
+  result.hidden = true
 
-  const show = (state: CheckState, says: string, offer = '', grade?: Grade) => {
-    panel.dataset.state = state
+  const show = (state: CheckState, says: string, grade?: Grade) => {
+    result.hidden = false
+    result.dataset.state = state
     text.className = state === 'failed' && !grade?.checks.length ? 'error' : ''
     text.textContent = says
-    action.hidden = !offer
-    action.textContent = offer
     list.replaceChildren(...(grade?.checks ?? []).map(checkItem))
     list.hidden = !grade?.checks.length
     output.textContent = grade?.output ?? ''
     output.hidden = !output.textContent
   }
 
-  action.onclick = async () => {
+  button.onclick = async () => {
+    button.disabled = true
+    button.textContent = 'Checking…'
     show('running', 'Checking your work on the cluster…')
     try {
       const grade = await checkTask(id, signal)
       if (signal.aborted) return
-      if (!grade.checks.length) show('failed', `The check broke with exit code ${grade.exitCode ?? 0}.`, 'Check again', grade)
-      else if (grade.earned === grade.total) show('done', `Solved · ${score(grade)}`, 'Check again', grade)
-      else show('failed', `Not yet · ${score(grade)}`, 'Check again', grade)
+      if (!grade.checks.length) show('failed', `The check broke with exit code ${grade.exitCode ?? 0}.`, grade)
+      else if (grade.earned === grade.total) show('done', `Solved · ${score(grade)}`, grade)
+      else show('failed', `Not yet · ${score(grade)}`, grade)
     } catch (err) {
-      if (!signal.aborted) show('failed', `Cannot check the task: ${message(err)}`, 'Try again')
+      if (!signal.aborted) show('failed', `Cannot check the task: ${message(err)}`)
+    } finally {
+      button.disabled = false
+      button.textContent = 'Check'
     }
   }
 
-  let ready = false
+  // A result belongs to the cluster it was read from, so a lab that goes away takes it along.
   const follow = (lab: Lab) => {
-    if (lab.state === 'ready' && !ready) show('idle', 'Solve the task in the terminal, then check it.', 'Check')
-    if (lab.state !== 'ready') show('waiting', waiting)
-    ready = lab.state === 'ready'
+    button.hidden = lab.state !== 'ready'
+    if (lab.state !== 'ready') result.hidden = true
   }
 
-  show('waiting', waiting)
-  return { panel, follow }
+  return { button, result, follow }
 }
 
 function checkItem(check: Grade['checks'][number]): HTMLElement {

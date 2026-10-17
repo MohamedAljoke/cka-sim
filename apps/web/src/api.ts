@@ -51,6 +51,18 @@ export async function startTask(id: string, signal?: AbortSignal): Promise<Setup
   return (await call('POST', `/api/tasks/${encodeURIComponent(id)}/start`, signal)).json()
 }
 
+export type Grade = {
+  earned: number
+  total: number
+  checks: { passed: boolean; points: number; description: string }[]
+  exitCode?: number
+  output?: string
+}
+
+export async function checkTask(id: string, signal?: AbortSignal): Promise<Grade> {
+  return (await call('POST', `/api/tasks/${encodeURIComponent(id)}/check`, signal)).json()
+}
+
 export type LabState = 'none' | 'starting' | 'ready' | 'stopping' | 'failed'
 
 export type Lab = {

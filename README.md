@@ -8,18 +8,7 @@ break a control plane and fix it the way the exam asks you to.
 
 ## How it works
 
-```
-browser (xterm.js)
-   │ WebSocket
-platform :7070          catalog of ~200 tasks, serves the page, proxies the terminal
-   │ Connect over HTTP/2 (h2c), bearer token
-lab container           privileged docker:dind
-   ├─ agent :7171       builds the cluster, opens shells
-   └─ dockerd
-       ├─ control-plane ┐
-       ├─ worker        ├ kind nodes: systemd, containerd, kubelet
-       └─ worker2       ┘
-```
+![The lab container runs its own dockerd, which runs the kind nodes](docs/img/lab-container.svg)
 
 - **A whole cluster in one container.** The lab container runs its own Docker, and [kind](https://kind.sigs.k8s.io)
   turns each node into a container inside it. Three levels deep: your Docker → the lab's Docker → the cluster's
@@ -30,6 +19,8 @@ lab container           privileged docker:dind
 - **A browser terminal that is a real shell.** Keystrokes travel WebSocket → platform → a bidirectional Connect
   stream → a pty on the agent → `docker exec -it` → bash on the control-plane node. What you see is bash's
   echo coming back; resizes are copied down to the node's terminal so `vim` and `top` draw correctly.
+
+  ![A keystroke's path from xterm.js to bash on the control-plane node](docs/img/terminal.svg)
 - **The platform never touches Docker.** It only knows the agent's contract
   ([`lab.proto`](apps/go-shared/contract/lab/v1/lab.proto)), so a lab could later run on a VM or GKE without the
   platform changing.

@@ -451,17 +451,55 @@ body[data-page='task'] main {
   background: var(--card);
 }
 
-.setup-panel[data-state='running'] .lab-dot {
+.setup-panel[data-state='running'] .lab-dot,
+.check-panel[data-state='running'] .lab-dot {
   background: var(--accent);
   animation: pulse 1.2s ease-in-out infinite;
 }
 
-.setup-panel[data-state='done'] .lab-dot {
+.setup-panel[data-state='done'] .lab-dot,
+.check-panel[data-state='done'] .lab-dot {
   background: var(--good);
 }
 
-.setup-panel[data-state='failed'] .lab-dot {
+.setup-panel[data-state='failed'] .lab-dot,
+.check-panel[data-state='failed'] .lab-dot {
   background: var(--bad);
+}
+
+.check-list {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.check-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.check-mark {
+  flex: none;
+  width: 1em;
+  font-weight: 700;
+}
+
+.check-list .passed .check-mark {
+  color: var(--good);
+}
+
+.check-list .failed .check-mark {
+  color: var(--bad);
+}
+
+.check-points {
+  margin-left: auto;
+  flex: none;
+  font-size: 13px;
 }
 
 .setup-output {

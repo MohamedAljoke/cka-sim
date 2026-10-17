@@ -1,4 +1,5 @@
 import { getSolution, getTask, type TaskDetail } from './api'
+import { checkPanel } from './check'
 import type { LabStatus } from './lab'
 import { homePath } from './routes'
 import { setupPanel } from './setup'
@@ -24,14 +25,16 @@ export async function showTask(pane: HTMLElement, id: string, lab: LabStatus, si
   brief.append(backLink(), el('h1', '', task.title), chips(task), hostLine(task), question, solutionPanel(task.id, signal))
 
   const setup = setupPanel(task.id, signal)
+  const check = checkPanel(task.id, signal)
   const shell = shellPanel(signal, lab.refresh)
   lab.watch(signal, (state) => {
     setup.follow(state)
+    check.follow(state)
     shell.follow(state)
   })
   const workspace = el('section', 'task-lab')
   workspace.setAttribute('aria-label', 'Workspace')
-  workspace.append(setup.panel, shell.panel)
+  workspace.append(setup.panel, shell.panel, check.panel)
 
   const layout = el('div', 'task-layout')
   layout.append(brief, workspace)

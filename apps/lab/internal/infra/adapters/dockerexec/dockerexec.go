@@ -29,17 +29,18 @@ const hangupTimeout = 15 * time.Second
 
 type Opener struct {
 	container string
+	user      string
 }
 
-func NewOpener(container string) *Opener {
-	return &Opener{container: container}
+func NewOpener(container, user string) *Opener {
+	return &Opener{container: container, user: user}
 }
 
 func (o *Opener) Open(ctx context.Context, size cluster.TerminalSize) (usecases.Shell, error) {
 	tag := rand.Text()
 	//nolint:gosec // no shell runs the arguments, and the container comes from the agent's own settings
 	cmd := exec.CommandContext(ctx, "docker", "exec", "-it",
-		"-e", tagVar+"="+tag, "-e", "KUBECONFIG=/etc/kubernetes/admin.conf", "-w", "/root",
+		"-e", tagVar+"="+tag, "-u", o.user, "-w", "/home/"+o.user,
 		o.container, "bash", "-l")
 
 	tty, err := pty.StartWithSize(cmd, winsize(size))

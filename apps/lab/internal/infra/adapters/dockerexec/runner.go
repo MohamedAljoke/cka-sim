@@ -28,8 +28,7 @@ func (r *Runner) Run(ctx context.Context, host, script string) (cluster.ScriptRe
 	pidFile := "/tmp/cka-sim-run-" + rand.Text()
 	// setsid makes the script lead its own process group, so a cancel can stop it and everything it started.
 	//nolint:gosec // no shell runs the arguments, and the host is one of the cluster's nodes
-	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", "-e", "KUBECONFIG=/etc/kubernetes/admin.conf",
-		host, "setsid", "-w", "bash", "-s")
+	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", host, "setsid", "-w", "bash", "-s")
 	cmd.Stdin = io.MultiReader(
 		strings.NewReader("echo $$ > "+pidFile+"; trap 'rm -f "+pidFile+"' EXIT\n"),
 		strings.NewReader(script))

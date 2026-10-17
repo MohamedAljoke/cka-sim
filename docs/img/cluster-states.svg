@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 340" role="img" aria-label="The cluster goes from Absent to Creating to Ready to Deleting and back to Absent; a failed create or delete lands in Failed, from which both create and delete work" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
+  <style>
+    .ink { fill: #1f2328; }
+    .quiet { fill: #59636e; font-size: 11.5px; }
+    .label { fill: #59636e; font-size: 11px; }
+    .edge { fill: none; stroke: #8c959f; stroke-width: 1.25; }
+    .head { fill: #8c959f; }
+    .node { fill: #0969da; fill-opacity: 0.12; stroke: #0969da; stroke-width: 2; }
+    .bad { fill: #cf222e; fill-opacity: 0.1; stroke: #cf222e; stroke-width: 1.5; }
+    .b { font-weight: 600; }
+    @media (prefers-color-scheme: dark) {
+      .ink { fill: #e6edf3; }
+      .quiet, .label { fill: #9198a1; }
+      .edge { stroke: #6e7681; }
+      .head { fill: #6e7681; }
+      .node { fill: #4493f8; stroke: #4493f8; }
+      .bad { fill: #f85149; stroke: #f85149; }
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path class="head" d="M0 0L10 5L0 10z"/>
+    </marker>
+  </defs>
+  <text class="ink b" x="24" y="34" font-size="15">The cluster's state machine, one per agent, in memory</text>
+
+  <rect class="edge" x="24" y="120" width="110" height="44" rx="8"/>
+  <text class="ink b" x="79" y="147" text-anchor="middle">Absent</text>
+  <rect class="edge" x="214" y="120" width="110" height="44" rx="8"/>
+  <text class="ink b" x="269" y="147" text-anchor="middle">Creating</text>
+  <rect class="node" x="404" y="120" width="110" height="44" rx="8"/>
+  <text class="ink b" x="459" y="147" text-anchor="middle">Ready</text>
+  <rect class="edge" x="594" y="120" width="110" height="44" rx="8"/>
+  <text class="ink b" x="649" y="147" text-anchor="middle">Deleting</text>
+  <rect class="bad" x="404" y="232" width="110" height="44" rx="8"/>
+  <text class="ink b" x="459" y="259" text-anchor="middle">Failed</text>
+
+  <path class="edge" d="M134 142H210" marker-end="url(#arrow)"/>
+  <text class="label" x="172" y="134" text-anchor="middle">BeginCreate</text>
+  <path class="edge" d="M324 142H400" marker-end="url(#arrow)"/>
+  <text class="label" x="362" y="134" text-anchor="middle">Created</text>
+  <path class="edge" d="M514 142H590" marker-end="url(#arrow)"/>
+  <text class="label" x="552" y="134" text-anchor="middle">BeginDelete</text>
+  <path class="edge" d="M649 120V84H79V116" marker-end="url(#arrow)"/>
+  <text class="label" x="364" y="76" text-anchor="middle">Deleted</text>
+
+  <path class="edge" d="M269 164V254H400" marker-end="url(#arrow)"/>
+  <text class="label" x="334" y="248" text-anchor="middle">CreateFailed</text>
+  <path class="edge" d="M649 164V254H518" marker-end="url(#arrow)"/>
+  <text class="label" x="584" y="248" text-anchor="middle">DeleteFailed</text>
+  <path class="edge" d="M434 232L300 168" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+  <text class="label" x="346" y="204" text-anchor="end">BeginCreate</text>
+  <path class="edge" d="M484 232L618 168" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+  <text class="label" x="572" y="204">BeginDelete</text>
+
+  <text class="quiet" x="24" y="306">Starting twice returns the current status; only the caller that gets true from BeginCreate builds.</text>
+  <text class="quiet" x="24" y="324">Deleting while Creating is refused (ErrBusy). A progress line that arrives after a failure changes nothing.</text>
+</svg>

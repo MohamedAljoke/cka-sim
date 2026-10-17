@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 356" role="img" aria-label="Two terminals: our pty between the agent and the docker CLI, and the node's terminal between dockerd and bash" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
+  <style>
+    .ink { fill: #1f2328; }
+    .quiet { fill: #59636e; font-size: 11.5px; }
+    .label { fill: #59636e; font-size: 11px; }
+    .edge { fill: none; stroke: #8c959f; stroke-width: 1.25; }
+    .head { fill: #8c959f; }
+    .node { fill: #0969da; fill-opacity: 0.12; stroke: #0969da; stroke-width: 2; }
+    .b { font-weight: 600; }
+    @media (prefers-color-scheme: dark) {
+      .ink { fill: #e6edf3; }
+      .quiet, .label { fill: #9198a1; }
+      .edge { stroke: #6e7681; }
+      .head { fill: #6e7681; }
+      .node { fill: #4493f8; stroke: #4493f8; }
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path class="head" d="M0 0L10 5L0 10z"/>
+    </marker>
+  </defs>
+  <text class="ink b" x="24" y="34" font-size="15">Two terminals between the browser and bash</text>
+
+  <rect class="edge" x="24" y="56" width="712" height="112" rx="8" stroke-dasharray="4 4"/>
+  <text class="ink b" x="40" y="78">Our pty</text>
+  <text class="quiet" x="98" y="78">in the lab container, from creack/pty</text>
+
+  <rect class="edge" x="48" y="92" width="180" height="60" rx="8"/>
+  <text class="ink b" x="138" y="116" text-anchor="middle">agent</text>
+  <text class="quiet" x="138" y="134" text-anchor="middle">holds the master</text>
+
+  <rect class="edge" x="290" y="92" width="200" height="60" rx="8"/>
+  <path class="edge" d="M390 92V152"/>
+  <text class="ink b" x="340" y="116" text-anchor="middle">master</text>
+  <text class="quiet" x="340" y="134" text-anchor="middle">writes look typed</text>
+  <text class="ink b" x="440" y="116" text-anchor="middle">slave</text>
+  <text class="quiet" x="440" y="134" text-anchor="middle">looks like a tty</text>
+
+  <rect class="edge" x="552" y="92" width="160" height="60" rx="8"/>
+  <text class="ink b" x="632" y="116" text-anchor="middle">docker exec -it</text>
+  <text class="quiet" x="632" y="134" text-anchor="middle">raw mode, passes bytes</text>
+
+  <path class="edge" d="M232 122H286" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path class="edge" d="M494 122H548" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+
+  <rect class="edge" x="24" y="196" width="712" height="112" rx="8" stroke-dasharray="4 4"/>
+  <text class="ink b" x="40" y="218">The node's terminal</text>
+  <text class="quiet" x="170" y="218">in cka-sim-control-plane, made by -t</text>
+
+  <rect class="node" x="48" y="232" width="180" height="60" rx="8"/>
+  <text class="ink b" x="138" y="256" text-anchor="middle">bash -l</text>
+  <text class="quiet" x="138" y="274" text-anchor="middle">echo, line editing, Ctrl-C</text>
+
+  <rect class="edge" x="290" y="232" width="200" height="60" rx="8"/>
+  <text class="ink b" x="390" y="256" text-anchor="middle">node tty</text>
+  <text class="quiet" x="390" y="274" text-anchor="middle">sized from our pty's size</text>
+
+  <rect class="edge" x="552" y="232" width="160" height="60" rx="8"/>
+  <text class="ink b" x="632" y="256" text-anchor="middle">inner dockerd</text>
+  <text class="quiet" x="632" y="274" text-anchor="middle">runs the exec</text>
+
+  <path class="edge" d="M632 156V228" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text class="label" x="622" y="186" text-anchor="end">exec API, and a resize on SIGWINCH</text>
+  <path class="edge" d="M548 262H494" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path class="edge" d="M286 262H232" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+
+  <text class="quiet" x="24" y="336">Without a terminal, docker exec -it refuses to run and bash has no prompt, so vim, top and Ctrl-C would not work.</text>
+</svg>

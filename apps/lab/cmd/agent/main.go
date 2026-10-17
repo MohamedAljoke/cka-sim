@@ -56,7 +56,7 @@ func run() error {
 		return fmt.Errorf("claim %s: %w", cfg.Addr, err)
 	}
 
-	shells := dockerexec.NewOpener(cfg.Cluster + "-control-plane")
+	shells := dockerexec.NewOpener(provisioner.Base(), "candidate")
 	handler := api.New(cfg.AgentToken, usecases.New(cluster.New(), provisioner, shells, dockerexec.NewRunner(), time.Now))
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)

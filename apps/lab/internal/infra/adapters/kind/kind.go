@@ -19,6 +19,12 @@ var config string
 //go:embed kind-cgroupv1-patch.yaml
 var cgroupV1Patch string
 
+//go:embed node.Dockerfile
+var nodeDockerfile string
+
+// The tag must match the kindest/node version in node.Dockerfile.
+const nodeImage = "cka-sim/node:v1.37.0"
+
 type Provisioner struct {
 	name       string
 	kubeconfig string
@@ -48,7 +54,14 @@ func (p *Provisioner) Create(ctx context.Context, progress func(step string)) er
 		return err
 	}
 
+	progress("Building the node image")
+
+	if err := buildImage(ctx, nodeImage, nodeDockerfile); err != nil {
+		return err
+	}
+
 	err = newProvider(progress).Create(p.name,
+		kindcluster.CreateWithNodeImage(nodeImage),
 		kindcluster.CreateWithRawConfig([]byte(kindConfig(cgroupVersion))),
 		kindcluster.CreateWithKubeconfigPath(p.kubeconfig),
 		kindcluster.CreateWithWaitForReady(5*time.Minute),
@@ -61,11 +74,25 @@ func (p *Provisioner) Create(ctx context.Context, progress func(step string)) er
 
 	progress("Waiting for every node to be Ready")
 
-	return p.waitForNodes(ctx)
+	if err := p.waitForNodes(ctx); err != nil {
+		return err
+	}
+
+	progress("Starting the base host")
+
+	return p.startBase(ctx)
 }
 
-func (p *Provisioner) Delete(context.Context) error {
+func (p *Provisioner) Delete(ctx context.Context) error {
+	if _, err := docker(ctx, "", "rm", "-f", p.Base()); err != nil {
+		return err
+	}
+
 	return newProvider(func(string) {}).Delete(p.name, p.kubeconfig)
+}
+
+func (p *Provisioner) Base() string {
+	return p.name + "-base"
 }
 
 func (p *Provisioner) Nodes(context.Context) ([]string, error) {

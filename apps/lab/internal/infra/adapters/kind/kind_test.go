@@ -47,6 +47,14 @@ func TestTheClusterHasOneControlPlaneAndTwoWorkers(t *testing.T) {
 	}
 }
 
+func TestTheNodeImageTagMatchesItsDockerfile(t *testing.T) {
+	_, version, _ := strings.Cut(nodeImage, ":")
+
+	if !strings.HasPrefix(nodeDockerfile, "FROM kindest/node:"+version+"\n") {
+		t.Errorf("%s isn't built from kindest/node:%s", nodeImage, version)
+	}
+}
+
 func TestOnlyCgroupV1GetsThePatch(t *testing.T) {
 	if strings.Contains(kindConfig("2"), "failCgroupV1") {
 		t.Error("cgroup v2 got the v1 patch")

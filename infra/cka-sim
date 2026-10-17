@@ -28,6 +28,7 @@ usage: cka-sim <command>
   down       stop it; keeps the downloaded images
   status     show what is running
   logs       follow the logs (cka-sim logs lab for one part)
+  shell      open a shell on the base host, as in the page's terminal
   update     get the latest cka-sim and restart it
   uninstall  delete cka-sim and everything it stored
 USAGE
@@ -44,6 +45,7 @@ up)
   ;;
 down) compose down ;;
 status) compose ps ;;
+shell) compose exec lab docker exec -it -u candidate -w /home/candidate cka-sim-base bash -l ;;
 logs)
   shift
   compose logs -f "$@"

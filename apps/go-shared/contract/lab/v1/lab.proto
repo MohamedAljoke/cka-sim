@@ -17,7 +17,8 @@ service LabService {
   // DeleteCluster starts deleting the cluster and returns at once. An ABSENT or DELETING cluster
   // is left as it is. FAILED_PRECONDITION while it is CREATING.
   rpc DeleteCluster(DeleteClusterRequest) returns (DeleteClusterResponse);
-  // OpenShell runs a login shell as root on the control plane. The first request carries the
+  // OpenShell runs a login shell as candidate on the base host, which has no kubectl and reaches
+  // every node with ssh. The first request carries the
   // terminal's size; after it, requests carry keystrokes or a new size and responses carry the
   // shell's output. The stream ends when the shell exits. FAILED_PRECONDITION unless the cluster is
   // READY, INVALID_ARGUMENT when the first request isn't a size.

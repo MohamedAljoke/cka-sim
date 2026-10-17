@@ -92,7 +92,8 @@ func TestARealClusterIsBuiltAndDeleted(t *testing.T) {
 	}
 	t.Logf("ready in %s", ready.Ready.AsTime().Sub(ready.Started.AsTime()).Round(time.Second))
 
-	output := runInShell(t, "echo nodes=$(kubectl get nodes --no-headers | grep -cw Ready)\n", "nodes=3")
+	runInShell(t, "echo user=$(whoami) kubectl=$(command -v kubectl || echo none)\n", "user=candidate kubectl=none")
+	output := runInShell(t, "ssh "+worker+" 'echo nodes=$(kubectl get nodes --no-headers | grep -cw Ready)'\n", "nodes=3")
 	t.Logf("the shell answered %q", output)
 	runScripts(t)
 

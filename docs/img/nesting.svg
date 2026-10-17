@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 384" role="img" aria-label="Your Docker runs the lab container, the lab container's dockerd runs the kind nodes, and each node's containerd runs its pods" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
+  <style>
+    .ink { fill: #1f2328; }
+    .quiet { fill: #59636e; font-size: 11.5px; }
+    .edge { fill: none; stroke: #8c959f; stroke-width: 1.25; }
+    .node { fill: #0969da; fill-opacity: 0.12; stroke: #0969da; stroke-width: 2; }
+    .pod { fill: #1a7f37; fill-opacity: 0.12; stroke: #1a7f37; stroke-width: 1.25; }
+    .b { font-weight: 600; }
+    @media (prefers-color-scheme: dark) {
+      .ink { fill: #e6edf3; }
+      .quiet { fill: #9198a1; }
+      .edge { stroke: #6e7681; }
+      .node { fill: #4493f8; stroke: #4493f8; }
+      .pod { fill: #3fb950; stroke: #3fb950; }
+    }
+  </style>
+  <text class="ink b" x="24" y="34" font-size="15">Three levels of containers, one inside the other</text>
+
+  <rect class="edge" x="24" y="56" width="712" height="280" rx="8" stroke-dasharray="4 4"/>
+  <text class="ink b" x="40" y="80">Your Docker</text>
+  <text class="quiet" x="720" y="80" text-anchor="end">level 1: runs the lab container</text>
+
+  <rect class="edge" x="48" y="96" width="664" height="224" rx="8"/>
+  <text class="ink b" x="64" y="120">lab container</text>
+  <text class="quiet" x="160" y="120">privileged, its own dockerd</text>
+  <text class="quiet" x="696" y="120" text-anchor="end">level 2: runs the kind nodes</text>
+
+  <rect class="node" x="72" y="136" width="192" height="168" rx="8"/>
+  <text class="ink b" x="168" y="160" text-anchor="middle">control-plane</text>
+  <text class="quiet" x="168" y="178" text-anchor="middle">systemd, kubelet</text>
+  <rect class="edge" x="88" y="192" width="160" height="96" rx="6"/>
+  <text class="quiet" x="168" y="212" text-anchor="middle">containerd</text>
+  <rect class="pod" x="100" y="228" width="64" height="40" rx="5"/>
+  <rect class="pod" x="172" y="228" width="64" height="40" rx="5"/>
+  <text class="ink" x="132" y="252" text-anchor="middle" font-size="11">etcd</text>
+  <text class="ink" x="204" y="252" text-anchor="middle" font-size="11">apiserver</text>
+
+  <rect class="node" x="284" y="136" width="192" height="168" rx="8"/>
+  <text class="ink b" x="380" y="160" text-anchor="middle">worker</text>
+  <text class="quiet" x="380" y="178" text-anchor="middle">systemd, kubelet</text>
+  <rect class="edge" x="300" y="192" width="160" height="96" rx="6"/>
+  <text class="quiet" x="380" y="212" text-anchor="middle">containerd</text>
+  <rect class="pod" x="312" y="228" width="64" height="40" rx="5"/>
+  <rect class="pod" x="384" y="228" width="64" height="40" rx="5"/>
+  <text class="ink" x="344" y="252" text-anchor="middle" font-size="11">pod</text>
+  <text class="ink" x="416" y="252" text-anchor="middle" font-size="11">pod</text>
+
+  <rect class="node" x="496" y="136" width="192" height="168" rx="8"/>
+  <text class="ink b" x="592" y="160" text-anchor="middle">worker2</text>
+  <text class="quiet" x="592" y="178" text-anchor="middle">systemd, kubelet</text>
+  <rect class="edge" x="512" y="192" width="160" height="96" rx="6"/>
+  <text class="quiet" x="592" y="212" text-anchor="middle">containerd</text>
+  <rect class="pod" x="524" y="228" width="64" height="40" rx="5"/>
+  <rect class="pod" x="596" y="228" width="64" height="40" rx="5"/>
+  <text class="ink" x="556" y="252" text-anchor="middle" font-size="11">pod</text>
+  <text class="ink" x="628" y="252" text-anchor="middle" font-size="11">pod</text>
+
+  <text class="quiet" x="24" y="360">Level 3: each node's containerd runs that node's pods. The platform sees none of this; it only calls the agent.</text>
+</svg>

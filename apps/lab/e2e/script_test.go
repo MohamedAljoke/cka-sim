@@ -11,7 +11,10 @@ import (
 	labv1 "github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/lab/v1"
 )
 
-const controlPlane = clusterName + "-control-plane"
+const (
+	controlPlane = clusterName + "-control-plane"
+	worker       = clusterName + "-worker"
+)
 
 func TestAScriptNeedsAReadyCluster(t *testing.T) {
 	if *create {
@@ -43,7 +46,12 @@ func runScripts(t *testing.T) {
 		}
 	}
 
-	_, err = c.RunScript(context.Background(), &labv1.RunScriptRequest{Host: "cka-sim-lab-1", Script: "true"})
+	got, err = c.RunScript(context.Background(), &labv1.RunScriptRequest{Host: worker, Script: "kubectl get namespace default -o name\n"})
+	if err != nil || got.ExitCode != 0 {
+		t.Errorf("kubectl on a worker = %q, %v", got.GetOutput(), err)
+	}
+
+	_, err = c.RunScript(context.Background(), &labv1.RunScriptRequest{Host: clusterName + "-base", Script: "true"})
 	if connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Errorf("a host outside the cluster: got %v", err)
 	}

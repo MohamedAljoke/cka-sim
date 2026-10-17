@@ -26,12 +26,12 @@
 
   <rect class="edge" x="48" y="96" width="240" height="72" rx="8"/>
   <text class="ink b" x="168" y="120" text-anchor="middle">Platform</text>
-  <text class="quiet" x="168" y="136" text-anchor="middle">127.0.0.1:7070, serves the page</text>
-  <text class="quiet" x="168" y="152" text-anchor="middle">proxies the browser terminal</text>
+  <text class="quiet" x="168" y="136" text-anchor="middle">:7070, app container or make dev</text>
+  <text class="quiet" x="168" y="152" text-anchor="middle">serves the API and the terminal</text>
 
   <rect class="edge" x="488" y="96" width="200" height="72" rx="8"/>
   <text class="ink b" x="588" y="120" text-anchor="middle">lab-docker volume</text>
-  <text class="quiet" x="588" y="136" text-anchor="middle">survives make down</text>
+  <text class="quiet" x="588" y="136" text-anchor="middle">survives cka-sim down</text>
   <text class="quiet" x="588" y="152" text-anchor="middle">keeps the 1 GB node image</text>
 
   <rect class="edge" x="48" y="200" width="664" height="228" rx="8"/>

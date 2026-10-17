@@ -12,6 +12,8 @@ type fakeProvisioner struct {
 	createCtxErr chan error
 	creates      atomic.Int32
 	deletes      atomic.Int32
+	nodes        []string
+	nodesErr     error
 }
 
 func newFakeProvisioner() *fakeProvisioner {
@@ -39,4 +41,8 @@ func (p *fakeProvisioner) Create(ctx context.Context, progress func(step string)
 func (p *fakeProvisioner) Delete(context.Context) error {
 	p.deletes.Add(1)
 	return <-p.deleted
+}
+
+func (p *fakeProvisioner) Nodes(context.Context) ([]string, error) {
+	return p.nodes, p.nodesErr
 }

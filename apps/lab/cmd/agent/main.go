@@ -57,7 +57,7 @@ func run() error {
 	}
 
 	shells := dockerexec.NewOpener(cfg.Cluster + "-control-plane")
-	handler := api.New(cfg.AgentToken, usecases.New(cluster.New(), provisioner, shells, time.Now))
+	handler := api.New(cfg.AgentToken, usecases.New(cluster.New(), provisioner, shells, dockerexec.NewRunner(), time.Now))
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
 	protocols.SetUnencryptedHTTP2(true)

@@ -42,7 +42,7 @@ func runInShell(t *testing.T, command, want string) string {
 	}
 
 	var output strings.Builder
-	for !strings.Contains(output.String(), "\n"+want) {
+	for !strings.Contains(output.String(), want) {
 		res, err := stream.Receive()
 		if err != nil {
 			t.Fatalf("the shell ended with %v after %q", err, output.String())

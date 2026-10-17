@@ -11,13 +11,15 @@ type UseCases struct {
 	Create    *CreateCluster
 	Delete    *DeleteCluster
 	OpenShell *OpenShell
+	RunScript *RunScript
 }
 
-func New(c *cluster.Cluster, p Provisioner, o ShellOpener, now func() time.Time) UseCases {
+func New(lab *cluster.Cluster, p Provisioner, o ShellOpener, r ScriptRunner, now func() time.Time) UseCases {
 	return UseCases{
-		Get:       NewGetCluster(c),
-		Create:    NewCreateCluster(c, p, now),
-		Delete:    NewDeleteCluster(c, p),
-		OpenShell: NewOpenShell(c, o),
+		Get:       NewGetCluster(lab),
+		Create:    NewCreateCluster(lab, p, now),
+		Delete:    NewDeleteCluster(lab, p),
+		OpenShell: NewOpenShell(lab, o),
+		RunScript: NewRunScript(lab, p, r),
 	}
 }

@@ -22,6 +22,10 @@ service LabService {
   // shell's output. The stream ends when the shell exits. FAILED_PRECONDITION unless the cluster is
   // READY, INVALID_ARGUMENT when the first request isn't a size.
   rpc OpenShell(stream OpenShellRequest) returns (stream OpenShellResponse);
+  // RunScript runs a bash script as root on one of the cluster's nodes and answers once it ends. A
+  // script that fails still answers: its exit code says so. FAILED_PRECONDITION unless the cluster is
+  // READY, INVALID_ARGUMENT when the host isn't one of the cluster's nodes.
+  rpc RunScript(RunScriptRequest) returns (RunScriptResponse);
 }
 
 enum ClusterState {
@@ -75,4 +79,16 @@ message TerminalSize {
 
 message OpenShellResponse {
   bytes output = 1;
+}
+
+message RunScriptRequest {
+  // A node's container name, like "cka-sim-control-plane".
+  string host = 1;
+  string script = 2;
+}
+
+message RunScriptResponse {
+  // stdout and stderr together, cut to their last 64 KiB.
+  bytes output = 1;
+  int32 exit_code = 2;
 }

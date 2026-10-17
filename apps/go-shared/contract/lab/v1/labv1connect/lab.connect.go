@@ -32,6 +32,8 @@ const (
 	LabServiceDeleteClusterProcedure = "/lab.v1.LabService/DeleteCluster"
 	// LabServiceOpenShellProcedure is the procedure name of the LabService's OpenShell RPC.
 	LabServiceOpenShellProcedure = "/lab.v1.LabService/OpenShell"
+	// LabServiceRunScriptProcedure is the procedure name of the LabService's RunScript RPC.
+	LabServiceRunScriptProcedure = "/lab.v1.LabService/RunScript"
 )
 
 var (
@@ -63,6 +65,13 @@ var (
 			Procedure:  LabServiceOpenShellProcedure,
 		}
 	})
+	labServiceRunScriptSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_lab_v1_lab_proto.Services().ByName("LabService").Methods().ByName("RunScript"),
+			Procedure:  LabServiceRunScriptProcedure,
+		}
+	})
 )
 
 // LabServiceClient is a client for the lab.v1.LabService service.
@@ -80,6 +89,10 @@ type LabServiceClient interface {
 	// shell's output. The stream ends when the shell exits. FAILED_PRECONDITION unless the cluster is
 	// READY, INVALID_ARGUMENT when the first request isn't a size.
 	OpenShell(context.Context) (LabServiceOpenShellClientStream, error)
+	// RunScript runs a bash script as root on one of the cluster's nodes and answers once it ends. A
+	// script that fails still answers: its exit code says so. FAILED_PRECONDITION unless the cluster is
+	// READY, INVALID_ARGUMENT when the host isn't one of the cluster's nodes.
+	RunScript(context.Context, *v1.RunScriptRequest) (*v1.RunScriptResponse, error)
 }
 
 // NewLabServiceClient constructs a client for the lab.v1.LabService service. Multiple service
@@ -139,6 +152,10 @@ type LabServiceHandler interface {
 	// shell's output. The stream ends when the shell exits. FAILED_PRECONDITION unless the cluster is
 	// READY, INVALID_ARGUMENT when the first request isn't a size.
 	OpenShell(context.Context, LabServiceOpenShellServerStream) error
+	// RunScript runs a bash script as root on one of the cluster's nodes and answers once it ends. A
+	// script that fails still answers: its exit code says so. FAILED_PRECONDITION unless the cluster is
+	// READY, INVALID_ARGUMENT when the host isn't one of the cluster's nodes.
+	RunScript(context.Context, *v1.RunScriptRequest) (*v1.RunScriptResponse, error)
 }
 
 // RegisterLabServiceHandler registers svc as the lab.v1.LabService implementation on server.
@@ -149,6 +166,7 @@ func RegisterLabServiceHandler(server *connect.Server, svc LabServiceHandler) {
 		connect.Method{Spec: labServiceCreateClusterSpec(), Handler: adapter.createCluster},
 		connect.Method{Spec: labServiceDeleteClusterSpec(), Handler: adapter.deleteCluster},
 		connect.Method{Spec: labServiceOpenShellSpec(), Handler: adapter.openShell},
+		connect.Method{Spec: labServiceRunScriptSpec(), Handler: adapter.runScript},
 	)
 }
 
@@ -195,6 +213,10 @@ func (UnimplementedLabServiceHandler) OpenShell(context.Context, LabServiceOpenS
 	return connect.NewError(connect.CodeUnimplemented, "lab.v1.LabService.OpenShell is not implemented")
 }
 
+func (UnimplementedLabServiceHandler) RunScript(context.Context, *v1.RunScriptRequest) (*v1.RunScriptResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "lab.v1.LabService.RunScript is not implemented")
+}
+
 type labServiceClient struct {
 	client *connect.Client
 }
@@ -229,6 +251,14 @@ func (c *labServiceClient) OpenShell(ctx context.Context) (LabServiceOpenShellCl
 		return LabServiceOpenShellClientStream{}, err
 	}
 	return LabServiceOpenShellClientStream{stream: stream}, nil
+}
+
+func (c *labServiceClient) RunScript(ctx context.Context, req *v1.RunScriptRequest) (*v1.RunScriptResponse, error) {
+	var res v1.RunScriptResponse
+	if err := c.client.CallUnary(ctx, labServiceRunScriptSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
 }
 
 type labServiceHandler struct{ svc LabServiceHandler }
@@ -271,4 +301,16 @@ func (h labServiceHandler) deleteCluster(ctx context.Context, _ connect.Spec, st
 
 func (h labServiceHandler) openShell(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
 	return h.svc.OpenShell(ctx, LabServiceOpenShellServerStream{stream: stream})
+}
+
+func (h labServiceHandler) runScript(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.RunScriptRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.RunScript(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
 }

@@ -38,6 +38,10 @@ func TestEveryCallIsRefusedWithoutTheRightToken(t *testing.T) {
 			_, err := client(rpcauth.Bearer("guess")).DeleteCluster(context.Background(), &labv1.DeleteClusterRequest{})
 			return err
 		},
+		"run a script with a wrong token": func() error {
+			_, err := client(rpcauth.Bearer("guess")).RunScript(context.Background(), &labv1.RunScriptRequest{Host: controlPlane, Script: "true"})
+			return err
+		},
 	} {
 		if err := c(); connect.CodeOf(err) != connect.CodeUnauthenticated {
 			t.Errorf("%s: got %v", name, err)
@@ -88,8 +92,9 @@ func TestARealClusterIsBuiltAndDeleted(t *testing.T) {
 	}
 	t.Logf("ready in %s", ready.Ready.AsTime().Sub(ready.Started.AsTime()).Round(time.Second))
 
-	output := runInShell(t, "kubectl get nodes --no-headers | grep -cw Ready\n", "3")
+	output := runInShell(t, "echo nodes=$(kubectl get nodes --no-headers | grep -cw Ready)\n", "nodes=3")
 	t.Logf("the shell answered %q", output)
+	runScripts(t)
 
 	if _, err := c.DeleteCluster(context.Background(), &labv1.DeleteClusterRequest{}); err != nil {
 		t.Fatal(err)

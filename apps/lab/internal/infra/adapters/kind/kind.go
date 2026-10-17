@@ -68,6 +68,20 @@ func (p *Provisioner) Delete(context.Context) error {
 	return newProvider(func(string) {}).Delete(p.name, p.kubeconfig)
 }
 
+func (p *Provisioner) Nodes(context.Context) ([]string, error) {
+	nodes, err := newProvider(func(string) {}).ListNodes(p.name)
+	if err != nil {
+		return nil, fmt.Errorf("list the nodes of %s: %w", p.name, err)
+	}
+
+	names := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		names = append(names, node.String())
+	}
+
+	return names, nil
+}
+
 func newProvider(progress func(string)) *kindcluster.Provider {
 	return kindcluster.NewProvider(kindcluster.ProviderWithDocker(), kindcluster.ProviderWithLogger(stepLogger{progress}))
 }

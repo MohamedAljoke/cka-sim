@@ -23,7 +23,7 @@ import (
 
 func TestAShellOpensAtTheFirstSizeAndEchoesTheKeys(t *testing.T) {
 	o := newEchoOpener()
-	stream := openShell(t, readyLab(t, o), size(100, 30))
+	stream := openShell(t, readyLab(t, o, &fakeRunner{}), size(100, 30))
 
 	send(t, stream, keys("echo hi\n"))
 
@@ -37,7 +37,7 @@ func TestAShellOpensAtTheFirstSizeAndEchoesTheKeys(t *testing.T) {
 
 func TestALaterSizeResizesTheShell(t *testing.T) {
 	o := newEchoOpener()
-	stream := openShell(t, readyLab(t, o), size(80, 24))
+	stream := openShell(t, readyLab(t, o, &fakeRunner{}), size(80, 24))
 	<-o.opened
 
 	send(t, stream, size(132, 43))
@@ -54,7 +54,7 @@ func TestALaterSizeResizesTheShell(t *testing.T) {
 
 func TestHangingUpClosesTheShell(t *testing.T) {
 	o := newEchoOpener()
-	stream := openShell(t, readyLab(t, o), size(80, 24))
+	stream := openShell(t, readyLab(t, o, &fakeRunner{}), size(80, 24))
 	<-o.opened
 
 	stream.Close()
@@ -67,7 +67,7 @@ func TestHangingUpClosesTheShell(t *testing.T) {
 }
 
 func TestAShellNeedsAReadyCluster(t *testing.T) {
-	stream := openShell(t, shellClient(serveWith(t, &fakeProvisioner{}, newEchoOpener()), rpcauth.Bearer(token)), size(80, 24))
+	stream := openShell(t, shellClient(serveWith(t, &fakeProvisioner{}, newEchoOpener(), &fakeRunner{}), rpcauth.Bearer(token)), size(80, 24))
 
 	_, err := stream.Receive()
 
@@ -83,7 +83,7 @@ func TestAShellMustStartWithItsSize(t *testing.T) {
 		"empty size": size(0, 24),
 	} {
 		t.Run(name, func(t *testing.T) {
-			stream := openShell(t, readyLab(t, newEchoOpener()), first)
+			stream := openShell(t, readyLab(t, newEchoOpener(), &fakeRunner{}), first)
 
 			if _, err := stream.Receive(); connect.CodeOf(err) != connect.CodeInvalidArgument {
 				t.Errorf("got %v", err)
@@ -93,7 +93,7 @@ func TestAShellMustStartWithItsSize(t *testing.T) {
 }
 
 func TestAShellNeedsTheToken(t *testing.T) {
-	stream := openShell(t, shellClient(serveWith(t, &fakeProvisioner{}, newEchoOpener())), size(80, 24))
+	stream := openShell(t, shellClient(serveWith(t, &fakeProvisioner{}, newEchoOpener(), &fakeRunner{})), size(80, 24))
 
 	if _, err := stream.Receive(); connect.CodeOf(err) != connect.CodeUnauthenticated {
 		t.Errorf("got %v", err)
@@ -141,9 +141,9 @@ func (s *echoShell) Read(p []byte) (int, error) { return s.PipeReader.Read(p) }
 
 func (s *echoShell) Write(p []byte) (int, error) { return s.PipeWriter.Write(p) }
 
-func serveWith(t *testing.T, p usecases.Provisioner, o usecases.ShellOpener) string {
+func serveWith(t *testing.T, p usecases.Provisioner, o usecases.ShellOpener, r usecases.ScriptRunner) string {
 	t.Helper()
-	srv := httptest.NewUnstartedServer(New(token, usecases.New(cluster.New(), p, o, time.Now)))
+	srv := httptest.NewUnstartedServer(New(token, usecases.New(cluster.New(), p, o, r, time.Now)))
 	srv.Config.Protocols = new(http.Protocols)
 	srv.Config.Protocols.SetHTTP1(true)
 	srv.Config.Protocols.SetUnencryptedHTTP2(true)
@@ -159,10 +159,10 @@ func shellClient(url string, interceptors ...connect.ClientInterceptor) labv1con
 	return labv1connect.NewLabServiceClient(connect.NewClient(connecthttp.NewTransport(httpClient, url), interceptors...))
 }
 
-func readyLab(t *testing.T, o usecases.ShellOpener) labv1connect.LabServiceClient {
+func readyLab(t *testing.T, o usecases.ShellOpener, r usecases.ScriptRunner) labv1connect.LabServiceClient {
 	t.Helper()
 	p := &fakeProvisioner{created: make(chan error)}
-	url := serveWith(t, p, o)
+	url := serveWith(t, p, o, r)
 	if _, err := client(url).CreateCluster(context.Background(), &labv1.CreateClusterRequest{}); err != nil {
 		t.Fatal(err)
 	}

@@ -143,9 +143,13 @@ func (p *fakeProvisioner) Create(context.Context, func(string)) error { return <
 
 func (p *fakeProvisioner) Delete(context.Context) error { return <-p.deleted }
 
+func (p *fakeProvisioner) Nodes(context.Context) ([]string, error) {
+	return []string{"lab-control-plane", "lab-worker"}, nil
+}
+
 func serve(t *testing.T, p usecases.Provisioner) string {
 	t.Helper()
-	return serveWith(t, p, newEchoOpener())
+	return serveWith(t, p, newEchoOpener(), &fakeRunner{})
 }
 
 func client(url string) labv1connect.LabServiceClient {

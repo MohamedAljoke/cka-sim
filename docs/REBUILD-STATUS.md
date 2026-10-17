@@ -22,9 +22,9 @@ when what they describe changes.
 | 2.1 `lab doctor` | Not started | No `lab` CLI at all yet (`doctor`, `up`, `down`, `shell`, `version`) |
 | 2.2 The lab image | Partly | Same image shape, but the agent builds the cluster on `CreateCluster` instead of `lab up` at start |
 | 2.3 Exam-like nodes and base host | Not started | `node.Dockerfile`, `base.Dockerfile`, ssh between them, image preload from `catalog/images.txt` |
-| 2.4 The agent | Partly | `/healthz`, token, `LabService` Get/Create/Delete; no script runner, no shell |
+| 2.4 The agent | Partly | `/healthz`, token, `LabService` Get/Create/Delete and `OpenShell` (a bidi stream; `docker exec` under a pty, tagged shells hung up on close); no script runner |
 | 2.5 The platform reaches the lab | Partly | `labagent` adapter, `/api/lab`, polling page; no sandbox `Provider`, desks or idle end |
-| 2.6 Terminal in the page | Not started | `/ws/terminal` proxied to the agent, xterm.js |
+| 2.6 Terminal in the page | Done | `/ws/terminal` bridges the page's websocket to `OpenShell`; the shell is root on the control plane until 2.3 brings the base host, so the page's `ssh <host>` hint doesn't apply yet |
 | 2.7 Setup, check, solution | Not started | `setup.sh`, `check.sh`, `solution.sh`, `lib.sh`, `grader`, `/start` and `/check`, Check button |
 | 2.8 Selftest | Not started | |
 | 2.9 Tasks that break the cluster | Not started | `reset.sh` (25 tasks on `main`), `Heal`, `Tidy` |
@@ -35,7 +35,7 @@ when what they describe changes.
 
 ## Next
 
-Steps 2.3, 2.4's runner and shell, 2.6 and 2.7 together make one task playable end to end: open it, get a
-terminal on its host, run setup, solve, Check. On this branch that means the `LabService` contract grows a
-script-running RPC and a terminal stream beside it. Exam mode (2.8 to 2.10) builds on that, and add-ons (2.11)
+Steps 2.3, 2.4's runner and 2.7 make one task playable end to end: open it, get a terminal on its host, run
+setup, solve, Check. On this branch that means the `LabService` contract grows a script-running RPC beside
+`OpenShell`, and 2.3 moves the shell from the control plane to the base host. Exam mode (2.8 to 2.10) builds on that, and add-ons (2.11)
 come in with the first task that needs each one.

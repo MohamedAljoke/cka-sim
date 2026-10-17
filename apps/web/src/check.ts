@@ -58,7 +58,7 @@ export function checkTool(id: string, signal: AbortSignal): { button: HTMLButton
   return { button, result, follow }
 }
 
-function checkItem(check: Grade['checks'][number]): HTMLElement {
+export function checkItem(check: Grade['checks'][number]): HTMLElement {
   const item = el('li', check.passed ? 'passed' : 'failed')
   item.append(
     el('span', 'check-mark', check.passed ? '✓' : '✗'),

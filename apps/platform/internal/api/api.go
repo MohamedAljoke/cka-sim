@@ -6,6 +6,7 @@ import (
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 
+	examusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/exams/usecases"
 	labusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks/usecases"
 )
@@ -13,12 +14,13 @@ import (
 type api struct {
 	tasks usecases.UseCases
 	labs  labusecases.UseCases
+	exams examusecases.UseCases
 }
 
 type handleFunc func(pattern string, h httpx.Handler)
 
-func New(tasks usecases.UseCases, labs labusecases.UseCases) http.Handler {
-	handlers := &api{tasks: tasks, labs: labs}
+func New(tasks usecases.UseCases, labs labusecases.UseCases, exams examusecases.UseCases) http.Handler {
+	handlers := &api{tasks: tasks, labs: labs, exams: exams}
 	problems := httpx.NewProblems(httpx.WithReporter(func(r *http.Request, err error) {
 		slog.Error("request failed", "method", r.Method, "path", r.URL.Path, "err", err)
 	}))
@@ -27,6 +29,7 @@ func New(tasks usecases.UseCases, labs labusecases.UseCases) http.Handler {
 	handlers.taskRoutes(handle)
 	handlers.labRoutes(handle)
 	handlers.terminalRoutes(handle)
+	handlers.examRoutes(handle)
 
 	return http.NewCrossOriginProtection().Handler(mux)
 }

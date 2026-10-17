@@ -47,7 +47,7 @@ func TestATerminalSaysSoWhenNoAgentAnswers(t *testing.T) {
 	}
 	closed := "http://" + ln.Addr().String()
 	ln.Close()
-	server, url, err := start(closed)
+	server, url, err := start(closed, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

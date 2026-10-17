@@ -286,11 +286,13 @@ func newAPI(all ...tasks.Task) http.Handler {
 }
 
 func newAPIWith(repo usecases.TaskRepository) http.Handler {
-	return New(usecases.New(repo, &fakeRunner{}), labusecases.UseCases{})
+	taskCases := usecases.New(repo, &fakeRunner{})
+	return New(taskCases, labusecases.UseCases{}, examsFor(taskCases, labusecases.UseCases{}, nil))
 }
 
 func newAPIRunning(r *fakeRunner, all ...tasks.Task) http.Handler {
-	return New(usecases.New(fakeRepository{tasks: all}, r), labusecases.UseCases{})
+	taskCases := usecases.New(fakeRepository{tasks: all}, r)
+	return New(taskCases, labusecases.UseCases{}, examsFor(taskCases, labusecases.UseCases{}, nil))
 }
 
 type fakeRunner struct {

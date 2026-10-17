@@ -1,8 +1,10 @@
 import { filterQuery, noFilter, type Filter } from './api'
 
-export type Route = { page: 'tasks'; filter: Filter } | { page: 'task'; id: string }
+export type Route = { page: 'tasks'; filter: Filter } | { page: 'task'; id: string } | { page: 'exam' }
 
 export const homePath = '#/'
+
+export const examPath = '#/exam'
 
 export function tasksPath(filter: Filter): string {
   const query = filterQuery(filter)
@@ -14,6 +16,7 @@ export function taskPath(id: string): string {
 }
 
 export function parseRoute(hash: string): Route {
+  if (hash === examPath) return { page: 'exam' }
   const task = /^#\/tasks\/([^/]+)$/.exec(hash)
   if (task) {
     try {

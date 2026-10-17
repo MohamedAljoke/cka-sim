@@ -28,14 +28,14 @@ when what they describe changes.
 | 2.7 Setup, check, solution | Partly | `lib.sh`, every `setup.sh` and `check.sh` are in the catalog. `/api/tasks/{id}/start` runs setup and `/api/tasks/{id}/check` grades the check's PASS/FAIL lines (`tasks.ReadGrade`), both through `RunScript`; the page has Set up task and Check. Tasks that need an add-on (2.11) fail for now. No `solution.sh` yet (the selftest, 2.8, needs it) |
 | 2.8 Selftest | Not started | |
 | 2.9 Tasks that break the cluster | Not started | `reset.sh` (25 tasks on `main`), `Heal`, `Tidy` |
-| 2.10 The exam | Not started | `Draw`, exam session saved to a file, weighted score, `/api/exam*`, exam page |
+| 2.10 The exam | Done | `tasks.Draw` (domain weights, at most one `order: last` task, set up last and shown first); the `exams` domain with Begin, Get, Flag, End, Discard and Resume. The exam is saved to `<CKA_SIM_STATE_DIR>/exam.json`; setups and checks run in the background and a restart resumes them. The clock starts once every setup is done, and the server ends an exam read past its deadline. Score weighted by task, pass at 66%; a task whose setup failed counts in neither earned nor total. `/api/exam*`; practice start, check and solution answer 409 during an exam. The page at `#/exam`: form, setup progress, pills, flags, countdown, terminal, results. No heal or tidy (2.9): restart the lab after an exam |
 | 2.11 Add-ons | Not started | metrics-server, kube-router, Gateway API + Traefik, VPA, registry, chart repo |
 | 4.1 One command, Docker only | Partly | `install.sh` puts the `cka-sim` command (`up`, `down`, `status`, `logs`, `update`, `uninstall`) and `infra/compose.yml` in `~/.cka-sim`; it runs the lab and the app (the page and the platform behind Caddy) on :7080 with a token generated once. `cka-sim shell` opens the base host. No auth or assistant yet |
 | 4.2 Published images | Partly | `images.yml` pushes `cka-sim-lab` and `cka-sim-app` (amd64 + arm64) to GHCR as `:rebuild` and `:sha-…` on every push to `rebuild`; no `ci.yml` yet |
 
 ## Next
 
-A task is playable exam-style: the terminal sits on the base host, `ssh <host>` reaches the task's node, set it
-up, solve it, Check. Next is exam mode (2.10): draw N tasks by domain weight, set them all up front, a timer,
-and a score at the end. Selftest (2.8) and reset (2.9) make that safe for tasks that break the cluster, and
-add-ons (2.11) come in with the first task that needs each one.
+Exam mode works on one shared cluster: draw, set everything up, play against the clock, End exam, a weighted
+score. Two gaps show in it. Tasks that need an add-on fail their setup and are left out of the score (2.11).
+Nothing resets the cluster between exams, so the lab needs a restart after each one (2.9). Selftest (2.8) is the
+way to find out which tasks set up and grade cleanly.

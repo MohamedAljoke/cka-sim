@@ -1,4 +1,5 @@
 import './style.css'
+import { showExam } from './exam'
 import { labStatus } from './lab'
 import { parseRoute } from './routes'
 import { showTask } from './task'
@@ -16,6 +17,7 @@ function show() {
   const route = parseRoute(location.hash)
   document.body.dataset.page = route.page
   if (route.page === 'task') showTask(pane, route.id, lab, leaving.signal)
+  else if (route.page === 'exam') showExam(pane, lab, leaving.signal)
   else showTasks(pane, route.filter, leaving.signal)
 }
 

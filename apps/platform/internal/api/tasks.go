@@ -96,6 +96,10 @@ func (a *api) getTaskByID(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) getTaskSolution(w http.ResponseWriter, r *http.Request) error {
+	if err := a.outsideAnExam(r); err != nil {
+		return err
+	}
+
 	solution, err := a.tasks.Solution.Execute(r.Context(), r.PathValue("id"))
 	switch {
 	case errors.Is(err, tasks.ErrNotFound):
@@ -110,6 +114,10 @@ func (a *api) getTaskSolution(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) startTask(w http.ResponseWriter, r *http.Request) error {
+	if err := a.outsideAnExam(r); err != nil {
+		return err
+	}
+
 	result, err := a.tasks.Start.Execute(r.Context(), r.PathValue("id"))
 	switch {
 	case errors.Is(err, tasks.ErrNotFound):
@@ -128,6 +136,10 @@ func (a *api) startTask(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) checkTask(w http.ResponseWriter, r *http.Request) error {
+	if err := a.outsideAnExam(r); err != nil {
+		return err
+	}
+
 	checked, err := a.tasks.Check.Execute(r.Context(), r.PathValue("id"))
 	switch {
 	case errors.Is(err, tasks.ErrNotFound):
@@ -144,15 +156,20 @@ func (a *api) checkTask(w http.ResponseWriter, r *http.Request) error {
 }
 
 func newGradeView(checked usecases.Checked) gradeView {
-	grade := checked.Grade
+	view := gradeViewOf(checked.Grade)
+
+	if len(checked.Grade.Checks) == 0 {
+		view.ExitCode, view.Output = checked.Script.ExitCode, checked.Script.Output
+	}
+
+	return view
+}
+
+func gradeViewOf(grade tasks.Grade) gradeView {
 	view := gradeView{Earned: grade.Earned, Total: grade.Total, Checks: make([]checkView, len(grade.Checks))}
 
 	for i, c := range grade.Checks {
 		view.Checks[i] = checkView{Passed: c.Passed, Points: c.Points, Description: c.Description}
-	}
-
-	if len(grade.Checks) == 0 {
-		view.ExitCode, view.Output = checked.Script.ExitCode, checked.Script.Output
 	}
 
 	return view

@@ -23,4 +23,5 @@ COPY --from=web /web/dist /srv
 COPY infra/app/Caddyfile /etc/caddy/Caddyfile
 COPY infra/app/app-start.sh /app-start.sh
 ENV CKA_SIM_PLATFORM_ADDR=127.0.0.1:7070
+ENV CKA_SIM_STATE_DIR=/var/lib/cka-sim
 ENTRYPOINT ["/app-start.sh"]

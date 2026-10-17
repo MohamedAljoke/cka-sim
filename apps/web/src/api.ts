@@ -87,8 +87,59 @@ export async function stopLab(signal?: AbortSignal): Promise<Lab> {
   return (await call('DELETE', '/api/lab', signal)).json()
 }
 
-async function call(method: string, path: string, signal?: AbortSignal): Promise<Response> {
-  const res = await fetch(path, { method, signal })
+export type SetupState = 'preparing' | 'ready' | 'failed'
+
+export type ExamTask = {
+  id: string
+  weight: number
+  setup: SetupState
+  setupError?: string
+  flagged: boolean
+  grade?: Grade
+  checkError?: string
+}
+
+export type Exam = {
+  tasks: ExamTask[]
+  minutes: number
+  started?: string
+  deadline?: string
+  ended?: string
+  scored?: string
+  now: string
+  score?: { percent: number; passed: boolean; pass: number }
+}
+
+export async function getExam(signal?: AbortSignal): Promise<Exam | null> {
+  const res = await fetch('/api/exam', { signal })
+  if (res.status === 404) return null
+  if (!res.ok) throw await failure(res, 'GET', '/api/exam')
+  return res.json()
+}
+
+export async function beginExam(count: number, minutes: number, signal?: AbortSignal): Promise<Exam> {
+  return (await call('POST', '/api/exam', signal, { count, minutes })).json()
+}
+
+export async function endExam(signal?: AbortSignal): Promise<Exam> {
+  return (await call('POST', '/api/exam/end', signal)).json()
+}
+
+export async function discardExam(signal?: AbortSignal): Promise<void> {
+  await call('DELETE', '/api/exam', signal)
+}
+
+export async function flagTask(id: string, flagged: boolean, signal?: AbortSignal): Promise<void> {
+  await call(flagged ? 'PUT' : 'DELETE', `/api/exam/tasks/${encodeURIComponent(id)}/flag`, signal)
+}
+
+async function call(method: string, path: string, signal?: AbortSignal, body?: unknown): Promise<Response> {
+  const res = await fetch(path, body === undefined ? { method, signal } : {
+    method,
+    signal,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
   if (!res.ok) throw await failure(res, method, path)
   return res
 }

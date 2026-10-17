@@ -646,3 +646,248 @@ body[data-page='task'] main {
     height: 420px;
   }
 }
+
+.nav {
+  display: flex;
+  gap: 4px;
+}
+
+.nav a {
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.nav a:hover {
+  color: var(--ink);
+}
+
+body[data-page='tasks'] [data-nav='tasks'],
+body[data-page='task'] [data-nav='tasks'],
+body[data-page='exam'] [data-nav='exam'] {
+  background: var(--chip);
+  color: var(--ink);
+}
+
+.exam-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  margin-top: 16px;
+}
+
+.exam-field {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.exam-number {
+  width: 110px;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.exam-setup,
+.exam-results {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exam-setup-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.exam-setup-item span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+
+.exam-setup-item[data-state='preparing'] .lab-dot {
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.exam-setup-item[data-state='ready'] .lab-dot {
+  background: var(--good);
+}
+
+.exam-setup-item[data-state='failed'] .lab-dot {
+  background: var(--bad);
+}
+
+body[data-page='exam'][data-phase='running'] {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+body[data-page='exam'][data-phase='running'] main {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+
+.exam-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.exam-label {
+  font-weight: 600;
+}
+
+.exam-timer {
+  margin-left: auto;
+  font: 600 1.1rem/1 'Cascadia Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.exam-timer[data-low='true'] {
+  color: var(--bad);
+}
+
+.exam-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 16px;
+}
+
+.exam-pill {
+  position: relative;
+  min-width: 36px;
+  padding: 4px 8px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.exam-pill:hover {
+  border-color: var(--ink-2);
+}
+
+.exam-pill[aria-current='true'] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.exam-pill[data-flagged='true']::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--card);
+}
+
+.exam-pill[data-failed='true'] {
+  text-decoration: line-through;
+}
+
+.exam-pill[data-failed='true']:not([aria-current='true']) {
+  color: var(--ink-2);
+}
+
+.exam-question-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.exam-question-head h1 {
+  flex: 1 1 240px;
+  margin: 0;
+  font-size: 1.4rem;
+  line-height: 1.25;
+}
+
+.exam-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.exam-verdict {
+  margin: 8px 0 0;
+  font-size: 1.1rem;
+}
+
+.exam-verdict strong {
+  font-size: 2rem;
+}
+
+.exam-verdict.passed strong {
+  color: var(--good);
+}
+
+.exam-verdict.failed strong {
+  color: var(--bad);
+}
+
+.exam-result {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0 12px 12px;
+  border-top: 1px solid var(--rule);
+  border-left: 3px solid var(--rule);
+}
+
+.exam-result[data-state='passed'] {
+  border-left-color: var(--good);
+}
+
+.exam-result[data-state='failed'] {
+  border-left-color: var(--bad);
+}
+
+.exam-result-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.exam-result-head a {
+  flex: 1 1 240px;
+  color: inherit;
+  font-weight: 500;
+}
+
+.card > .action {
+  margin-top: 16px;
+}
+
+@media (max-width: 900px) {
+  body[data-page='exam'][data-phase='running'] {
+    height: auto;
+    display: block;
+  }
+}

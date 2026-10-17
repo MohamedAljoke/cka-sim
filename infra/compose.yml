@@ -65,6 +65,8 @@ services:
       CKA_SIM_AGENT_TOKEN: ${CKA_SIM_AGENT_TOKEN:-}
     volumes:
       - secrets:/secrets:ro
+      # Keeps a running exam across restarts and updates.
+      - app-state:/var/lib/cka-sim
     entrypoint: *with-token
     command: /app-start.sh
     healthcheck:
@@ -75,3 +77,4 @@ services:
 volumes:
   secrets:
   lab-docker:
+  app-state:

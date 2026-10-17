@@ -41,6 +41,16 @@ export async function getSolution(id: string, signal?: AbortSignal): Promise<str
   return reply.solution
 }
 
+export type Setup = {
+  passed: boolean
+  exitCode: number
+  output?: string
+}
+
+export async function startTask(id: string, signal?: AbortSignal): Promise<Setup> {
+  return (await call('POST', `/api/tasks/${encodeURIComponent(id)}/start`, signal)).json()
+}
+
 export type LabState = 'none' | 'starting' | 'ready' | 'stopping' | 'failed'
 
 export type Lab = {

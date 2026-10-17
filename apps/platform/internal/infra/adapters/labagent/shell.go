@@ -17,7 +17,7 @@ import (
 
 // The agent answers a refused shell with an error in place of output, so OpenShell waits for that first answer.
 func (p *Provider) OpenShell(ctx context.Context, size labs.TerminalSize) (usecases.Shell, error) {
-	stream, err := p.shells.OpenShell(ctx)
+	stream, err := p.work.OpenShell(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -29,14 +29,14 @@ func (p *Provider) OpenShell(ctx context.Context, size labs.TerminalSize) (useca
 
 	first, err := stream.Receive()
 	if err != nil {
-		return nil, errors.Join(shellRefusal(err), stream.Close())
+		return nil, errors.Join(notReady(err), stream.Close())
 	}
 	shell.pending = first.GetOutput()
 
 	return shell, nil
 }
 
-func shellRefusal(err error) error {
+func notReady(err error) error {
 	if connect.CodeOf(err) == connect.CodeFailedPrecondition {
 		return fmt.Errorf("%w: %w", labs.ErrNotReady, err)
 	}

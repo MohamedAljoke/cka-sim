@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
 	labusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks/usecases"
@@ -158,14 +160,83 @@ func TestAFailedGetIsUnavailableAndHidesTheCause(t *testing.T) {
 	}
 }
 
-var wlScale = tasks.Task{ID: "wl-scale", Title: "Scale a Deployment", Domain: tasks.Workloads, Topics: []string{"deployments"}, Weight: 4, Host: "node-1", Question: "Scale it to 4.", Solution: "Run kubectl scale."}
+func TestStartingATaskRunsItsSetup(t *testing.T) {
+	r := &fakeRunner{result: labs.ScriptResult{Output: "namespace/wl-scale created\n"}}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/wl-scale/start")
+
+	if status != http.StatusOK || strings.TrimSpace(body) != `{"passed":true,"exitCode":0,"output":"namespace/wl-scale created\n"}` {
+		t.Errorf("status %d: %s", status, body)
+	}
+	if r.host != "node-1" || r.script != wlScale.Setup {
+		t.Errorf("ran %q on %q", r.script, r.host)
+	}
+}
+
+func TestAFailedSetupAnswersItsExitCodeAndOutput(t *testing.T) {
+	r := &fakeRunner{result: labs.ScriptResult{Output: "error: the server doesn't have a resource type \"widgets\"\n", ExitCode: 1}}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/wl-scale/start")
+
+	if status != http.StatusOK || !strings.Contains(body, `"passed":false,"exitCode":1`) || !strings.Contains(body, "widgets") {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestStartingATaskWhileTheLabIsNotReadyIsAConflict(t *testing.T) {
+	r := &fakeRunner{err: fmt.Errorf("%w: the cluster is creating", labs.ErrNotReady)}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/wl-scale/start")
+
+	if status != http.StatusConflict || !strings.Contains(body, `"code":"lab_not_ready"`) {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestStartingATaskOnALabThatDoesNotAnswerIsUnavailableAndHidesTheCause(t *testing.T) {
+	r := &fakeRunner{err: errors.New("dial tcp 127.0.0.1:7171: connection refused")}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/wl-scale/start")
+
+	if status != http.StatusServiceUnavailable || !strings.Contains(body, `"code":"lab_unavailable"`) || strings.Contains(body, "7171") {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestStartingAnUnknownTaskIsNotFound(t *testing.T) {
+	r := &fakeRunner{}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/net-svc/start")
+
+	if status != http.StatusNotFound || !strings.Contains(body, `"code":"task_not_found"`) || r.host != "" {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+var wlScale = tasks.Task{ID: "wl-scale", Title: "Scale a Deployment", Domain: tasks.Workloads, Topics: []string{"deployments"}, Weight: 4, Host: "node-1", Question: "Scale it to 4.", Solution: "Run kubectl scale.", Setup: "fresh_ns wl-scale\n"}
 
 func newAPI(all ...tasks.Task) http.Handler {
 	return newAPIWith(fakeRepository{tasks: all})
 }
 
 func newAPIWith(repo usecases.TaskRepository) http.Handler {
-	return New(usecases.New(repo), labusecases.UseCases{})
+	return New(usecases.New(repo, &fakeRunner{}), labusecases.UseCases{})
+}
+
+func newAPIRunning(r *fakeRunner, all ...tasks.Task) http.Handler {
+	return New(usecases.New(fakeRepository{tasks: all}, r), labusecases.UseCases{})
+}
+
+type fakeRunner struct {
+	result labs.ScriptResult
+	err    error
+	host   string
+	script string
+}
+
+func (r *fakeRunner) RunScript(_ context.Context, host, script string) (labs.ScriptResult, error) {
+	r.host, r.script = host, script
+	return r.result, r.err
 }
 
 type fakeRepository struct {

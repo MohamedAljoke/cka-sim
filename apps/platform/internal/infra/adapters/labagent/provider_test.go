@@ -114,6 +114,8 @@ type fakeAgent struct {
 	creates int
 	deletes int
 	opened  chan *labv1.TerminalSize
+	ran     *labv1.RunScriptRequest
+	script  *labv1.RunScriptResponse
 }
 
 func (a *fakeAgent) GetCluster(context.Context, *labv1.GetClusterRequest) (*labv1.GetClusterResponse, error) {
@@ -170,4 +172,9 @@ func (a *fakeAgent) OpenShell(_ context.Context, stream labv1connect.LabServiceO
 			return err
 		}
 	}
+}
+
+func (a *fakeAgent) RunScript(_ context.Context, req *labv1.RunScriptRequest) (*labv1.RunScriptResponse, error) {
+	a.ran = req
+	return a.script, a.err
 }

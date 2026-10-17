@@ -3,7 +3,13 @@ import { el, message } from './ui'
 
 const pollEvery = 1000
 
-export function labPanel(signal: AbortSignal, onChange: (lab: Lab) => void): { panel: HTMLElement; refresh: () => void } {
+export type LabStatus = {
+  panel: HTMLElement
+  refresh: () => void
+  watch: (signal: AbortSignal, onChange: (lab: Lab) => void) => void
+}
+
+export function labStatus(): LabStatus {
   const dot = el('span', 'lab-dot')
   const text = el('span')
   const line = el('p', 'lab-line')
@@ -11,11 +17,13 @@ export function labPanel(signal: AbortSignal, onChange: (lab: Lab) => void): { p
   const action = el('button', 'action')
   action.type = 'button'
   const panel = el('section', 'lab-panel')
+  panel.setAttribute('aria-label', 'Lab')
   panel.setAttribute('aria-live', 'polite')
   panel.append(line, action)
 
   let timer: ReturnType<typeof setTimeout> | undefined
-  signal.addEventListener('abort', () => clearTimeout(timer))
+  let current: Lab | undefined
+  const watchers = new Set<(lab: Lab) => void>()
 
   const offer = (label: string, run: () => Promise<void>) => {
     action.hidden = false
@@ -23,12 +31,13 @@ export function labPanel(signal: AbortSignal, onChange: (lab: Lab) => void): { p
     action.onclick = run
   }
   const show = (lab: Lab) => {
+    current = lab
     panel.dataset.state = lab.state
     text.className = ''
     action.hidden = true
     switch (lab.state) {
       case 'none':
-        text.textContent = 'This task runs on a real 3-node cluster.'
+        text.textContent = 'No lab running'
         offer('Start lab', () => change(startLab))
         break
       case 'starting':
@@ -48,10 +57,9 @@ export function labPanel(signal: AbortSignal, onChange: (lab: Lab) => void): { p
         break
     }
     if (lab.state === 'starting' || lab.state === 'stopping') timer = setTimeout(refresh, pollEvery)
-    onChange(lab)
+    watchers.forEach((onChange) => onChange(lab))
   }
   const failed = (err: unknown) => {
-    if (signal.aborted) return
     panel.dataset.state = 'failed'
     text.className = 'error'
     text.textContent = `Cannot reach the lab: ${message(err)}`
@@ -60,29 +68,32 @@ export function labPanel(signal: AbortSignal, onChange: (lab: Lab) => void): { p
   async function refresh() {
     clearTimeout(timer)
     try {
-      const lab = await getLab(signal)
-      if (!signal.aborted) show(lab)
+      show(await getLab())
     } catch (err) {
       failed(err)
     }
   }
-  async function change(run: (signal: AbortSignal) => Promise<Lab>) {
+  async function change(run: () => Promise<Lab>) {
     clearTimeout(timer)
     action.disabled = true
     try {
-      const lab = await run(signal)
-      if (!signal.aborted) show(lab)
+      show(await run())
     } catch (err) {
       failed(err)
     } finally {
       action.disabled = false
     }
   }
+  const watch = (signal: AbortSignal, onChange: (lab: Lab) => void) => {
+    watchers.add(onChange)
+    signal.addEventListener('abort', () => watchers.delete(onChange))
+    if (current) onChange(current)
+  }
 
   text.textContent = 'Checking the lab…'
   action.hidden = true
   refresh()
-  return { panel, refresh }
+  return { panel, refresh, watch }
 }
 
 function since(startedAt?: string): string {

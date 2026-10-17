@@ -187,6 +187,18 @@ func (a *fakeAgent) OpenShell(_ context.Context, stream labv1connect.LabServiceO
 	}
 }
 
+func (a *fakeAgent) RunScript(_ context.Context, req *labv1.RunScriptRequest) (*labv1.RunScriptResponse, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.cluster.State != labv1.ClusterState_CLUSTER_STATE_READY {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, "the cluster isn't ready")
+	}
+	if !strings.Contains(req.GetScript(), "export TASK_ID=") || !strings.Contains(req.GetScript(), "fresh_ns()") {
+		return &labv1.RunScriptResponse{Output: []byte("not a catalog script\n"), ExitCode: 2}, nil
+	}
+	return &labv1.RunScriptResponse{Output: []byte("ran on " + req.GetHost() + "\n")}, nil
+}
+
 func serveAgent(a *fakeAgent) (string, func()) {
 	server := connect.NewServer(rpcauth.RequireBearer(agentToken))
 	labv1connect.RegisterLabServiceHandler(server, a)

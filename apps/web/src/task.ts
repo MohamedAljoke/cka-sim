@@ -1,10 +1,11 @@
 import { getSolution, getTask, type TaskDetail } from './api'
-import { labPanel } from './lab'
+import type { LabStatus } from './lab'
 import { homePath } from './routes'
+import { setupPanel } from './setup'
 import { shellPanel } from './shell'
 import { chips, copyable, el, markdown, message } from './ui'
 
-export async function showTask(pane: HTMLElement, id: string, signal: AbortSignal) {
+export async function showTask(pane: HTMLElement, id: string, lab: LabStatus, signal: AbortSignal) {
   pane.replaceChildren(note(el('p', 'muted', 'Loading the task…')))
   let task: TaskDetail
   try {
@@ -22,11 +23,15 @@ export async function showTask(pane: HTMLElement, id: string, signal: AbortSigna
   const brief = el('article', 'task-brief')
   brief.append(backLink(), el('h1', '', task.title), chips(task), hostLine(task), question, solutionPanel(task.id, signal))
 
-  const shell = shellPanel(signal, () => lab.refresh())
-  const lab = labPanel(signal, shell.follow)
+  const setup = setupPanel(task.id, signal)
+  const shell = shellPanel(signal, lab.refresh)
+  lab.watch(signal, (state) => {
+    setup.follow(state)
+    shell.follow(state)
+  })
   const workspace = el('section', 'task-lab')
-  workspace.setAttribute('aria-label', 'Lab')
-  workspace.append(lab.panel, shell.panel)
+  workspace.setAttribute('aria-label', 'Workspace')
+  workspace.append(setup.panel, shell.panel)
 
   const layout = el('div', 'task-layout')
   layout.append(brief, workspace)

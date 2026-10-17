@@ -43,9 +43,28 @@ body {
 
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  padding: 12px 24px;
+  gap: 8px 16px;
+  padding: 8px 24px;
   border-bottom: 1px solid var(--rule);
+}
+
+.topbar .lab-panel {
+  margin: 0 0 0 auto;
+  padding: 0;
+  border: none;
+  font-size: 14px;
+}
+
+.topbar .action {
+  padding: 4px 12px;
+}
+
+@media (max-width: 600px) {
+  .topbar {
+    padding: 8px 16px;
+  }
 }
 
 .brand {
@@ -430,6 +449,33 @@ body[data-page='task'] main {
 .task-lab .lab-panel {
   margin-top: 0;
   background: var(--card);
+}
+
+.setup-panel[data-state='running'] .lab-dot {
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.setup-panel[data-state='done'] .lab-dot {
+  background: var(--good);
+}
+
+.setup-panel[data-state='failed'] .lab-dot {
+  background: var(--bad);
+}
+
+.setup-output {
+  width: 100%;
+  max-height: 160px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: var(--radius);
+  background: var(--chip);
+  color: var(--ink);
+  font: 12.5px/1.45 'Cascadia Mono', ui-monospace, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .shell {

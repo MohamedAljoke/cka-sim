@@ -54,7 +54,7 @@ func run() error {
 	}
 
 	lab := labagent.NewProvider(cfg.LabURL, cfg.AgentToken)
-	handler := api.New(usecases.New(taskRepo), labusecases.New(lab))
+	handler := api.New(usecases.New(taskRepo, lab), labusecases.New(lab))
 	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 
 	go func() {

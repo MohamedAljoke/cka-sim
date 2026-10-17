@@ -7,6 +7,7 @@ import (
 
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/httpx"
 
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks"
 )
 
@@ -30,10 +31,18 @@ type solutionView struct {
 	Solution string `json:"solution"`
 }
 
+// A setup that fails is still an answer: the page shows its exit code and the end of its output.
+type setupView struct {
+	Passed   bool   `json:"passed"`
+	ExitCode int    `json:"exitCode"`
+	Output   string `json:"output,omitempty"`
+}
+
 func (a *api) taskRoutes(handle handleFunc) {
 	handle("GET /api/tasks", a.getTasks)
 	handle("GET /api/tasks/{id}", a.getTaskByID)
 	handle("GET /api/tasks/{id}/solution", a.getTaskSolution)
+	handle("POST /api/tasks/{id}/start", a.startTask)
 }
 
 func (a *api) getTasks(w http.ResponseWriter, r *http.Request) error {
@@ -81,6 +90,24 @@ func (a *api) getTaskSolution(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return httpx.WriteJSON(w, http.StatusOK, solutionView{Solution: solution})
+}
+
+func (a *api) startTask(w http.ResponseWriter, r *http.Request) error {
+	result, err := a.tasks.Start.Execute(r.Context(), r.PathValue("id"))
+	switch {
+	case errors.Is(err, tasks.ErrNotFound):
+		return httpx.NotFound(err)
+	case errors.Is(err, labs.ErrNotReady):
+		return httpx.Conflict(err)
+	case errors.Is(err, tasks.ErrUnavailable), errors.Is(err, labs.ErrUnavailable):
+		return httpx.Unavailable(err)
+	case err != nil:
+		return err
+	}
+
+	view := setupView{Passed: result.Passed(), ExitCode: result.ExitCode, Output: result.Output}
+
+	return httpx.WriteJSON(w, http.StatusOK, view)
 }
 
 func filterOf(query url.Values) tasks.Filter {

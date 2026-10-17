@@ -1,0 +1,72 @@
+#!/bin/sh
+set -eu
+
+self=$0
+[ -L "$self" ] && self=$(readlink "$self")
+dir=$(cd "$(dirname "$self")" && pwd -P)
+installer=https://raw.githubusercontent.com/${CKA_SIM_REPO:-MohamedAljoke/cka-sim}/${CKA_SIM_REF:-rebuild}/infra/install.sh
+
+compose() { docker compose -f "$dir/compose.yml" "$@"; }
+
+fail() {
+  echo "cka-sim: $*" >&2
+  exit 1
+}
+
+check_docker() {
+  command -v docker >/dev/null 2>&1 || fail "Docker is not installed: https://docs.docker.com/get-started/get-docker/"
+  docker info >/dev/null 2>&1 || fail "Docker is not running; start it (or Docker Desktop) and try again"
+  docker compose version >/dev/null 2>&1 || fail "this Docker has no 'docker compose'; update Docker"
+  [ "$(docker info --format '{{.OSType}}')" = linux ] || fail "switch Docker to Linux containers"
+}
+
+usage() {
+  cat <<USAGE
+usage: cka-sim <command>
+
+  up         start cka-sim on http://localhost:${CKA_SIM_PORT:-7080}
+  down       stop it; keeps the downloaded images
+  status     show what is running
+  logs       follow the logs (cka-sim logs lab for one part)
+  update     get the latest cka-sim and restart it
+  uninstall  delete cka-sim and everything it stored
+USAGE
+}
+
+case "${1:-}" in
+up)
+  check_docker
+  echo "starting cka-sim; the first start downloads the images"
+  compose up -d --wait --no-build
+  echo
+  echo "cka-sim is ready on http://localhost:${CKA_SIM_PORT:-7080}"
+  echo "pick a task and click Start lab; the first cluster takes a few minutes"
+  ;;
+down) compose down ;;
+status) compose ps ;;
+logs)
+  shift
+  compose logs -f "$@"
+  ;;
+update)
+  check_docker
+  curl -fsSL "$installer" | CKA_SIM_HOME="$dir" CKA_SIM_INSTALL_ONLY=1 sh
+  compose pull lab app
+  exec "$dir/cka-sim" up
+  ;;
+uninstall)
+  compose down --volumes
+  for part in app lab; do
+    docker image rm "ghcr.io/mohamedaljoke/cka-sim-$part:${CKA_SIM_VERSION:-rebuild}" >/dev/null 2>&1 || true
+  done
+  link=$(command -v cka-sim || true)
+  [ -L "$link" ] && rm -f "$link"
+  rm -rf "$dir"
+  echo "cka-sim is gone"
+  ;;
+-h | --help | help | "") usage ;;
+*)
+  usage >&2
+  exit 2
+  ;;
+esac

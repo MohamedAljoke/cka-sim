@@ -30,8 +30,8 @@ when what they describe changes.
 | 2.9 Tasks that break the cluster | Not started | `reset.sh` (25 tasks on `main`), `Heal`, `Tidy` |
 | 2.10 The exam | Not started | `Draw`, exam session saved to a file, weighted score, `/api/exam*`, exam page |
 | 2.11 Add-ons | Not started | metrics-server, kube-router, Gateway API + Traefik, VPA, registry, chart repo |
-| 4.1 One command, Docker only | Partly | `docker compose -f infra/compose.yml up` from a clone runs the lab and the app (the page and the platform behind Caddy) on :7080, with a token generated once; no auth or assistant yet, and no `cka-sim` command or `install.sh` |
-| 4.2 Published images | Not started | `images.yml`; `main` also has `ci.yml` testing lab and platform on Linux, macOS and Windows |
+| 4.1 One command, Docker only | Partly | `install.sh` puts the `cka-sim` command (`up`, `down`, `status`, `logs`, `update`, `uninstall`) and `infra/compose.yml` in `~/.cka-sim`; it runs the lab and the app (the page and the platform behind Caddy) on :7080 with a token generated once. No auth or assistant yet, and no `cka-sim shell` until the base host (2.3) |
+| 4.2 Published images | Partly | `images.yml` pushes `cka-sim-lab` and `cka-sim-app` (amd64 + arm64) to GHCR as `:rebuild` and `:sha-…` on every push to `rebuild`; no `ci.yml` yet |
 
 ## Next
 

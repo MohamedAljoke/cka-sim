@@ -1,5 +1,5 @@
-# cka-sim with only Docker: `docker compose -f infra/compose.yml up -d --build --wait`, then http://localhost:7080.
-# make passes the token in .env, so the platform from `make dev` can reach this lab too; without one, a token
+# cka-sim with only Docker, on http://localhost:7080. `cka-sim up` pulls the published images; `make up` builds
+# them from this clone. make passes the token in .env, so the platform from `make dev` can reach this lab too; without one, a token
 # is generated once and kept in the secrets volume.
 name: cka-sim
 
@@ -19,7 +19,7 @@ services:
     build:
       context: ..
       dockerfile: infra/lab/lab.Dockerfile
-    image: cka-sim-lab:dev
+    image: ghcr.io/mohamedaljoke/cka-sim-lab:${CKA_SIM_VERSION:-rebuild}
     restart: unless-stopped
     privileged: true
     init: true
@@ -53,7 +53,7 @@ services:
     build:
       context: ..
       dockerfile: infra/app/app.Dockerfile
-    image: cka-sim-app:dev
+    image: ghcr.io/mohamedaljoke/cka-sim-app:${CKA_SIM_VERSION:-rebuild}
     restart: unless-stopped
     depends_on:
       lab:

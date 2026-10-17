@@ -8,15 +8,26 @@ break a control plane and fix it the way the exam asks you to.
 
 ## Run it
 
-You need Docker, with at least 2 CPUs and 4 GiB of memory for it. From a clone:
+You need Docker, with at least 2 CPUs and 4 GiB of memory for it. No clone needed:
 
 ```sh
-docker compose -f infra/compose.yml up -d --build --wait
+curl -fsSL https://raw.githubusercontent.com/MohamedAljoke/cka-sim/rebuild/infra/install.sh | sh
 ```
 
-Open http://localhost:7080, pick a task and click **Start lab**. The first cluster takes a few minutes while
-the node image downloads; later ones reuse it. `docker compose -f infra/compose.yml down` stops everything
-and keeps the downloaded image.
+That installs the `cka-sim` command in `~/.local/bin` and starts it. Open http://localhost:7080, pick a task
+and click **Start lab**. The first cluster takes a few minutes while the node image downloads; later ones
+reuse it.
+
+```sh
+cka-sim down        # stop it; the downloaded images stay
+cka-sim up          # start it again
+cka-sim status      # what is running
+cka-sim logs lab    # follow one part's logs: lab or app
+cka-sim update      # get the latest cka-sim and restart it
+cka-sim uninstall   # delete it and everything it stored
+```
+
+From a clone, `make up` builds the same images from source and runs them.
 
 To work on the code, `cp .env.example .env` and run `make` to list the commands: `make lab` starts only the
 lab, and `make dev` runs the page with hot reload on http://localhost:5173.
@@ -53,7 +64,7 @@ The full walkthrough, from Docker-in-Docker quirks to how HTTP/2 streams both wa
 | `apps/lab` | Go agent that runs inside the lab container: cluster lifecycle and shells |
 | `apps/web` | TypeScript + Vite page with xterm.js |
 | `apps/go-shared` | Protobuf contracts and shared helpers, the only code apps may share |
-| `infra` | The images and the one Compose file that runs them: the lab, and the page with its platform |
+| `infra` | The images, the one Compose file that runs them, and the `cka-sim` command with its installer |
 
 Apps never import each other, each follows a domain / use cases / adapters layout, and every endpoint has
 end-to-end tests against the real binary. The rules are in [AGENTS.md](AGENTS.md).

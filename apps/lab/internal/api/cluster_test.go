@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -146,10 +145,7 @@ func (p *fakeProvisioner) Delete(context.Context) error { return <-p.deleted }
 
 func serve(t *testing.T, p usecases.Provisioner) string {
 	t.Helper()
-	h := New(token, usecases.New(cluster.New(), p, time.Now))
-	srv := httptest.NewServer(h)
-	t.Cleanup(srv.Close)
-	return srv.URL
+	return serveWith(t, p, newEchoOpener())
 }
 
 func client(url string) labv1connect.LabServiceClient {

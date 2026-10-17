@@ -7,6 +7,7 @@ toolchain go1.26.9
 require (
 	connectrpc.com/connect/v2 v2.0.1
 	github.com/MohamedAljoke/cka-sim/apps/go-shared v0.0.0
+	github.com/creack/pty v1.1.24
 	google.golang.org/protobuf v1.36.12
 	sigs.k8s.io/kind v0.33.0
 	sigs.k8s.io/yaml v1.4.0

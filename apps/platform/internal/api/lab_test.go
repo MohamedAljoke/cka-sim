@@ -71,6 +71,7 @@ type fakeLabProvider struct {
 	lab   labs.Lab
 	err   error
 	calls []string
+	shell *echoShell
 }
 
 func (p *fakeLabProvider) Get(context.Context) (labs.Lab, error) { return p.lab, p.err }
@@ -83,6 +84,14 @@ func (p *fakeLabProvider) Start(context.Context) (labs.Lab, error) {
 func (p *fakeLabProvider) Stop(context.Context) (labs.Lab, error) {
 	p.calls = append(p.calls, "stop")
 	return p.lab, p.err
+}
+
+func (p *fakeLabProvider) OpenShell(_ context.Context, size labs.TerminalSize) (labusecases.Shell, error) {
+	if p.err != nil {
+		return nil, p.err
+	}
+	p.shell.opened <- size
+	return p.shell, nil
 }
 
 func newLabAPI(p labusecases.LabProvider) http.Handler {

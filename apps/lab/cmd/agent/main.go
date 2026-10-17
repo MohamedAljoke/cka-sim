@@ -16,6 +16,7 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/api"
 	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/domain/cluster"
 	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/domain/cluster/usecases"
+	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/infra/adapters/dockerexec"
 	"github.com/MohamedAljoke/cka-sim/apps/lab/internal/infra/adapters/kind"
 )
 
@@ -55,7 +56,8 @@ func run() error {
 		return fmt.Errorf("claim %s: %w", cfg.Addr, err)
 	}
 
-	handler := api.New(cfg.AgentToken, usecases.New(cluster.New(), provisioner, time.Now))
+	shells := dockerexec.NewOpener(cfg.Cluster + "-control-plane")
+	handler := api.New(cfg.AgentToken, usecases.New(cluster.New(), provisioner, shells, time.Now))
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
 	protocols.SetUnencryptedHTTP2(true)

@@ -17,12 +17,21 @@ import (
 )
 
 type Provider struct {
-	agent labv1connect.LabServiceClient
+	agent  labv1connect.LabServiceClient
+	shells labv1connect.LabServiceClient
 }
 
+// Shells get a client of their own: one open as long as the terminal needs HTTP/2 and no timeout.
 func NewProvider(url, token string) *Provider {
-	transport := connecthttp.NewTransport(&http.Client{Timeout: 10 * time.Second}, url)
-	return &Provider{agent: labv1connect.NewLabServiceClient(connect.NewClient(transport, rpcauth.Bearer(token)))}
+	calls := connecthttp.NewTransport(&http.Client{Timeout: 10 * time.Second}, url)
+	protocols := new(http.Protocols)
+	protocols.SetUnencryptedHTTP2(true)
+	streams := connecthttp.NewTransport(&http.Client{Transport: &http.Transport{Protocols: protocols}}, url)
+
+	return &Provider{
+		agent:  labv1connect.NewLabServiceClient(connect.NewClient(calls, rpcauth.Bearer(token))),
+		shells: labv1connect.NewLabServiceClient(connect.NewClient(streams, rpcauth.Bearer(token))),
+	}
 }
 
 func (p *Provider) Get(ctx context.Context) (labs.Lab, error) {

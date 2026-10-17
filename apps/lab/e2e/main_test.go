@@ -101,8 +101,12 @@ func stop(agent *exec.Cmd) error {
 	}
 }
 
+// HTTP/2 without TLS, which OpenShell's stream needs; the agent serves it beside HTTP/1.
 func client(interceptors ...connect.ClientInterceptor) labv1connect.LabServiceClient {
-	return labv1connect.NewLabServiceClient(connect.NewClient(connecthttp.NewTransport(http.DefaultClient, baseURL), interceptors...))
+	protocols := new(http.Protocols)
+	protocols.SetUnencryptedHTTP2(true)
+	h2c := &http.Client{Transport: &http.Transport{Protocols: protocols}}
+	return labv1connect.NewLabServiceClient(connect.NewClient(connecthttp.NewTransport(h2c, baseURL), interceptors...))
 }
 
 func authed() labv1connect.LabServiceClient {

@@ -88,6 +88,9 @@ func TestARealClusterIsBuiltAndDeleted(t *testing.T) {
 	}
 	t.Logf("ready in %s", ready.Ready.AsTime().Sub(ready.Started.AsTime()).Round(time.Second))
 
+	output := runInShell(t, "kubectl get nodes --no-headers | grep -cw Ready\n", "3")
+	t.Logf("the shell answered %q", output)
+
 	if _, err := c.DeleteCluster(context.Background(), &labv1.DeleteClusterRequest{}); err != nil {
 		t.Fatal(err)
 	}

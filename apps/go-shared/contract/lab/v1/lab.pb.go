@@ -398,6 +398,184 @@ func (x *DeleteClusterResponse) GetCluster() *Cluster {
 	return nil
 }
 
+type OpenShellRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Input:
+	//
+	//	*OpenShellRequest_Size
+	//	*OpenShellRequest_Keys
+	Input         isOpenShellRequest_Input `protobuf_oneof:"input"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpenShellRequest) Reset() {
+	*x = OpenShellRequest{}
+	mi := &file_lab_v1_lab_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenShellRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenShellRequest) ProtoMessage() {}
+
+func (x *OpenShellRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_lab_v1_lab_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenShellRequest.ProtoReflect.Descriptor instead.
+func (*OpenShellRequest) Descriptor() ([]byte, []int) {
+	return file_lab_v1_lab_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *OpenShellRequest) GetInput() isOpenShellRequest_Input {
+	if x != nil {
+		return x.Input
+	}
+	return nil
+}
+
+func (x *OpenShellRequest) GetSize() *TerminalSize {
+	if x != nil {
+		if x, ok := x.Input.(*OpenShellRequest_Size); ok {
+			return x.Size
+		}
+	}
+	return nil
+}
+
+func (x *OpenShellRequest) GetKeys() []byte {
+	if x != nil {
+		if x, ok := x.Input.(*OpenShellRequest_Keys); ok {
+			return x.Keys
+		}
+	}
+	return nil
+}
+
+type isOpenShellRequest_Input interface {
+	isOpenShellRequest_Input()
+}
+
+type OpenShellRequest_Size struct {
+	Size *TerminalSize `protobuf:"bytes,1,opt,name=size,proto3,oneof"`
+}
+
+type OpenShellRequest_Keys struct {
+	Keys []byte `protobuf:"bytes,2,opt,name=keys,proto3,oneof"`
+}
+
+func (*OpenShellRequest_Size) isOpenShellRequest_Input() {}
+
+func (*OpenShellRequest_Keys) isOpenShellRequest_Input() {}
+
+type TerminalSize struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cols          uint32                 `protobuf:"varint,1,opt,name=cols,proto3" json:"cols,omitempty"`
+	Rows          uint32                 `protobuf:"varint,2,opt,name=rows,proto3" json:"rows,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TerminalSize) Reset() {
+	*x = TerminalSize{}
+	mi := &file_lab_v1_lab_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TerminalSize) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TerminalSize) ProtoMessage() {}
+
+func (x *TerminalSize) ProtoReflect() protoreflect.Message {
+	mi := &file_lab_v1_lab_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TerminalSize.ProtoReflect.Descriptor instead.
+func (*TerminalSize) Descriptor() ([]byte, []int) {
+	return file_lab_v1_lab_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *TerminalSize) GetCols() uint32 {
+	if x != nil {
+		return x.Cols
+	}
+	return 0
+}
+
+func (x *TerminalSize) GetRows() uint32 {
+	if x != nil {
+		return x.Rows
+	}
+	return 0
+}
+
+type OpenShellResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Output        []byte                 `protobuf:"bytes,1,opt,name=output,proto3" json:"output,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpenShellResponse) Reset() {
+	*x = OpenShellResponse{}
+	mi := &file_lab_v1_lab_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenShellResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenShellResponse) ProtoMessage() {}
+
+func (x *OpenShellResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_lab_v1_lab_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenShellResponse.ProtoReflect.Descriptor instead.
+func (*OpenShellResponse) Descriptor() ([]byte, []int) {
+	return file_lab_v1_lab_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *OpenShellResponse) GetOutput() []byte {
+	if x != nil {
+		return x.Output
+	}
+	return nil
+}
+
 var File_lab_v1_lab_proto protoreflect.FileDescriptor
 
 const file_lab_v1_lab_proto_rawDesc = "" +
@@ -417,20 +595,30 @@ const file_lab_v1_lab_proto_rawDesc = "" +
 	"\acluster\x18\x01 \x01(\v2\x0f.lab.v1.ClusterR\acluster\"\x16\n" +
 	"\x14DeleteClusterRequest\"B\n" +
 	"\x15DeleteClusterResponse\x12)\n" +
-	"\acluster\x18\x01 \x01(\v2\x0f.lab.v1.ClusterR\acluster*\xb2\x01\n" +
+	"\acluster\x18\x01 \x01(\v2\x0f.lab.v1.ClusterR\acluster\"]\n" +
+	"\x10OpenShellRequest\x12*\n" +
+	"\x04size\x18\x01 \x01(\v2\x14.lab.v1.TerminalSizeH\x00R\x04size\x12\x14\n" +
+	"\x04keys\x18\x02 \x01(\fH\x00R\x04keysB\a\n" +
+	"\x05input\"6\n" +
+	"\fTerminalSize\x12\x12\n" +
+	"\x04cols\x18\x01 \x01(\rR\x04cols\x12\x12\n" +
+	"\x04rows\x18\x02 \x01(\rR\x04rows\"+\n" +
+	"\x11OpenShellResponse\x12\x16\n" +
+	"\x06output\x18\x01 \x01(\fR\x06output*\xb2\x01\n" +
 	"\fClusterState\x12\x1d\n" +
 	"\x19CLUSTER_STATE_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14CLUSTER_STATE_ABSENT\x10\x01\x12\x1a\n" +
 	"\x16CLUSTER_STATE_CREATING\x10\x02\x12\x17\n" +
 	"\x13CLUSTER_STATE_READY\x10\x03\x12\x1a\n" +
 	"\x16CLUSTER_STATE_DELETING\x10\x04\x12\x18\n" +
-	"\x14CLUSTER_STATE_FAILED\x10\x052\xed\x01\n" +
+	"\x14CLUSTER_STATE_FAILED\x10\x052\xb3\x02\n" +
 	"\n" +
 	"LabService\x12C\n" +
 	"\n" +
 	"GetCluster\x12\x19.lab.v1.GetClusterRequest\x1a\x1a.lab.v1.GetClusterResponse\x12L\n" +
 	"\rCreateCluster\x12\x1c.lab.v1.CreateClusterRequest\x1a\x1d.lab.v1.CreateClusterResponse\x12L\n" +
-	"\rDeleteCluster\x12\x1c.lab.v1.DeleteClusterRequest\x1a\x1d.lab.v1.DeleteClusterResponseBGZEgithub.com/MohamedAljoke/cka-sim/apps/go-shared/contract/lab/v1;labv1b\x06proto3"
+	"\rDeleteCluster\x12\x1c.lab.v1.DeleteClusterRequest\x1a\x1d.lab.v1.DeleteClusterResponse\x12D\n" +
+	"\tOpenShell\x12\x18.lab.v1.OpenShellRequest\x1a\x19.lab.v1.OpenShellResponse(\x010\x01BGZEgithub.com/MohamedAljoke/cka-sim/apps/go-shared/contract/lab/v1;labv1b\x06proto3"
 
 var (
 	file_lab_v1_lab_proto_rawDescOnce sync.Once
@@ -445,7 +633,7 @@ func file_lab_v1_lab_proto_rawDescGZIP() []byte {
 }
 
 var file_lab_v1_lab_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_lab_v1_lab_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_lab_v1_lab_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_lab_v1_lab_proto_goTypes = []any{
 	(ClusterState)(0),             // 0: lab.v1.ClusterState
 	(*Cluster)(nil),               // 1: lab.v1.Cluster
@@ -455,26 +643,32 @@ var file_lab_v1_lab_proto_goTypes = []any{
 	(*CreateClusterResponse)(nil), // 5: lab.v1.CreateClusterResponse
 	(*DeleteClusterRequest)(nil),  // 6: lab.v1.DeleteClusterRequest
 	(*DeleteClusterResponse)(nil), // 7: lab.v1.DeleteClusterResponse
-	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
+	(*OpenShellRequest)(nil),      // 8: lab.v1.OpenShellRequest
+	(*TerminalSize)(nil),          // 9: lab.v1.TerminalSize
+	(*OpenShellResponse)(nil),     // 10: lab.v1.OpenShellResponse
+	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
 }
 var file_lab_v1_lab_proto_depIdxs = []int32{
-	0, // 0: lab.v1.Cluster.state:type_name -> lab.v1.ClusterState
-	8, // 1: lab.v1.Cluster.started:type_name -> google.protobuf.Timestamp
-	8, // 2: lab.v1.Cluster.ready:type_name -> google.protobuf.Timestamp
-	1, // 3: lab.v1.GetClusterResponse.cluster:type_name -> lab.v1.Cluster
-	1, // 4: lab.v1.CreateClusterResponse.cluster:type_name -> lab.v1.Cluster
-	1, // 5: lab.v1.DeleteClusterResponse.cluster:type_name -> lab.v1.Cluster
-	2, // 6: lab.v1.LabService.GetCluster:input_type -> lab.v1.GetClusterRequest
-	4, // 7: lab.v1.LabService.CreateCluster:input_type -> lab.v1.CreateClusterRequest
-	6, // 8: lab.v1.LabService.DeleteCluster:input_type -> lab.v1.DeleteClusterRequest
-	3, // 9: lab.v1.LabService.GetCluster:output_type -> lab.v1.GetClusterResponse
-	5, // 10: lab.v1.LabService.CreateCluster:output_type -> lab.v1.CreateClusterResponse
-	7, // 11: lab.v1.LabService.DeleteCluster:output_type -> lab.v1.DeleteClusterResponse
-	9, // [9:12] is the sub-list for method output_type
-	6, // [6:9] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	0,  // 0: lab.v1.Cluster.state:type_name -> lab.v1.ClusterState
+	11, // 1: lab.v1.Cluster.started:type_name -> google.protobuf.Timestamp
+	11, // 2: lab.v1.Cluster.ready:type_name -> google.protobuf.Timestamp
+	1,  // 3: lab.v1.GetClusterResponse.cluster:type_name -> lab.v1.Cluster
+	1,  // 4: lab.v1.CreateClusterResponse.cluster:type_name -> lab.v1.Cluster
+	1,  // 5: lab.v1.DeleteClusterResponse.cluster:type_name -> lab.v1.Cluster
+	9,  // 6: lab.v1.OpenShellRequest.size:type_name -> lab.v1.TerminalSize
+	2,  // 7: lab.v1.LabService.GetCluster:input_type -> lab.v1.GetClusterRequest
+	4,  // 8: lab.v1.LabService.CreateCluster:input_type -> lab.v1.CreateClusterRequest
+	6,  // 9: lab.v1.LabService.DeleteCluster:input_type -> lab.v1.DeleteClusterRequest
+	8,  // 10: lab.v1.LabService.OpenShell:input_type -> lab.v1.OpenShellRequest
+	3,  // 11: lab.v1.LabService.GetCluster:output_type -> lab.v1.GetClusterResponse
+	5,  // 12: lab.v1.LabService.CreateCluster:output_type -> lab.v1.CreateClusterResponse
+	7,  // 13: lab.v1.LabService.DeleteCluster:output_type -> lab.v1.DeleteClusterResponse
+	10, // 14: lab.v1.LabService.OpenShell:output_type -> lab.v1.OpenShellResponse
+	11, // [11:15] is the sub-list for method output_type
+	7,  // [7:11] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_lab_v1_lab_proto_init() }
@@ -482,13 +676,17 @@ func file_lab_v1_lab_proto_init() {
 	if File_lab_v1_lab_proto != nil {
 		return
 	}
+	file_lab_v1_lab_proto_msgTypes[7].OneofWrappers = []any{
+		(*OpenShellRequest_Size)(nil),
+		(*OpenShellRequest_Keys)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_lab_v1_lab_proto_rawDesc), len(file_lab_v1_lab_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   7,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

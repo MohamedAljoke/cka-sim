@@ -11,4 +11,6 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
+require github.com/coder/websocket v1.8.15
+
 replace github.com/MohamedAljoke/cka-sim/apps/go-shared => ../go-shared

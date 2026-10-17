@@ -113,6 +113,7 @@ type fakeAgent struct {
 	err     error
 	creates int
 	deletes int
+	opened  chan *labv1.TerminalSize
 }
 
 func (a *fakeAgent) GetCluster(context.Context, *labv1.GetClusterRequest) (*labv1.GetClusterResponse, error) {
@@ -135,7 +136,38 @@ func serve(t *testing.T, agent *fakeAgent) string {
 	labv1connect.RegisterLabServiceHandler(server, agent)
 	mux := http.NewServeMux()
 	connecthttp.Mount(mux, server)
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewUnstartedServer(mux)
+	srv.Config.Protocols = new(http.Protocols)
+	srv.Config.Protocols.SetHTTP1(true)
+	srv.Config.Protocols.SetUnencryptedHTTP2(true)
+	srv.Start()
 	t.Cleanup(srv.Close)
 	return srv.URL
+}
+
+func (a *fakeAgent) OpenShell(_ context.Context, stream labv1connect.LabServiceOpenShellServerStream) error {
+	if a.err != nil {
+		return a.err
+	}
+	first, err := stream.Receive()
+	if err != nil {
+		return err
+	}
+	a.opened <- first.GetSize()
+	if err := stream.Send(&labv1.OpenShellResponse{Output: []byte("$ ")}); err != nil {
+		return err
+	}
+	for {
+		req, err := stream.Receive()
+		if err != nil {
+			return nil
+		}
+		if size := req.GetSize(); size != nil {
+			a.opened <- size
+			continue
+		}
+		if err := stream.Send(&labv1.OpenShellResponse{Output: req.GetKeys()}); err != nil {
+			return err
+		}
+	}
 }

@@ -30,6 +30,8 @@ const (
 	LabServiceCreateClusterProcedure = "/lab.v1.LabService/CreateCluster"
 	// LabServiceDeleteClusterProcedure is the procedure name of the LabService's DeleteCluster RPC.
 	LabServiceDeleteClusterProcedure = "/lab.v1.LabService/DeleteCluster"
+	// LabServiceOpenShellProcedure is the procedure name of the LabService's OpenShell RPC.
+	LabServiceOpenShellProcedure = "/lab.v1.LabService/OpenShell"
 )
 
 var (
@@ -54,6 +56,13 @@ var (
 			Procedure:  LabServiceDeleteClusterProcedure,
 		}
 	})
+	labServiceOpenShellSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeBidi,
+			Schema:     v1.File_lab_v1_lab_proto.Services().ByName("LabService").Methods().ByName("OpenShell"),
+			Procedure:  LabServiceOpenShellProcedure,
+		}
+	})
 )
 
 // LabServiceClient is a client for the lab.v1.LabService service.
@@ -66,12 +75,53 @@ type LabServiceClient interface {
 	// DeleteCluster starts deleting the cluster and returns at once. An ABSENT or DELETING cluster
 	// is left as it is. FAILED_PRECONDITION while it is CREATING.
 	DeleteCluster(context.Context, *v1.DeleteClusterRequest) (*v1.DeleteClusterResponse, error)
+	// OpenShell runs a login shell as root on the control plane. The first request carries the
+	// terminal's size; after it, requests carry keystrokes or a new size and responses carry the
+	// shell's output. The stream ends when the shell exits. FAILED_PRECONDITION unless the cluster is
+	// READY, INVALID_ARGUMENT when the first request isn't a size.
+	OpenShell(context.Context) (LabServiceOpenShellClientStream, error)
 }
 
 // NewLabServiceClient constructs a client for the lab.v1.LabService service. Multiple service
 // clients may share a single connect.Client.
 func NewLabServiceClient(client *connect.Client) LabServiceClient {
 	return &labServiceClient{client: client}
+}
+
+// LabServiceOpenShellClientStream is the client stream for the LabService's OpenShell RPC.
+type LabServiceOpenShellClientStream struct {
+	stream connect.ClientStream
+}
+
+// SendHeaders opens the stream and flushes the request headers without a message. The first Send or
+// Receive does this implicitly.
+func (s LabServiceOpenShellClientStream) SendHeaders() error {
+	return s.stream.SendHeaders()
+}
+
+// Send sends a request message to the server.
+func (s LabServiceOpenShellClientStream) Send(req *v1.OpenShellRequest) error {
+	return s.stream.Send(req)
+}
+
+// CloseSend closes the request side of the stream.
+func (s LabServiceOpenShellClientStream) CloseSend() error {
+	return s.stream.CloseSend()
+}
+
+// Receive returns the next response message from the server.
+func (s LabServiceOpenShellClientStream) Receive() (*v1.OpenShellResponse, error) {
+	var res v1.OpenShellResponse
+	if err := s.stream.Receive(&res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// Close releases the stream's resources. It is idempotent and is typically deferred to clean up a
+// stream abandoned before io.EOF.
+func (s LabServiceOpenShellClientStream) Close() error {
+	return s.stream.Close()
 }
 
 // LabServiceHandler is an implementation of the lab.v1.LabService service.
@@ -84,6 +134,11 @@ type LabServiceHandler interface {
 	// DeleteCluster starts deleting the cluster and returns at once. An ABSENT or DELETING cluster
 	// is left as it is. FAILED_PRECONDITION while it is CREATING.
 	DeleteCluster(context.Context, *v1.DeleteClusterRequest) (*v1.DeleteClusterResponse, error)
+	// OpenShell runs a login shell as root on the control plane. The first request carries the
+	// terminal's size; after it, requests carry keystrokes or a new size and responses carry the
+	// shell's output. The stream ends when the shell exits. FAILED_PRECONDITION unless the cluster is
+	// READY, INVALID_ARGUMENT when the first request isn't a size.
+	OpenShell(context.Context, LabServiceOpenShellServerStream) error
 }
 
 // RegisterLabServiceHandler registers svc as the lab.v1.LabService implementation on server.
@@ -93,7 +148,32 @@ func RegisterLabServiceHandler(server *connect.Server, svc LabServiceHandler) {
 		connect.Method{Spec: labServiceGetClusterSpec(), Handler: adapter.getCluster},
 		connect.Method{Spec: labServiceCreateClusterSpec(), Handler: adapter.createCluster},
 		connect.Method{Spec: labServiceDeleteClusterSpec(), Handler: adapter.deleteCluster},
+		connect.Method{Spec: labServiceOpenShellSpec(), Handler: adapter.openShell},
 	)
+}
+
+// LabServiceOpenShellServerStream is the server stream for the LabService's OpenShell RPC.
+type LabServiceOpenShellServerStream struct {
+	stream connect.ServerStream
+}
+
+// Receive returns the next request message from the client.
+func (s LabServiceOpenShellServerStream) Receive() (*v1.OpenShellRequest, error) {
+	var req v1.OpenShellRequest
+	if err := s.stream.Receive(&req); err != nil {
+		return nil, err
+	}
+	return &req, nil
+}
+
+// SendHeaders flushes the response headers without a message. The first Send does this implicitly.
+func (s LabServiceOpenShellServerStream) SendHeaders() error {
+	return s.stream.SendHeaders()
+}
+
+// Send sends a response message to the client.
+func (s LabServiceOpenShellServerStream) Send(res *v1.OpenShellResponse) error {
+	return s.stream.Send(res)
 }
 
 // UnimplementedLabServiceHandler returns CodeUnimplemented from all methods.
@@ -109,6 +189,10 @@ func (UnimplementedLabServiceHandler) CreateCluster(context.Context, *v1.CreateC
 
 func (UnimplementedLabServiceHandler) DeleteCluster(context.Context, *v1.DeleteClusterRequest) (*v1.DeleteClusterResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, "lab.v1.LabService.DeleteCluster is not implemented")
+}
+
+func (UnimplementedLabServiceHandler) OpenShell(context.Context, LabServiceOpenShellServerStream) error {
+	return connect.NewError(connect.CodeUnimplemented, "lab.v1.LabService.OpenShell is not implemented")
 }
 
 type labServiceClient struct {
@@ -137,6 +221,14 @@ func (c *labServiceClient) DeleteCluster(ctx context.Context, req *v1.DeleteClus
 		return nil, err
 	}
 	return &res, nil
+}
+
+func (c *labServiceClient) OpenShell(ctx context.Context) (LabServiceOpenShellClientStream, error) {
+	stream, err := c.client.CallClientStream(ctx, labServiceOpenShellSpec())
+	if err != nil {
+		return LabServiceOpenShellClientStream{}, err
+	}
+	return LabServiceOpenShellClientStream{stream: stream}, nil
 }
 
 type labServiceHandler struct{ svc LabServiceHandler }
@@ -175,4 +267,8 @@ func (h labServiceHandler) deleteCluster(ctx context.Context, _ connect.Spec, st
 		return err
 	}
 	return stream.Send(res)
+}
+
+func (h labServiceHandler) openShell(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	return h.svc.OpenShell(ctx, LabServiceOpenShellServerStream{stream: stream})
 }

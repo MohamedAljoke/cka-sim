@@ -26,6 +26,7 @@ func New(tasks usecases.UseCases, labs labusecases.UseCases) http.Handler {
 	handle := func(pattern string, h httpx.Handler) { mux.HandleFunc(pattern, problems.Handle(h)) }
 	handlers.taskRoutes(handle)
 	handlers.labRoutes(handle)
+	handlers.terminalRoutes(handle)
 
 	return http.NewCrossOriginProtection().Handler(mux)
 }

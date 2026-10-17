@@ -161,11 +161,41 @@ func (a *fakeAgent) DeleteCluster(context.Context, *labv1.DeleteClusterRequest) 
 	return &labv1.DeleteClusterResponse{Cluster: a.cluster}, nil
 }
 
+func (a *fakeAgent) OpenShell(_ context.Context, stream labv1connect.LabServiceOpenShellServerStream) error {
+	a.mu.Lock()
+	state := a.cluster.State
+	a.mu.Unlock()
+	if state != labv1.ClusterState_CLUSTER_STATE_READY {
+		return connect.NewError(connect.CodeFailedPrecondition, "the cluster isn't ready")
+	}
+	if _, err := stream.Receive(); err != nil {
+		return err
+	}
+	if err := stream.Send(&labv1.OpenShellResponse{Output: []byte("root@cka-sim-control-plane:~# ")}); err != nil {
+		return err
+	}
+	for {
+		req, err := stream.Receive()
+		if err != nil {
+			return nil
+		}
+		if keys := req.GetKeys(); keys != nil {
+			if err := stream.Send(&labv1.OpenShellResponse{Output: keys}); err != nil {
+				return err
+			}
+		}
+	}
+}
+
 func serveAgent(a *fakeAgent) (string, func()) {
 	server := connect.NewServer(rpcauth.RequireBearer(agentToken))
 	labv1connect.RegisterLabServiceHandler(server, a)
 	mux := http.NewServeMux()
 	connecthttp.Mount(mux, server)
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewUnstartedServer(mux)
+	srv.Config.Protocols = new(http.Protocols)
+	srv.Config.Protocols.SetHTTP1(true)
+	srv.Config.Protocols.SetUnencryptedHTTP2(true)
+	srv.Start()
 	return srv.URL, srv.Close
 }

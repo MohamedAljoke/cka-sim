@@ -1,0 +1,11 @@
+:80 {
+	@backend path /api/* /ws/*
+	handle @backend {
+		reverse_proxy 127.0.0.1:7070
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -14,7 +14,7 @@ your machine
 │     │ WebSocket /ws/terminal                   (browser ⇄ platform)
 ├─ platform :7070
 │     │ Connect over HTTP/2: LabService          (platform ⇄ agent, bearer token)
-└─ lab container (privileged, docker:dind)       infra/local/compose.yml
+└─ lab container (privileged, docker:dind)       infra/compose.yml
    ├─ cka-sim-agent :7171                        apps/lab/cmd/agent
    │     ├─ kind as a Go library ─┐
    │     └─ docker exec under pty ┤
@@ -32,7 +32,7 @@ nothing about the platform would change.
 
 ## 1. Docker in Docker
 
-The lab image is `docker:28-dind` plus the agent (`apps/lab/deploy/lab.Dockerfile`). `lab-start.sh` starts
+The lab image is `docker:28-dind` plus the agent (`infra/lab/lab.Dockerfile`). `lab-start.sh` starts
 dockerd, waits until `docker info` answers, and then execs the agent.
 
 - **Why `privileged: true`:** dockerd and kind's nodes need to create cgroups, mount filesystems and change

@@ -6,6 +6,21 @@ your browser.
 Not a mock. Every cluster is a real kubeadm cluster with a real etcd, static pods and kubelets, so you can
 break a control plane and fix it the way the exam asks you to.
 
+## Run it
+
+You need Docker, with at least 2 CPUs and 4 GiB of memory for it. From a clone:
+
+```sh
+docker compose -f infra/compose.yml up -d --build --wait
+```
+
+Open http://localhost:7080, pick a task and click **Start lab**. The first cluster takes a few minutes while
+the node image downloads; later ones reuse it. `docker compose -f infra/compose.yml down` stops everything
+and keeps the downloaded image.
+
+To work on the code, `cp .env.example .env` and run `make` to list the commands: `make lab` starts only the
+lab, and `make dev` runs the page with hot reload on http://localhost:5173.
+
 ## How it works
 
 ![The lab container runs its own dockerd, which runs the kind nodes](docs/img/lab-container.svg)
@@ -38,7 +53,7 @@ The full walkthrough, from Docker-in-Docker quirks to how HTTP/2 streams both wa
 | `apps/lab` | Go agent that runs inside the lab container: cluster lifecycle and shells |
 | `apps/web` | TypeScript + Vite page with xterm.js |
 | `apps/go-shared` | Protobuf contracts and shared helpers, the only code apps may share |
-| `infra/local` | Compose file for the lab container |
+| `infra` | The images and the one Compose file that runs them: the lab, and the page with its platform |
 
 Apps never import each other, each follows a domain / use cases / adapters layout, and every endpoint has
 end-to-end tests against the real binary. The rules are in [AGENTS.md](AGENTS.md).
@@ -48,7 +63,5 @@ end-to-end tests against the real binary. The rules are in [AGENTS.md](AGENTS.md
 ## Status
 
 Being rebuilt step by step on this branch; [docs/REBUILD-STATUS.md](docs/REBUILD-STATUS.md) tracks what has
-landed and [docs/REBUILD-IN-STEPS.md](docs/REBUILD-IN-STEPS.md) what comes next. Next up: grading, then a
-killer.sh-style exam mode.
-
-Setup and usage instructions are coming. For now, `cp .env.example .env` and `make` lists the commands.
+landed and [docs/REBUILD-IN-STEPS.md](docs/REBUILD-IN-STEPS.md) what comes next. Next up: an exam-like base
+host you `ssh` from, then a killer.sh-style exam mode.

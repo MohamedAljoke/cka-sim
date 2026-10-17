@@ -1,0 +1,77 @@
+# cka-sim with only Docker: `docker compose -f infra/compose.yml up -d --build --wait`, then http://localhost:7080.
+# make passes the token in .env, so the platform from `make dev` can reach this lab too; without one, a token
+# is generated once and kept in the secrets volume.
+name: cka-sim
+
+services:
+  secrets:
+    image: alpine:3.22
+    volumes:
+      - secrets:/secrets
+    command:
+      - sh
+      - -c
+      - |
+        umask 077
+        [ -s /secrets/agent-token ] || od -An -tx1 -N32 /dev/urandom | tr -d ' \n' > /secrets/agent-token
+
+  lab:
+    build:
+      context: ..
+      dockerfile: infra/lab/lab.Dockerfile
+    image: cka-sim-lab:dev
+    restart: unless-stopped
+    privileged: true
+    init: true
+    depends_on:
+      secrets:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:7171:7171"
+    environment:
+      CKA_SIM_AGENT_ADDR: ":7171"
+      CKA_SIM_CLUSTER: cka-sim
+      CKA_SIM_AGENT_TOKEN: ${CKA_SIM_AGENT_TOKEN:-}
+    volumes:
+      - secrets:/secrets:ro
+      # Keeps the pulled node image, so every cluster after the first one builds without downloading it.
+      - lab-docker:/var/lib/docker
+      - /lib/modules:/lib/modules:ro
+    entrypoint: &with-token
+      - sh
+      - -c
+      - export CKA_SIM_AGENT_TOKEN="$${CKA_SIM_AGENT_TOKEN:-$$(cat /secrets/agent-token)}"; exec "$$@"
+      - sh
+    command: /lab-start.sh
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:7171/healthz"]
+      interval: 2s
+      timeout: 3s
+      start_period: 2m
+
+  app:
+    build:
+      context: ..
+      dockerfile: infra/app/app.Dockerfile
+    image: cka-sim-app:dev
+    restart: unless-stopped
+    depends_on:
+      lab:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${CKA_SIM_PORT:-7080}:80"
+    environment:
+      CKA_SIM_LAB_URL: http://lab:7171
+      CKA_SIM_AGENT_TOKEN: ${CKA_SIM_AGENT_TOKEN:-}
+    volumes:
+      - secrets:/secrets:ro
+    entrypoint: *with-token
+    command: /app-start.sh
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/api/tasks"]
+      interval: 2s
+      timeout: 3s
+
+volumes:
+  secrets:
+  lab-docker:

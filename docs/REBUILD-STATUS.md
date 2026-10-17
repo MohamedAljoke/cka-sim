@@ -30,7 +30,7 @@ when what they describe changes.
 | 2.9 Tasks that break the cluster | Not started | `reset.sh` (25 tasks on `main`), `Heal`, `Tidy` |
 | 2.10 The exam | Not started | `Draw`, exam session saved to a file, weighted score, `/api/exam*`, exam page |
 | 2.11 Add-ons | Not started | metrics-server, kube-router, Gateway API + Traefik, VPA, registry, chart repo |
-| 4.1 One command, Docker only | Partly | `infra/local/compose.yml` runs the lab only; no `cka-sim` command or `install.sh` |
+| 4.1 One command, Docker only | Partly | `docker compose -f infra/compose.yml up` from a clone runs the lab and the app (the page and the platform behind Caddy) on :7080, with a token generated once; no auth or assistant yet, and no `cka-sim` command or `install.sh` |
 | 4.2 Published images | Not started | `images.yml`; `main` also has `ci.yml` testing lab and platform on Linux, macOS and Windows |
 
 ## Next

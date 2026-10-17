@@ -7,14 +7,21 @@ PLATFORM := apps/platform
 LAB := apps/lab
 SHARED := apps/go-shared
 WEB := apps/web
-COMPOSE := docker compose --env-file .env -f infra/local/compose.yml
+COMPOSE := docker compose -f infra/compose.yml
 BUF := go run github.com/bufbuild/buf/cmd/buf@v1.74.0
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.0
 
-.PHONY: help serve web dev lab lab-down lab-logs test e2e lab-e2e lint proto boundaries
+.PHONY: help up down serve web dev lab lab-logs test e2e lab-e2e lint proto boundaries
 
 help:
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
+
+up: ## build and run cka-sim the way a user does, Docker only, on http://localhost:7080
+	$(COMPOSE) up -d --build --wait
+	@echo "cka-sim is on http://localhost:$${CKA_SIM_PORT:-7080}"
+
+down: ## stop cka-sim, from make up or make lab; keeps the pulled node image for the next cluster
+	$(COMPOSE) down
 
 serve: ## run the backend for the page on 127.0.0.1:7070
 	cd $(PLATFORM) && go run ./cmd/server
@@ -28,11 +35,8 @@ dev: $(WEB)/node_modules ## the backend and the page together
 	@$(PLATFORM)/bin/server & server=$$!; \
 	  trap 'kill $$server 2>/dev/null; wait $$server' INT TERM EXIT; cd $(WEB) && npm run dev
 
-lab: ## build and start the lab container; its agent listens on 127.0.0.1:7171
+lab: ## build and start only the lab, for make dev; its agent listens on 127.0.0.1:7171
 	$(COMPOSE) up -d --build --wait lab
-
-lab-down: ## stop the lab container; keeps the pulled node image for the next cluster
-	$(COMPOSE) down
 
 lab-logs: ## follow the lab's log, where a failed cluster build explains itself
 	$(COMPOSE) logs -f lab

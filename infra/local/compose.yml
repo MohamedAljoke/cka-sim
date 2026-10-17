@@ -1,0 +1,29 @@
+name: cka-sim
+
+services:
+  lab:
+    build:
+      context: ../../apps
+      dockerfile: lab/deploy/lab.Dockerfile
+    image: cka-sim-lab:dev
+    restart: unless-stopped
+    privileged: true
+    init: true
+    ports:
+      - "127.0.0.1:7171:7171"
+    environment:
+      CKA_SIM_AGENT_ADDR: ":7171"
+      CKA_SIM_CLUSTER: ${CKA_SIM_CLUSTER:?cp .env.example .env}
+      CKA_SIM_AGENT_TOKEN: ${CKA_SIM_AGENT_TOKEN:?cp .env.example .env}
+    volumes:
+      # Keeps the pulled node image, so every cluster after the first one builds without downloading it.
+      - lab-docker:/var/lib/docker
+      - /lib/modules:/lib/modules:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:7171/healthz"]
+      interval: 2s
+      timeout: 3s
+      start_period: 2m
+
+volumes:
+  lab-docker:

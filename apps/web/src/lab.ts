@@ -3,7 +3,7 @@ import { el, message } from './ui'
 
 const pollEvery = 1000
 
-export function labPanel(signal: AbortSignal): HTMLElement {
+export function labPanel(signal: AbortSignal, onChange: (lab: Lab) => void): { panel: HTMLElement; refresh: () => void } {
   const dot = el('span', 'lab-dot')
   const text = el('span')
   const line = el('p', 'lab-line')
@@ -48,6 +48,7 @@ export function labPanel(signal: AbortSignal): HTMLElement {
         break
     }
     if (lab.state === 'starting' || lab.state === 'stopping') timer = setTimeout(refresh, pollEvery)
+    onChange(lab)
   }
   const failed = (err: unknown) => {
     if (signal.aborted) return
@@ -81,7 +82,7 @@ export function labPanel(signal: AbortSignal): HTMLElement {
   text.textContent = 'Checking the lab…'
   action.hidden = true
   refresh()
-  return panel
+  return { panel, refresh }
 }
 
 function since(startedAt?: string): string {

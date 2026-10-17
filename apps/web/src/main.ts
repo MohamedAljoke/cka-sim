@@ -11,6 +11,7 @@ function show() {
   leaving = new AbortController()
   window.scrollTo(0, 0)
   const route = parseRoute(location.hash)
+  document.body.dataset.page = route.page
   if (route.page === 'task') showTask(pane, route.id, leaving.signal)
   else showTasks(pane, route.filter, leaving.signal)
 }

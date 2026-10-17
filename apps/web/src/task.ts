@@ -1,16 +1,17 @@
 import { getSolution, getTask, type TaskDetail } from './api'
 import { labPanel } from './lab'
 import { homePath } from './routes'
-import { chips, el, markdown, message } from './ui'
+import { shellPanel } from './shell'
+import { chips, copyable, el, markdown, message } from './ui'
 
 export async function showTask(pane: HTMLElement, id: string, signal: AbortSignal) {
-  pane.replaceChildren(el('p', 'muted', 'Loading the task…'))
+  pane.replaceChildren(note(el('p', 'muted', 'Loading the task…')))
   let task: TaskDetail
   try {
     task = await getTask(id, signal)
   } catch (err) {
     if (signal.aborted) return
-    pane.replaceChildren(backLink(), el('p', 'error', `Cannot open this task: ${message(err)}`))
+    pane.replaceChildren(note(backLink(), el('p', 'error', `Cannot open this task: ${message(err)}`)))
     return
   }
   if (signal.aborted) return
@@ -18,9 +19,24 @@ export async function showTask(pane: HTMLElement, id: string, signal: AbortSigna
   document.title = `${task.title} · cka-sim`
   const question = el('div', 'markdown')
   markdown(question, task.question)
-  const card = el('article', 'card task-page')
-  card.append(el('h1', '', task.title), chips(task), labPanel(signal), hostLine(task), question, solutionPanel(task.id, signal))
-  pane.replaceChildren(backLink(), card)
+  const brief = el('article', 'task-brief')
+  brief.append(backLink(), el('h1', '', task.title), chips(task), hostLine(task), question, solutionPanel(task.id, signal))
+
+  const shell = shellPanel(signal, () => lab.refresh())
+  const lab = labPanel(signal, shell.follow)
+  const workspace = el('section', 'task-lab')
+  workspace.setAttribute('aria-label', 'Lab')
+  workspace.append(lab.panel, shell.panel)
+
+  const layout = el('div', 'task-layout')
+  layout.append(brief, workspace)
+  pane.replaceChildren(layout)
+}
+
+function note(...children: HTMLElement[]): HTMLElement {
+  const box = el('div', 'task-note')
+  box.append(...children)
+  return box
 }
 
 function backLink(): HTMLElement {
@@ -31,7 +47,7 @@ function backLink(): HTMLElement {
 
 function hostLine(task: TaskDetail): HTMLElement {
   const line = el('p', 'host')
-  line.append(el('span', 'muted', 'Connect first: '), el('code', '', `ssh ${task.host}`))
+  line.append(el('span', 'muted', 'Connect first: '), copyable(`ssh ${task.host}`))
   return line
 }
 

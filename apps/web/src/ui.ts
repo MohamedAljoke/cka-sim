@@ -12,6 +12,26 @@ export function chips(task: Task): HTMLElement {
   return row
 }
 
+export function copyable(text: string): HTMLElement {
+  const label = el('span', 'copy-label', 'Copy')
+  const button = el('button', 'copyable')
+  button.type = 'button'
+  button.title = 'Copy to clipboard'
+  button.append(el('code', '', text), label)
+  let reset: ReturnType<typeof setTimeout> | undefined
+  button.onclick = async () => {
+    clearTimeout(reset)
+    try {
+      await navigator.clipboard.writeText(text)
+      label.textContent = 'Copied'
+    } catch {
+      label.textContent = 'Copy failed'
+    }
+    reset = setTimeout(() => (label.textContent = 'Copy'), 1500)
+  }
+  return button
+}
+
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
   const node = document.createElement(tag)
   node.className = className

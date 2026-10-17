@@ -2,5 +2,5 @@ package catalog
 
 import "embed"
 
-//go:embed */task.md */explain.md
+//go:embed lib.sh */task.md */explain.md */setup.sh
 var FS embed.FS

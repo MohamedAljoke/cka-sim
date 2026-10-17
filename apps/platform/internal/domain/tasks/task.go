@@ -53,6 +53,8 @@ type Task struct {
 	Order    Order
 	Question string
 	Solution string
+	// Setup is the bash the lab runs as root on Host to set the task up, ready to run as it is.
+	Setup string
 }
 
 var kebab = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
@@ -73,6 +75,8 @@ func (t Task) Validate() error {
 		return errors.New("question is required")
 	case strings.TrimSpace(t.Solution) == "":
 		return errors.New("solution is required")
+	case strings.TrimSpace(t.Setup) == "":
+		return errors.New("setup is required")
 	case t.Order != "" && t.Order != Last:
 		return errors.New(`order must be empty or "last"`)
 	}

@@ -24,10 +24,15 @@ func NewTaskRepository(fsys fs.FS) (*TaskRepository, error) {
 		return nil, err
 	}
 
+	lib, err := fs.ReadFile(fsys, "lib.sh")
+	if err != nil {
+		return nil, errors.New("missing lib.sh")
+	}
+
 	var all []tasks.Task
 
 	for _, file := range files {
-		t, err := loadTaskFile(fsys, file)
+		t, err := loadTaskFile(fsys, file, string(lib))
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", file, err)
 		}
@@ -51,7 +56,7 @@ func (r *TaskRepository) Get(_ context.Context, id string) (tasks.Task, error) {
 	return r.tasks[i], nil
 }
 
-func loadTaskFile(fsys fs.FS, file string) (tasks.Task, error) {
+func loadTaskFile(fsys fs.FS, file, lib string) (tasks.Task, error) {
 	text, err := fs.ReadFile(fsys, file)
 	if err != nil {
 		return tasks.Task{}, err
@@ -73,7 +78,22 @@ func loadTaskFile(fsys fs.FS, file string) (tasks.Task, error) {
 	}
 	task.Solution = strings.TrimSpace(string(solution))
 
+	setup, err := fs.ReadFile(fsys, path.Join(dir, "setup.sh"))
+	if err != nil {
+		return tasks.Task{}, errors.New("missing setup.sh")
+	}
+	task.Setup = script(task.ID, lib, string(setup))
+
 	return task, task.Validate()
+}
+
+// Every script runs after the catalog's lib.sh, with TASK_ID set, so the lab needs nothing of its own.
+func script(id, lib, body string) string {
+	if strings.TrimSpace(body) == "" {
+		return ""
+	}
+
+	return "export TASK_ID='" + id + "'\n" + lib + "\n" + body
 }
 
 type taskFrontmatter struct {

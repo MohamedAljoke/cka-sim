@@ -272,6 +272,17 @@ code {
   margin: 12px 0 4px;
 }
 
+.task-search {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
 .picker {
   position: relative;
 }

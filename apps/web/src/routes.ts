@@ -23,5 +23,5 @@ export function parseRoute(hash: string): Route {
     }
   }
   const params = new URLSearchParams(/^#\/\?(.*)$/.exec(hash)?.[1] ?? '')
-  return { page: 'tasks', filter: { domains: params.getAll('domain'), topics: params.getAll('topic') } }
+  return { page: 'tasks', filter: { domains: params.getAll('domain'), topics: params.getAll('topic'), search: params.get('q') ?? '' } }
 }

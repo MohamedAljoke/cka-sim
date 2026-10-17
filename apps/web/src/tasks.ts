@@ -30,9 +30,9 @@ export async function showTasks(pane: HTMLElement, filter: Filter, signal: Abort
 
   let pending: AbortController | undefined
   const refresh = async () => {
-    const chosen: Filter = { domains: domains.chosen(), topics: topics.chosen() }
+    const chosen: Filter = { domains: domains.chosen(), topics: topics.chosen(), search: search.value }
     history.replaceState(null, '', tasksPath(chosen))
-    clear.hidden = chosen.domains.length === 0 && chosen.topics.length === 0
+    clear.hidden = chosen.domains.length === 0 && chosen.topics.length === 0 && !chosen.search.trim()
     pending?.abort()
     pending = new AbortController()
     const mine = AbortSignal.any([signal, pending.signal])
@@ -47,17 +47,28 @@ export async function showTasks(pane: HTMLElement, filter: Filter, signal: Abort
     }
   }
 
+  const search = el('input', 'task-search')
+  Object.assign(search, { type: 'search', placeholder: 'Search tasks…', value: filter.search })
+  search.setAttribute('aria-label', 'Search tasks by id or title')
+  let typing: number | undefined
+  search.oninput = () => {
+    clearTimeout(typing)
+    typing = setTimeout(refresh, 200)
+  }
+  signal.addEventListener('abort', () => clearTimeout(typing))
+
   const domains = picker('domains', options(all, (t) => [t.domain], (_, t) => t.domainTitle), filter.domains, refresh, signal)
   const topics = picker('topics', options(all, (t) => t.topics, (topic) => topic), filter.topics, refresh, signal)
   const clear = el('button', 'link', 'Clear filters')
   clear.type = 'button'
   clear.onclick = () => {
+    search.value = ''
     domains.clear()
     topics.clear()
     refresh()
   }
   const filters = el('div', 'filters')
-  filters.append(domains.element, topics.element, clear)
+  filters.append(search, domains.element, topics.element, clear)
 
   const card = el('section', 'card')
   card.append(el('h2', '', 'Tasks'), filters, count, list)

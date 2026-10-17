@@ -63,6 +63,16 @@ func TestFiltersTheListByDomainAndTopic(t *testing.T) {
 	}
 }
 
+func TestSearchesTheListByIDAndTitle(t *testing.T) {
+	dns := tasks.Task{ID: "nw-dns", Title: "Fix DNS", Domain: tasks.Networking, Weight: 4, Host: "node-1"}
+
+	status, body := call(t, newAPI(wlScale, dns), http.MethodGet, "/api/tasks?q=fix%20nw-")
+
+	if status != http.StatusOK || !strings.Contains(body, `"id":"nw-dns"`) || strings.Contains(body, `"id":"wl-scale"`) {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
 func TestAFilterMatchingNothingListsAnEmptyArray(t *testing.T) {
 	status, body := call(t, newAPI(wlScale), http.MethodGet, "/api/tasks?domain=storage")
 

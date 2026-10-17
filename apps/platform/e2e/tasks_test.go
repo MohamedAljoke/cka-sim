@@ -20,8 +20,9 @@ func TestTheTaskListHasEveryTaskInTheCatalog(t *testing.T) {
 	if len(listed) != len(files) || len(listed) == 0 {
 		t.Errorf("listed %d tasks, the catalog has %d task.md files", len(listed), len(files))
 	}
-	if !slices.IsSortedFunc(listed, func(a, b listedTask) int { return strings.Compare(a.ID, b.ID) }) {
-		t.Error("the tasks are not sorted by id")
+	byTitle := func(a, b listedTask) int { return strings.Compare(strings.ToLower(a.Title), strings.ToLower(b.Title)) }
+	if !slices.IsSortedFunc(listed, byTitle) {
+		t.Error("the tasks are not sorted by title")
 	}
 }
 
@@ -82,6 +83,20 @@ func TestRepeatedDomainsKeepTasksInAnyOfThem(t *testing.T) {
 	}
 	if len(seen) != 2 || !seen["networking"] || !seen["storage"] {
 		t.Errorf("domains listed: %v", seen)
+	}
+}
+
+func TestTheListSearchesIDsAndTitles(t *testing.T) {
+	listed := listTasks(t, "?q=NGINX%20pod")
+
+	if len(listed) != 1 || listed[0].ID != "wl-pod" {
+		t.Errorf("listed %+v, want only wl-pod", listed)
+	}
+}
+
+func TestASearchNoTaskMatchesListsNothing(t *testing.T) {
+	if listed := listTasks(t, "?q=no-such-task"); len(listed) != 0 {
+		t.Errorf("listed %d tasks", len(listed))
 	}
 }
 

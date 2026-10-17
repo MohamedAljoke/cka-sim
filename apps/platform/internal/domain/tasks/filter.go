@@ -3,11 +3,13 @@ package tasks
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 type Filter struct {
 	Domains []Domain
 	Topics  []string
+	Search  string
 }
 
 func (f Filter) Validate() error {
@@ -36,5 +38,12 @@ func (f Filter) Matches(task Task) bool {
 		return false
 	}
 
-	return true
+	return f.found(task)
+}
+
+func (f Filter) found(task Task) bool {
+	words := strings.Fields(strings.ToLower(f.Search))
+	text := strings.ToLower(task.ID + " " + task.Title)
+
+	return !slices.ContainsFunc(words, func(word string) bool { return !strings.Contains(text, word) })
 }

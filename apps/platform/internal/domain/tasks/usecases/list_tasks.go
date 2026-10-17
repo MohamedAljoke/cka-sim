@@ -1,6 +1,7 @@
 package usecases
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -34,7 +35,9 @@ func (uc *ListTasks) Execute(ctx context.Context, filter tasks.Filter) ([]tasks.
 		}
 	}
 
-	slices.SortFunc(kept, func(a, b tasks.Task) int { return strings.Compare(a.ID, b.ID) })
+	slices.SortFunc(kept, func(a, b tasks.Task) int {
+		return cmp.Or(strings.Compare(strings.ToLower(a.Title), strings.ToLower(b.Title)), strings.Compare(a.ID, b.ID))
+	})
 
 	return kept, nil
 }

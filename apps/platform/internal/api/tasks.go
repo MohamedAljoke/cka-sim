@@ -159,7 +159,7 @@ func newGradeView(checked usecases.Checked) gradeView {
 }
 
 func filterOf(query url.Values) tasks.Filter {
-	filter := tasks.Filter{Topics: query["topic"]}
+	filter := tasks.Filter{Topics: query["topic"], Search: query.Get("q")}
 	for _, d := range query["domain"] {
 		filter.Domains = append(filter.Domains, tasks.Domain(d))
 	}

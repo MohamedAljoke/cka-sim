@@ -16,14 +16,16 @@ export type TaskDetail = Task & {
 export type Filter = {
   domains: string[]
   topics: string[]
+  search: string
 }
 
-export const noFilter: Filter = { domains: [], topics: [] }
+export const noFilter: Filter = { domains: [], topics: [], search: '' }
 
 export function filterQuery(filter: Filter): string {
   const params = new URLSearchParams()
   for (const domain of filter.domains) params.append('domain', domain)
   for (const topic of filter.topics) params.append('topic', topic)
+  if (filter.search.trim()) params.set('q', filter.search.trim())
   return params.toString()
 }
 

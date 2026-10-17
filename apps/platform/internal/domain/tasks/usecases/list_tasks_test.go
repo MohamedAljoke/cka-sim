@@ -10,8 +10,25 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks"
 )
 
-func TestListTasksSortsByID(t *testing.T) {
-	uc := NewListTasks(fakeRepository{tasks: []tasks.Task{{ID: "wl-scale"}, {ID: "net-svc"}}})
+func TestListTasksSortsByTitleIgnoringCase(t *testing.T) {
+	uc := NewListTasks(fakeRepository{tasks: []tasks.Task{
+		{ID: "aa-run", Title: "Run a Pod"},
+		{ID: "zz-expose", Title: "expose a Service"},
+		{ID: "mm-fix", Title: "Fix DNS"},
+	}})
+
+	all, err := uc.Execute(context.Background(), tasks.Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := ids(all); !slices.Equal(got, []string{"zz-expose", "mm-fix", "aa-run"}) {
+		t.Errorf("ids = %q, want sorted by title", got)
+	}
+}
+
+func TestListTasksSortsTheSameTitleByID(t *testing.T) {
+	uc := NewListTasks(fakeRepository{tasks: []tasks.Task{{ID: "wl-scale", Title: "Scale"}, {ID: "net-svc", Title: "Scale"}}})
 
 	all, err := uc.Execute(context.Background(), tasks.Filter{})
 	if err != nil {
@@ -19,7 +36,7 @@ func TestListTasksSortsByID(t *testing.T) {
 	}
 
 	if got := ids(all); !slices.Equal(got, []string{"net-svc", "wl-scale"}) {
-		t.Errorf("ids = %q, want sorted", got)
+		t.Errorf("ids = %q, want sorted by id", got)
 	}
 }
 

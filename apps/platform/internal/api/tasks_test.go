@@ -213,7 +213,7 @@ func TestStartingAnUnknownTaskIsNotFound(t *testing.T) {
 	}
 }
 
-var wlScale = tasks.Task{ID: "wl-scale", Title: "Scale a Deployment", Domain: tasks.Workloads, Topics: []string{"deployments"}, Weight: 4, Host: "node-1", Question: "Scale it to 4.", Solution: "Run kubectl scale.", Setup: "fresh_ns wl-scale\n"}
+var wlScale = tasks.Task{ID: "wl-scale", Title: "Scale a Deployment", Domain: tasks.Workloads, Topics: []string{"deployments"}, Weight: 4, Host: "node-1", Question: "Scale it to 4.", Solution: "Run kubectl scale.", Setup: "fresh_ns wl-scale\n", Check: "check 1 \"scaled\" true\n"}
 
 func newAPI(all ...tasks.Task) http.Handler {
 	return newAPIWith(fakeRepository{tasks: all})

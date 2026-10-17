@@ -134,7 +134,7 @@ func TestNewTaskRepositoryRejects(t *testing.T) {
 }
 
 func TestNewTaskRepositoryNeedsEachTasksFiles(t *testing.T) {
-	for _, file := range []string{"explain.md", "setup.sh"} {
+	for _, file := range []string{"explain.md", "setup.sh", "check.sh"} {
 		fsys := catalogFS()
 		addTask(fsys, "wl-scale")
 		delete(fsys, "wl-scale/"+file)
@@ -157,7 +157,7 @@ func TestNewTaskRepositoryNeedsTheLib(t *testing.T) {
 	}
 }
 
-func TestASetupRunsAfterTheLibWithItsTaskID(t *testing.T) {
+func TestScriptsRunAfterTheLibWithTheirTaskID(t *testing.T) {
 	fsys := catalogFS()
 	addTask(fsys, "wl-scale")
 	repo, err := NewTaskRepository(fsys)
@@ -170,15 +170,20 @@ func TestASetupRunsAfterTheLibWithItsTaskID(t *testing.T) {
 	if want := "export TASK_ID='wl-scale'\nfresh_ns() { :; }\n\nfresh_ns wl-scale\n"; got.Setup != want {
 		t.Errorf("setup %q, want %q", got.Setup, want)
 	}
+	if want := "export TASK_ID='wl-scale'\nfresh_ns() { :; }\n\ncheck 1 \"wl-scale done\" true\n"; got.Check != want {
+		t.Errorf("check %q, want %q", got.Check, want)
+	}
 }
 
-func TestAnEmptySetupIsRejected(t *testing.T) {
-	fsys := catalogFS()
-	addTask(fsys, "wl-scale")
-	fsys["wl-scale/setup.sh"] = &fstest.MapFile{Data: []byte("\n")}
+func TestEmptyScriptsAreRejected(t *testing.T) {
+	for file, wantErr := range map[string]string{"setup.sh": "setup is required", "check.sh": "check is required"} {
+		fsys := catalogFS()
+		addTask(fsys, "wl-scale")
+		fsys["wl-scale/"+file] = &fstest.MapFile{Data: []byte("\n")}
 
-	if _, err := NewTaskRepository(fsys); err == nil || !strings.Contains(err.Error(), "setup is required") {
-		t.Errorf("got error %v", err)
+		if _, err := NewTaskRepository(fsys); err == nil || !strings.Contains(err.Error(), wantErr) {
+			t.Errorf("an empty %s: got error %v", file, err)
+		}
 	}
 }
 
@@ -194,4 +199,5 @@ func addTask(fsys fstest.MapFS, id string) {
 	fsys[id+"/task.md"] = &fstest.MapFile{Data: []byte(taskMD(id, "domain: workloads\nweight: 1"))}
 	fsys[id+"/explain.md"] = &fstest.MapFile{Data: []byte("Solve " + id + ".\n")}
 	fsys[id+"/setup.sh"] = &fstest.MapFile{Data: []byte("fresh_ns " + id + "\n")}
+	fsys[id+"/check.sh"] = &fstest.MapFile{Data: []byte("check 1 \"" + id + " done\" true\n")}
 }

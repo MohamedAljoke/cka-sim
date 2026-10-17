@@ -84,6 +84,12 @@ func loadTaskFile(fsys fs.FS, file, lib string) (tasks.Task, error) {
 	}
 	task.Setup = script(task.ID, lib, string(setup))
 
+	check, err := fs.ReadFile(fsys, path.Join(dir, "check.sh"))
+	if err != nil {
+		return tasks.Task{}, errors.New("missing check.sh")
+	}
+	task.Check = script(task.ID, lib, string(check))
+
 	return task, task.Validate()
 }
 

@@ -28,6 +28,7 @@ func TestValidateRejects(t *testing.T) {
 		{"blank question", func(t *Task) { t.Question = " \n" }, "question is required"},
 		{"blank solution", func(t *Task) { t.Solution = " \n" }, "solution is required"},
 		{"blank setup", func(t *Task) { t.Setup = " \n" }, "setup is required"},
+		{"blank check", func(t *Task) { t.Check = " \n" }, "check is required"},
 		{"unknown order", func(t *Task) { t.Order = "first" }, `order must be empty or "last"`},
 		{"unknown domain", func(t *Task) { t.Domain = "security" }, `unknown domain "security"`},
 		{"capital topic", func(t *Task) { t.Topics = []string{"Deployments"} }, "lowercase-kebab"},
@@ -48,5 +49,5 @@ func TestValidateRejects(t *testing.T) {
 }
 
 func valid() Task {
-	return Task{ID: "wl-scale", Title: "Scale a Deployment", Domain: Workloads, Topics: []string{"deployments"}, Weight: 4, Host: "node-1", Question: "Scale it to 4.", Solution: "kubectl scale.", Setup: "fresh_ns wl-scale"}
+	return Task{ID: "wl-scale", Title: "Scale a Deployment", Domain: Workloads, Topics: []string{"deployments"}, Weight: 4, Host: "node-1", Question: "Scale it to 4.", Solution: "kubectl scale.", Setup: "fresh_ns wl-scale", Check: "check 1 \"scaled\" true"}
 }

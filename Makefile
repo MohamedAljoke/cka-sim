@@ -11,7 +11,7 @@ COMPOSE := docker compose -f infra/compose.yml
 BUF := go run github.com/bufbuild/buf/cmd/buf@v1.74.0
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.0
 
-.PHONY: help up down serve web dev lab lab-logs test e2e lab-e2e lint proto boundaries
+.PHONY: help up down serve web dev lab lab-logs test e2e lab-e2e selftest lint proto boundaries
 
 help:
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
@@ -56,6 +56,9 @@ e2e: ## run the platform's and the lab's end-to-end tests against their real bin
 
 lab-e2e: ## build and delete a real kind cluster through the agent on this machine's Docker (minutes)
 	cd $(LAB) && go test ./e2e -count=1 -v -timeout 30m -run TestARealCluster -create
+
+selftest: ## set up, solve and grade every task on the running lab (long); one task: make selftest TASK=<id>
+	cd $(PLATFORM) && go test ./catalog -run 'TestSelftest$(if $(TASK),/^$(TASK)$$)' -selftest -count=1 -v -timeout 90m
 
 lint: ## lint every Go module with the rules in .golangci.yml
 	@for mod in apps/*/go.mod; do (cd $$(dirname $$mod) && $(GOLANGCI_LINT) run ./...) || exit 1; done

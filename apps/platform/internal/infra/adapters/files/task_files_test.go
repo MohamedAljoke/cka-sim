@@ -134,7 +134,7 @@ func TestNewTaskRepositoryRejects(t *testing.T) {
 }
 
 func TestNewTaskRepositoryNeedsEachTasksFiles(t *testing.T) {
-	for _, file := range []string{"explain.md", "setup.sh", "check.sh"} {
+	for _, file := range []string{"explain.md", "setup.sh", "check.sh", "solution.sh"} {
 		fsys := catalogFS()
 		addTask(fsys, "wl-scale")
 		delete(fsys, "wl-scale/"+file)
@@ -173,6 +173,9 @@ func TestScriptsRunAfterTheLibWithTheirTaskID(t *testing.T) {
 	if want := "export TASK_ID='wl-scale'\nfresh_ns() { :; }\n\ncheck 1 \"wl-scale done\" true\n"; got.Check != want {
 		t.Errorf("check %q, want %q", got.Check, want)
 	}
+	if want := "export TASK_ID='wl-scale'\nfresh_ns() { :; }\n\nsolve wl-scale\n"; got.Solve != want {
+		t.Errorf("solve %q, want %q", got.Solve, want)
+	}
 }
 
 func TestAResetRunsAfterTheLibToo(t *testing.T) {
@@ -205,7 +208,9 @@ func TestATaskWithoutAResetHasNone(t *testing.T) {
 }
 
 func TestEmptyScriptsAreRejected(t *testing.T) {
-	for file, wantErr := range map[string]string{"setup.sh": "setup is required", "check.sh": "check is required"} {
+	for file, wantErr := range map[string]string{
+		"setup.sh": "setup is required", "check.sh": "check is required", "solution.sh": "solve is required",
+	} {
 		fsys := catalogFS()
 		addTask(fsys, "wl-scale")
 		fsys["wl-scale/"+file] = &fstest.MapFile{Data: []byte("\n")}
@@ -229,4 +234,5 @@ func addTask(fsys fstest.MapFS, id string) {
 	fsys[id+"/explain.md"] = &fstest.MapFile{Data: []byte("Solve " + id + ".\n")}
 	fsys[id+"/setup.sh"] = &fstest.MapFile{Data: []byte("fresh_ns " + id + "\n")}
 	fsys[id+"/check.sh"] = &fstest.MapFile{Data: []byte("check 1 \"" + id + " done\" true\n")}
+	fsys[id+"/solution.sh"] = &fstest.MapFile{Data: []byte("solve " + id + "\n")}
 }

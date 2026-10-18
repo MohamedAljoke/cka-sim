@@ -53,11 +53,12 @@ type Task struct {
 	Order    Order
 	Question string
 	Solution string
-	// Setup, Check and Reset are the bash the lab runs as root on Host, ready to run as they are. Check prints
-	// the PASS or FAIL lines a grade is read from. Reset, for a task that breaks the cluster, undoes what its
-	// setup broke and does nothing on a healthy cluster.
+	// Setup, Check, Solve and Reset are the bash the lab runs as root on Host, ready to run as they are. Check
+	// prints the PASS or FAIL lines a grade is read from. Solve does what Solution explains. Reset, for a task
+	// that breaks the cluster, undoes what its setup broke and does nothing on a healthy cluster.
 	Setup string
 	Check string
+	Solve string
 	Reset string
 }
 
@@ -83,6 +84,8 @@ func (t Task) Validate() error {
 		return errors.New("setup is required")
 	case strings.TrimSpace(t.Check) == "":
 		return errors.New("check is required")
+	case strings.TrimSpace(t.Solve) == "":
+		return errors.New("solve is required")
 	case t.Order != "" && t.Order != Last:
 		return errors.New(`order must be empty or "last"`)
 	}

@@ -53,10 +53,12 @@ type Task struct {
 	Order    Order
 	Question string
 	Solution string
-	// Setup and Check are the bash the lab runs as root on Host, ready to run as they are. Check prints the
-	// PASS or FAIL lines a grade is read from.
+	// Setup, Check and Reset are the bash the lab runs as root on Host, ready to run as they are. Check prints
+	// the PASS or FAIL lines a grade is read from. Reset, for a task that breaks the cluster, undoes what its
+	// setup broke and does nothing on a healthy cluster.
 	Setup string
 	Check string
+	Reset string
 }
 
 var kebab = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)

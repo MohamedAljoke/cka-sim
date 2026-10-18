@@ -223,6 +223,46 @@ func TestStartingAnUnknownTaskIsNotFound(t *testing.T) {
 	}
 }
 
+func TestTidyingATaskDeletesItsNamespaces(t *testing.T) {
+	r := &fakeRunner{}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/wl-scale/tidy")
+
+	if status != http.StatusNoContent || r.host != "node-1" || r.script != usecases.TidyScript("wl-scale") {
+		t.Errorf("status %d: %s; ran %q on %q", status, body, r.script, r.host)
+	}
+}
+
+func TestTidyingATaskWhileTheLabIsNotReadyIsAConflict(t *testing.T) {
+	r := &fakeRunner{err: fmt.Errorf("%w: the cluster is creating", labs.ErrNotReady)}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/wl-scale/tidy")
+
+	if status != http.StatusConflict || !strings.Contains(body, `"code":"lab_not_ready"`) {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestTidyingATaskOnALabThatDoesNotAnswerIsUnavailableAndHidesTheCause(t *testing.T) {
+	r := &fakeRunner{err: errors.New("dial tcp 127.0.0.1:7171: connection refused")}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/wl-scale/tidy")
+
+	if status != http.StatusServiceUnavailable || !strings.Contains(body, `"code":"lab_unavailable"`) || strings.Contains(body, "7171") {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestTidyingAnUnknownTaskIsNotFound(t *testing.T) {
+	r := &fakeRunner{}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/net-svc/tidy")
+
+	if status != http.StatusNotFound || !strings.Contains(body, `"code":"task_not_found"`) || r.host != "" {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
 func TestCheckingATaskAnswersItsGrade(t *testing.T) {
 	r := &fakeRunner{result: labs.ScriptResult{Output: "deployment.apps/web\nPASS 2 web has 4 replicas\nFAIL 1 web is Ready\n"}}
 

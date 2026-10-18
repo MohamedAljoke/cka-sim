@@ -18,6 +18,20 @@ func TestStartingATaskRunsItsCatalogSetupOnItsHost(t *testing.T) {
 	}
 }
 
+func TestStartingATaskFirstResetsWhatAnEarlierTaskBroke(t *testing.T) {
+	agent.set(&labv1.Cluster{State: labv1.ClusterState_CLUSTER_STATE_READY})
+	ran := agent.scriptsFrom()
+
+	request(t, http.MethodPost, "/api/tasks/tr-kubelet/start", nil)
+	status, body := request(t, http.MethodPost, "/api/tasks/ar-aggregate-view/start", nil)
+
+	scripts := ran()
+	if status != http.StatusOK || len(scripts) != 3 || !strings.Contains(scripts[1], "TASK_ID='tr-kubelet'") ||
+		!strings.Contains(scripts[1], "systemctl enable --now kubelet") || !strings.Contains(scripts[2], "TASK_ID='ar-aggregate-view'") {
+		t.Errorf("status %d: %s; ran %d scripts", status, body, len(scripts))
+	}
+}
+
 func TestStartingATaskBeforeTheLabIsReadyIsAConflict(t *testing.T) {
 	agent.set(&labv1.Cluster{State: labv1.ClusterState_CLUSTER_STATE_CREATING})
 

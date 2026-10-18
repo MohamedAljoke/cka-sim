@@ -20,7 +20,7 @@ import (
 var (
 	t0      = time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC)
 	catalog = []tasks.Task{
-		task("tr-etcd", tasks.Troubleshooting, 7, tasks.Last),
+		breaking(task("tr-etcd", tasks.Troubleshooting, 7, tasks.Last)),
 		task("ar-rbac", tasks.Architecture, 4, ""),
 		task("nw-svc", tasks.Networking, 3, ""),
 	}
@@ -75,6 +75,18 @@ func TestAFailedSetupMarksItsTaskAndKeepsWhy(t *testing.T) {
 	}
 	if rbac.Setup != exams.SetupFailed || !strings.Contains(rbac.SetupError, "connection refused") {
 		t.Errorf("ar-rbac: %+v", rbac)
+	}
+}
+
+func TestBeginHealsWhatPracticeBrokeBeforeTheSetups(t *testing.T) {
+	f := newFixture(t, nil)
+	f.tasks.SetUp.Execute(context.Background(), "tr-etcd")
+
+	f.uc.Begin.Execute(context.Background(), 3, 30)
+	f.wait()
+
+	if ran := f.runner.ran(); len(ran) != 5 || ran[1] != "reset tr-etcd" || ran[4] != "setup tr-etcd" {
+		t.Errorf("ran %v", ran)
 	}
 }
 
@@ -149,6 +161,22 @@ func TestEndGradesEveryPlayableTaskThenScoresTheExam(t *testing.T) {
 	}
 	if slices.Contains(f.runner.ran(), "check nw-svc") || e.Tasks[e.Index("nw-svc")].Grade != nil {
 		t.Errorf("checked a task whose setup failed: %v", f.runner.ran())
+	}
+}
+
+func TestAScoredExamTidiesEveryTask(t *testing.T) {
+	f := newFixture(t, nil)
+	f.runner.fail("setup nw-svc", labs.ScriptResult{ExitCode: 1})
+	f.uc.Begin.Execute(context.Background(), 3, 30)
+	f.wait()
+
+	f.uc.End.Execute(context.Background())
+	f.wait()
+
+	ran := f.runner.ran()
+	want := []string{"reset tr-etcd", taskusecases.TidyScript("tr-etcd"), taskusecases.TidyScript("ar-rbac"), taskusecases.TidyScript("nw-svc")}
+	if len(ran) < 4 || !slices.Equal(ran[len(ran)-4:], want) {
+		t.Errorf("ran %v", ran)
 	}
 }
 
@@ -284,8 +312,9 @@ func TestResumeFinishesTheChecksAStoppedServerLeft(t *testing.T) {
 	f.uc.Resume.Execute(context.Background())
 	f.wait()
 
-	if ran := f.runner.ran(); !slices.Equal(ran, []string{"check nw-svc"}) || f.get().Scoring() {
-		t.Errorf("ran %v", ran)
+	checks := slices.DeleteFunc(f.runner.ran(), func(s string) bool { return !strings.HasPrefix(s, "check ") })
+	if !slices.Equal(checks, []string{"check nw-svc"}) || f.get().Scoring() {
+		t.Errorf("ran %v", checks)
 	}
 }
 
@@ -300,6 +329,7 @@ func TestNewFailsOnAnUnreadableSavedExam(t *testing.T) {
 type fixture struct {
 	t      *testing.T
 	uc     UseCases
+	tasks  taskusecases.UseCases
 	repo   *fakeExamRepository
 	runner *fakeRunner
 	lab    *fakeLab
@@ -309,8 +339,8 @@ type fixture struct {
 func newFixture(t *testing.T, saved *exams.Exam) *fixture {
 	t.Helper()
 	f := &fixture{t: t, repo: &fakeExamRepository{exam: saved}, runner: newFakeRunner(), lab: &fakeLab{lab: labs.Lab{State: labs.Ready}}, clock: t0}
-	taskCases := taskusecases.New(fakeTaskRepository{}, f.runner)
-	uc, err := New(f.repo, taskCases, labusecases.New(f.lab).Get, func() time.Time { return f.clock }, rand.New(rand.NewPCG(1, 2)))
+	f.tasks = taskusecases.New(fakeTaskRepository{}, f.runner)
+	uc, err := New(f.repo, f.tasks, labusecases.New(f.lab).Get, func() time.Time { return f.clock }, rand.New(rand.NewPCG(1, 2)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,6 +361,11 @@ func (f *fixture) get() exams.Exam {
 
 func task(id string, domain tasks.Domain, weight int, order tasks.Order) tasks.Task {
 	return tasks.Task{ID: id, Domain: domain, Weight: weight, Order: order, Host: "cka-sim-control-plane", Setup: "setup " + id, Check: "check " + id}
+}
+
+func breaking(t tasks.Task) tasks.Task {
+	t.Reset = "reset " + t.ID
+	return t
 }
 
 type fakeTaskRepository struct{}

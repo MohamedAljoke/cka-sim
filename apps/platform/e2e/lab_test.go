@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -119,6 +120,7 @@ type fakeAgent struct {
 	labv1connect.UnimplementedLabServiceHandler
 	mu      sync.Mutex
 	cluster *labv1.Cluster
+	scripts []string
 }
 
 func newFakeAgent() *fakeAgent {
@@ -193,6 +195,10 @@ func (a *fakeAgent) RunScript(_ context.Context, req *labv1.RunScriptRequest) (*
 	if a.cluster.State != labv1.ClusterState_CLUSTER_STATE_READY {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, "the cluster isn't ready")
 	}
+	a.scripts = append(a.scripts, req.GetScript())
+	if strings.HasPrefix(req.GetScript(), "kubectl delete namespace -l cka-sim/task=") {
+		return &labv1.RunScriptResponse{}, nil
+	}
 	if !strings.Contains(req.GetScript(), "export TASK_ID=") || !strings.Contains(req.GetScript(), "fresh_ns()") {
 		return &labv1.RunScriptResponse{Output: []byte("not a catalog script\n"), ExitCode: 2}, nil
 	}
@@ -200,6 +206,18 @@ func (a *fakeAgent) RunScript(_ context.Context, req *labv1.RunScriptRequest) (*
 		return &labv1.RunScriptResponse{Output: []byte("PASS 2 checked on " + req.GetHost() + "\nFAIL 1 not done yet\n")}, nil
 	}
 	return &labv1.RunScriptResponse{Output: []byte("ran on " + req.GetHost() + "\n")}, nil
+}
+
+// scriptsFrom gives back what the agent runs from now on.
+func (a *fakeAgent) scriptsFrom() func() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	from := len(a.scripts)
+	return func() []string {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		return slices.Clone(a.scripts[from:])
+	}
 }
 
 func serveAgent(a *fakeAgent) (string, func()) {

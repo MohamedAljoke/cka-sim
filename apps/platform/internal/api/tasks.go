@@ -60,6 +60,7 @@ func (a *api) taskRoutes(handle handleFunc) {
 	handle("GET /api/tasks/{id}/solution", a.getTaskSolution)
 	handle("POST /api/tasks/{id}/start", a.startTask)
 	handle("POST /api/tasks/{id}/check", a.checkTask)
+	handle("POST /api/tasks/{id}/tidy", a.tidyTask)
 }
 
 func (a *api) getTasks(w http.ResponseWriter, r *http.Request) error {
@@ -153,6 +154,28 @@ func (a *api) checkTask(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return httpx.WriteJSON(w, http.StatusOK, newGradeView(checked))
+}
+
+func (a *api) tidyTask(w http.ResponseWriter, r *http.Request) error {
+	if err := a.outsideAnExam(r); err != nil {
+		return err
+	}
+
+	err := a.tasks.Tidy.Execute(r.Context(), r.PathValue("id"))
+	switch {
+	case errors.Is(err, tasks.ErrNotFound):
+		return httpx.NotFound(err)
+	case errors.Is(err, labs.ErrNotReady):
+		return httpx.Conflict(err)
+	case errors.Is(err, tasks.ErrUnavailable), errors.Is(err, labs.ErrUnavailable):
+		return httpx.Unavailable(err)
+	case err != nil:
+		return err
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+
+	return nil
 }
 
 func newGradeView(checked usecases.Checked) gradeView {

@@ -18,14 +18,19 @@ const outputTail = 2000
 // session is the one exam every use case shares. A request's change is saved before it shows; setups and checks run
 // in the background and take the lock again to record each result.
 type session struct {
-	mu    sync.Mutex
-	exam  *exams.Exam
-	repo  ExamRepository
-	start *taskusecases.StartTask
-	check *taskusecases.CheckTask
-	now   func() time.Time
-	rng   *rand.Rand
-	work  sync.WaitGroup
+	mu        sync.Mutex
+	exam      *exams.Exam
+	repo      ExamRepository
+	heal      *taskusecases.HealCluster
+	setUpTask *taskusecases.SetUpTask
+	check     *taskusecases.CheckTask
+	tidy      *taskusecases.TidyTask
+	now       func() time.Time
+	rng       *rand.Rand
+	work      sync.WaitGroup
+	// tidying holds the next exam's setups back until the last exam's tidy is done, so it can't delete the
+	// namespaces they make.
+	tidying sync.WaitGroup
 }
 
 func (s *session) save(e exams.Exam) error {
@@ -53,7 +58,8 @@ func (s *session) endIfExpired(ctx context.Context) {
 	s.grade(ctx)
 }
 
-// Setups and checks outlive the request that started them, as a practice setup does.
+// Setups and checks outlive the request that started them, as a practice setup does. What earlier tasks broke is
+// healed first; a heal that fails doesn't stop the exam, and the setups say if the cluster is broken.
 func (s *session) setUp(ctx context.Context) {
 	ctx = context.WithoutCancel(ctx)
 
@@ -70,6 +76,12 @@ func (s *session) setUp(ctx context.Context) {
 	}
 
 	s.work.Go(func() {
+		s.tidying.Wait()
+
+		if healed, err := s.heal.Execute(ctx); err != nil || !healed.Passed() {
+			slog.Warn("heal the cluster before the exam", "err", err, "output", tail(healed.Output))
+		}
+
 		var wg sync.WaitGroup
 		for _, id := range together {
 			wg.Go(func() { s.startTask(ctx, id) })
@@ -91,7 +103,7 @@ func (s *session) setUp(ctx context.Context) {
 }
 
 func (s *session) startTask(ctx context.Context, id string) {
-	result, err := s.start.Execute(ctx, id)
+	result, err := s.setUpTask.Execute(ctx, id)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -110,31 +122,46 @@ func (s *session) startTask(ctx context.Context, id string) {
 	s.saveInBackground()
 }
 
+// Once scored, every task of the exam is tidied, so the next exam starts on a clean cluster.
 func (s *session) grade(ctx context.Context) {
 	ctx = context.WithoutCancel(ctx)
 
 	var ids []string
 
+	all := make([]string, 0, len(s.exam.Tasks))
+
 	for _, task := range s.exam.Tasks {
+		all = append(all, task.ID)
 		if task.Setup != exams.SetupFailed && task.Grade == nil {
 			ids = append(ids, task.ID)
 		}
 	}
 
+	s.tidying.Add(1)
+
 	s.work.Go(func() {
+		defer s.tidying.Done()
+
 		var wg sync.WaitGroup
 		for _, id := range ids {
 			wg.Go(func() { s.checkTask(ctx, id) })
 		}
 
 		wg.Wait()
+		s.scored()
 
-		s.mu.Lock()
-		defer s.mu.Unlock()
-
-		s.exam.Scored = s.now()
-		s.saveInBackground()
+		if err := s.tidy.Execute(ctx, all...); err != nil {
+			slog.Error("tidy after the exam", "err", err)
+		}
 	})
+}
+
+func (s *session) scored() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.exam.Scored = s.now()
+	s.saveInBackground()
 }
 
 // A check that breaks scores 0 and keeps why, so the results can say so.

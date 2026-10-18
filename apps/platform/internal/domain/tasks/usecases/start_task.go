@@ -4,26 +4,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks"
 )
 
-const setupTimeout = 3 * time.Minute
-
 type StartTask struct {
-	repo   TaskRepository
-	runner ScriptRunner
+	repo  TaskRepository
+	heal  *HealCluster
+	setUp *SetUpTask
 }
 
-func NewStartTask(repo TaskRepository, runner ScriptRunner) *StartTask {
-	return &StartTask{repo: repo, runner: runner}
+func NewStartTask(repo TaskRepository, heal *HealCluster, setUp *SetUpTask) *StartTask {
+	return &StartTask{repo: repo, heal: heal, setUp: setUp}
 }
 
-// A setup left half done breaks the task, so it runs to the end even when the page that asked goes away.
+// Execute heals what earlier tasks broke before setting this one up, so a task left half solved can't break it. A
+// reset that fails answers in place of the setup.
 func (uc *StartTask) Execute(ctx context.Context, id string) (labs.ScriptResult, error) {
-	task, err := uc.repo.Get(ctx, id)
+	_, err := uc.repo.Get(ctx, id)
 	if errors.Is(err, tasks.ErrNotFound) {
 		return labs.ScriptResult{}, err
 	}
@@ -32,16 +31,10 @@ func (uc *StartTask) Execute(ctx context.Context, id string) (labs.ScriptResult,
 		return labs.ScriptResult{}, fmt.Errorf("%w: %w", tasks.ErrUnavailable, err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), setupTimeout)
-	defer cancel()
-
-	result, err := uc.runner.RunScript(ctx, task.Host, task.Setup)
-	switch {
-	case errors.Is(err, labs.ErrNotReady):
-		return labs.ScriptResult{}, err
-	case err != nil:
-		return labs.ScriptResult{}, fmt.Errorf("%w: set up %s: %w", labs.ErrUnavailable, id, err)
+	healed, err := uc.heal.Execute(ctx)
+	if err != nil || !healed.Passed() {
+		return healed, err
 	}
 
-	return result, nil
+	return uc.setUp.Execute(ctx, id)
 }

@@ -272,7 +272,7 @@ function showResults(pane: HTMLElement, exam: Exam, catalog: Catalog, lab: LabSt
     el('h2', '', 'Your result'),
     verdict,
     rows,
-    el('p', 'muted', 'The cluster keeps what this exam changed. Restart the lab for a clean one before the next exam.'),
+    el('p', 'muted', 'What the exam changed is being undone, so the next exam starts on a clean cluster.'),
     again,
   )
   pane.replaceChildren(card)

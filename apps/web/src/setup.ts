@@ -1,4 +1,4 @@
-import { startTask, type Lab } from './api'
+import { startTask, tidyTask, type Lab } from './api'
 import { el, message } from './ui'
 
 type SetupState = 'waiting' | 'idle' | 'running' | 'done' | 'failed'
@@ -28,7 +28,13 @@ export function setupPanel(id: string, signal: AbortSignal): { panel: HTMLElemen
     output.scrollTop = output.scrollHeight
   }
 
+  let setUp = false
+  signal.addEventListener('abort', () => {
+    if (setUp) tidyTask(id)
+  })
+
   action.onclick = async () => {
+    setUp = true
     const started = Date.now()
     show('running', 'Setting the task up on the cluster…')
     try {

@@ -10,6 +10,8 @@ import (
 )
 
 const (
+	applyAttempts = 5
+
 	registryHost = "cka-sim-registry"
 	chartsHost   = "cka-sim-charts"
 
@@ -149,7 +151,16 @@ func (p *Provisioner) applyAddon(ctx context.Context, nodes []string, manifest, 
 		return err
 	}
 
-	_, err := p.kubectl(ctx, "apply", "--server-side", "--force-conflicts", "-f", path)
+	// A fresh cluster's etcd can time out on large manifests such as the Gateway API CRDs; the apply is idempotent.
+	var err error
+
+	for range applyAttempts {
+		if _, err = p.kubectl(ctx, "apply", "--server-side", "--force-conflicts", "-f", path); err == nil {
+			return nil
+		}
+
+		time.Sleep(3 * time.Second)
+	}
 
 	return err
 }

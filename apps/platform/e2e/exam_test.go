@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,7 @@ func TestAnExamNeedsAReadyLab(t *testing.T) {
 func TestAnExamIsSetUpPlayedGradedAndDiscarded(t *testing.T) {
 	agent.set(&labv1.Cluster{State: labv1.ClusterState_CLUSTER_STATE_READY})
 	url := ownServer(t, t.TempDir())
+	ran := agent.scriptsFrom()
 
 	status, body := post(t, url, "/api/exam", `{"count": 2, "minutes": 30}`)
 	if status != http.StatusAccepted {
@@ -75,6 +77,9 @@ func TestAnExamIsSetUpPlayedGradedAndDiscarded(t *testing.T) {
 	e = waitForExam(t, url, func(e exam) bool { return e.Score != nil })
 	if e.Score.Percent != 67 || !e.Score.Passed || !e.Tasks[1].Flagged || e.Tasks[0].Grade == nil || e.Tasks[0].Grade.Earned != 2 {
 		t.Errorf("graded: %+v", e)
+	}
+	for _, task := range e.Tasks {
+		waitForScript(t, ran, "kubectl delete namespace -l cka-sim/task="+task.ID+" ")
 	}
 
 	if status, body := requestTo(t, url, http.MethodDelete, "/api/exam", nil); status != http.StatusNoContent {
@@ -146,6 +151,17 @@ func waitForExam(t *testing.T, url string, done func(exam) bool) exam {
 	}
 	t.Fatal("the exam never got there")
 	return exam{}
+}
+
+func waitForScript(t *testing.T, ran func() []string, prefix string) {
+	t.Helper()
+	for range 100 {
+		if slices.ContainsFunc(ran(), func(s string) bool { return strings.HasPrefix(s, prefix) }) {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Errorf("never ran %q", prefix)
 }
 
 type exam struct {

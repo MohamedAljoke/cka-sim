@@ -175,6 +175,35 @@ func TestScriptsRunAfterTheLibWithTheirTaskID(t *testing.T) {
 	}
 }
 
+func TestAResetRunsAfterTheLibToo(t *testing.T) {
+	fsys := catalogFS()
+	addTask(fsys, "tr-kubelet")
+	fsys["tr-kubelet/reset.sh"] = &fstest.MapFile{Data: []byte("systemctl start kubelet\n")}
+	repo, err := NewTaskRepository(fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, _ := repo.Get(context.Background(), "tr-kubelet")
+
+	if want := "export TASK_ID='tr-kubelet'\nfresh_ns() { :; }\n\nsystemctl start kubelet\n"; got.Reset != want {
+		t.Errorf("reset %q, want %q", got.Reset, want)
+	}
+}
+
+func TestATaskWithoutAResetHasNone(t *testing.T) {
+	fsys := catalogFS()
+	addTask(fsys, "wl-scale")
+	repo, err := NewTaskRepository(fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got, _ := repo.Get(context.Background(), "wl-scale"); got.Reset != "" {
+		t.Errorf("reset %q", got.Reset)
+	}
+}
+
 func TestEmptyScriptsAreRejected(t *testing.T) {
 	for file, wantErr := range map[string]string{"setup.sh": "setup is required", "check.sh": "check is required"} {
 		fsys := catalogFS()

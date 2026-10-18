@@ -53,6 +53,11 @@ export async function startTask(id: string, signal?: AbortSignal): Promise<Setup
   return (await call('POST', `/api/tasks/${encodeURIComponent(id)}/start`, signal)).json()
 }
 
+// Sent as the page leaves the task, so it must outlive the page: no signal, and keepalive.
+export function tidyTask(id: string): void {
+  fetch(`/api/tasks/${encodeURIComponent(id)}/tidy`, { method: 'POST', keepalive: true }).catch(() => {})
+}
+
 export type Grade = {
   earned: number
   total: number

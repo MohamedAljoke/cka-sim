@@ -90,6 +90,12 @@ func loadTaskFile(fsys fs.FS, file, lib string) (tasks.Task, error) {
 	}
 	task.Check = script(task.ID, lib, string(check))
 
+	reset, err := fs.ReadFile(fsys, path.Join(dir, "reset.sh"))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return tasks.Task{}, err
+	}
+	task.Reset = script(task.ID, lib, string(reset))
+
 	return task, task.Validate()
 }
 

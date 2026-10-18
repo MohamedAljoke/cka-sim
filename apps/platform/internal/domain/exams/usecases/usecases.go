@@ -26,7 +26,8 @@ func New(
 		return UseCases{}, fmt.Errorf("load the saved exam: %w", err)
 	}
 
-	s := &session{exam: saved, repo: repo, start: tasks.Start, check: tasks.Check, now: now, rng: rng}
+	s := &session{exam: saved, repo: repo, heal: tasks.Heal, setUpTask: tasks.SetUp, check: tasks.Check,
+		tidy: tasks.Tidy, now: now, rng: rng}
 
 	return UseCases{
 		Begin:   &BeginExam{s: s, list: tasks.List, lab: lab},

@@ -66,7 +66,7 @@ func TestPracticeWaitsWhileAnExamRuns(t *testing.T) {
 	h := newExamAPI(&fakeRunner{}, nil)
 	send(t, h, http.MethodPost, "/api/exam", `{"count": 1, "minutes": 30}`)
 
-	for _, path := range []string{"/api/tasks/wl-scale/start", "/api/tasks/wl-scale/check"} {
+	for _, path := range []string{"/api/tasks/wl-scale/start", "/api/tasks/wl-scale/check", "/api/tasks/wl-scale/tidy"} {
 		status, body := call(t, h, http.MethodPost, path)
 		if status != http.StatusConflict || !strings.Contains(body, `"code":"exam_running"`) {
 			t.Errorf("%s: status %d: %s", path, status, body)

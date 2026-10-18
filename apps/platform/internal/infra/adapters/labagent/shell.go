@@ -16,7 +16,7 @@ import (
 )
 
 // The agent answers a refused shell with an error in place of output, so OpenShell waits for that first answer.
-func (p *Provider) OpenShell(ctx context.Context, size labs.TerminalSize) (usecases.Shell, error) {
+func (p *agent) OpenShell(ctx context.Context, size labs.TerminalSize) (usecases.Shell, error) {
 	stream, err := p.work.OpenShell(ctx)
 	if err != nil {
 		return nil, err

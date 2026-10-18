@@ -21,7 +21,7 @@ func TestSelftest(t *testing.T) {
 		t.Skip("needs -selftest and a running lab; run make selftest")
 	}
 
-	lab := labagent.NewProvider(cmp.Or(os.Getenv("CKA_SIM_LAB_URL"), "http://127.0.0.1:7171"),
+	lab := labagent.NewLab(labagent.Fixed(cmp.Or(os.Getenv("CKA_SIM_LAB_URL"), "http://127.0.0.1:7171")),
 		os.Getenv("CKA_SIM_AGENT_TOKEN"))
 	if got, err := lab.Get(context.Background()); err != nil || got.State != labs.Ready {
 		t.Skipf("the lab is not ready (%+v, %v); start it and set CKA_SIM_AGENT_TOKEN", got, err)

@@ -32,7 +32,7 @@ func TestEveryClusterStateBecomesALabState(t *testing.T) {
 		labv1.ClusterState_CLUSTER_STATE_DELETING: labs.Stopping,
 		labv1.ClusterState_CLUSTER_STATE_FAILED:   labs.Failed,
 	} {
-		p := NewProvider(serve(t, &fakeAgent{cluster: &labv1.Cluster{State: state}}), token)
+		p := newAgent(serve(t, &fakeAgent{cluster: &labv1.Cluster{State: state}}), token)
 
 		got, err := p.Get(context.Background())
 
@@ -49,7 +49,7 @@ func TestALabCarriesTheClustersStepAndTimes(t *testing.T) {
 		Ready:   timestamppb.New(started.Add(time.Minute)),
 	}}
 
-	got, err := NewProvider(serve(t, agent), token).Start(context.Background())
+	got, err := newAgent(serve(t, agent), token).Start(context.Background())
 
 	if err != nil || !got.StartedAt.Equal(started) || !got.ReadyAt.Equal(started.Add(time.Minute)) {
 		t.Errorf("got %+v, %v", got, err)
@@ -62,7 +62,7 @@ func TestALabCarriesTheClustersStepAndTimes(t *testing.T) {
 func TestStopDeletesTheCluster(t *testing.T) {
 	agent := &fakeAgent{cluster: &labv1.Cluster{State: labv1.ClusterState_CLUSTER_STATE_DELETING, Step: ""}}
 
-	got, err := NewProvider(serve(t, agent), token).Stop(context.Background())
+	got, err := newAgent(serve(t, agent), token).Stop(context.Background())
 
 	if err != nil || got.State != labs.Stopping || agent.deletes != 1 {
 		t.Errorf("got %+v, %v; DeleteCluster ran %d times", got, err, agent.deletes)
@@ -72,7 +72,7 @@ func TestStopDeletesTheCluster(t *testing.T) {
 func TestAFailedPreconditionIsABusyLab(t *testing.T) {
 	agent := &fakeAgent{err: connect.NewError(connect.CodeFailedPrecondition, "the cluster is still being created")}
 
-	_, err := NewProvider(serve(t, agent), token).Stop(context.Background())
+	_, err := newAgent(serve(t, agent), token).Stop(context.Background())
 
 	if !errors.Is(err, labs.ErrBusy) {
 		t.Errorf("got %v, want ErrBusy", err)
@@ -82,7 +82,7 @@ func TestAFailedPreconditionIsABusyLab(t *testing.T) {
 func TestAnUnknownStateIsAnError(t *testing.T) {
 	agent := &fakeAgent{cluster: &labv1.Cluster{State: labv1.ClusterState_CLUSTER_STATE_UNSPECIFIED}}
 
-	if _, err := NewProvider(serve(t, agent), token).Get(context.Background()); err == nil {
+	if _, err := newAgent(serve(t, agent), token).Get(context.Background()); err == nil {
 		t.Error("an unspecified state was taken as a lab")
 	}
 }
@@ -95,9 +95,9 @@ func TestAWrongTokenOrNoAgentIsAnErrorButNotABusyLab(t *testing.T) {
 	closed := "http://" + ln.Addr().String()
 	ln.Close()
 
-	for name, p := range map[string]*Provider{
-		"wrong token": NewProvider(serve(t, &fakeAgent{cluster: &labv1.Cluster{}}), "guess"),
-		"no agent":    NewProvider(closed, token),
+	for name, p := range map[string]*agent{
+		"wrong token": newAgent(serve(t, &fakeAgent{cluster: &labv1.Cluster{}}), "guess"),
+		"no agent":    newAgent(closed, token),
 	} {
 		_, err := p.Get(context.Background())
 

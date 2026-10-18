@@ -8,7 +8,7 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
 )
 
-func (p *Provider) RunScript(ctx context.Context, host, script string) (labs.ScriptResult, error) {
+func (p *agent) RunScript(ctx context.Context, host, script string) (labs.ScriptResult, error) {
 	res, err := p.work.RunScript(ctx, &labv1.RunScriptRequest{Host: host, Script: script})
 	if err != nil {
 		return labs.ScriptResult{}, notReady(err)

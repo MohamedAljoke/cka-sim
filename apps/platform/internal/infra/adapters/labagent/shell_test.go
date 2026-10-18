@@ -16,7 +16,7 @@ import (
 
 func TestAShellOpensAtItsSizeAndCarriesKeysAndOutput(t *testing.T) {
 	agent := &fakeAgent{opened: make(chan *labv1.TerminalSize, 2)}
-	shell, err := NewProvider(serve(t, agent), token).OpenShell(context.Background(), labs.TerminalSize{Cols: 100, Rows: 30})
+	shell, err := newAgent(serve(t, agent), token).OpenShell(context.Background(), labs.TerminalSize{Cols: 100, Rows: 30})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestAShellOpensAtItsSizeAndCarriesKeysAndOutput(t *testing.T) {
 
 func TestAShellReadsALongOutputInPieces(t *testing.T) {
 	agent := &fakeAgent{opened: make(chan *labv1.TerminalSize, 1)}
-	shell, err := NewProvider(serve(t, agent), token).OpenShell(context.Background(), labs.TerminalSize{Cols: 80, Rows: 24})
+	shell, err := newAgent(serve(t, agent), token).OpenShell(context.Background(), labs.TerminalSize{Cols: 80, Rows: 24})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestAShellReadsALongOutputInPieces(t *testing.T) {
 func TestAShellOnAClusterThatIsNotReadyIsNotReady(t *testing.T) {
 	agent := &fakeAgent{err: connect.NewError(connect.CodeFailedPrecondition, "the cluster isn't ready")}
 
-	_, err := NewProvider(serve(t, agent), token).OpenShell(context.Background(), labs.TerminalSize{Cols: 80, Rows: 24})
+	_, err := newAgent(serve(t, agent), token).OpenShell(context.Background(), labs.TerminalSize{Cols: 80, Rows: 24})
 
 	if !errors.Is(err, labs.ErrNotReady) {
 		t.Errorf("got %v, want ErrNotReady", err)
@@ -64,7 +64,7 @@ func TestAShellOnAClusterThatIsNotReadyIsNotReady(t *testing.T) {
 func TestAShellWithAWrongTokenIsAnErrorButNotNotReady(t *testing.T) {
 	agent := &fakeAgent{opened: make(chan *labv1.TerminalSize, 1)}
 
-	_, err := NewProvider(serve(t, agent), "guess").OpenShell(context.Background(), labs.TerminalSize{Cols: 80, Rows: 24})
+	_, err := newAgent(serve(t, agent), "guess").OpenShell(context.Background(), labs.TerminalSize{Cols: 80, Rows: 24})
 
 	if err == nil || errors.Is(err, labs.ErrNotReady) {
 		t.Errorf("got %v", err)

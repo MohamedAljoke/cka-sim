@@ -16,27 +16,27 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
 )
 
-type Provider struct {
-	agent labv1connect.LabServiceClient
+type agent struct {
+	calls labv1connect.LabServiceClient
 	work  labv1connect.LabServiceClient
 }
 
 // Shells and scripts get a client with no timeout: their own contexts say how long they may take, and a
 // shell's stream needs HTTP/2.
-func NewProvider(url, token string) *Provider {
+func newAgent(url, token string) *agent {
 	calls := connecthttp.NewTransport(&http.Client{Timeout: 10 * time.Second}, url)
 	protocols := new(http.Protocols)
 	protocols.SetUnencryptedHTTP2(true)
 	streams := connecthttp.NewTransport(&http.Client{Transport: &http.Transport{Protocols: protocols}}, url)
 
-	return &Provider{
-		agent: labv1connect.NewLabServiceClient(connect.NewClient(calls, rpcauth.Bearer(token))),
+	return &agent{
+		calls: labv1connect.NewLabServiceClient(connect.NewClient(calls, rpcauth.Bearer(token))),
 		work:  labv1connect.NewLabServiceClient(connect.NewClient(streams, rpcauth.Bearer(token))),
 	}
 }
 
-func (p *Provider) Get(ctx context.Context) (labs.Lab, error) {
-	res, err := p.agent.GetCluster(ctx, &labv1.GetClusterRequest{})
+func (p *agent) Get(ctx context.Context) (labs.Lab, error) {
+	res, err := p.calls.GetCluster(ctx, &labv1.GetClusterRequest{})
 	if err != nil {
 		return labs.Lab{}, refusal(err)
 	}
@@ -44,8 +44,8 @@ func (p *Provider) Get(ctx context.Context) (labs.Lab, error) {
 	return labOf(res.GetCluster())
 }
 
-func (p *Provider) Start(ctx context.Context) (labs.Lab, error) {
-	res, err := p.agent.CreateCluster(ctx, &labv1.CreateClusterRequest{})
+func (p *agent) Start(ctx context.Context) (labs.Lab, error) {
+	res, err := p.calls.CreateCluster(ctx, &labv1.CreateClusterRequest{})
 	if err != nil {
 		return labs.Lab{}, refusal(err)
 	}
@@ -53,8 +53,8 @@ func (p *Provider) Start(ctx context.Context) (labs.Lab, error) {
 	return labOf(res.GetCluster())
 }
 
-func (p *Provider) Stop(ctx context.Context) (labs.Lab, error) {
-	res, err := p.agent.DeleteCluster(ctx, &labv1.DeleteClusterRequest{})
+func (p *agent) Stop(ctx context.Context) (labs.Lab, error) {
+	res, err := p.calls.DeleteCluster(ctx, &labv1.DeleteClusterRequest{})
 	if err != nil {
 		return labs.Lab{}, refusal(err)
 	}

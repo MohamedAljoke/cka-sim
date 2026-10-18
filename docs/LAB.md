@@ -159,7 +159,7 @@ that started it.
 > **The shell user is not the boundary.** CKA tasks need root on the nodes, so `sudo` is one command away, and
 > from there a privileged node can reach the lab container. **One lab container per learner is the boundary**,
 > plus whatever isolates that container. Hosted, that is a pod alone on its own node, which only the app can
-> reach ([HOSTING.md](HOSTING.md#4-who-can-reach-the-lab)).
+> reach ([HOSTING.md](HOSTING.md#5-who-can-reach-the-lab)).
 
 The origin check matters because a GET is a "safe" method, so `CrossOriginProtection` lets the WebSocket upgrade
 through. Without the check, any site could open a shell through your platform.

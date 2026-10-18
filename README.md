@@ -46,10 +46,11 @@ To host it on Kubernetes instead, see [docs/HOSTING.md](docs/HOSTING.md).
 
   A selftest solves every task on a real cluster to prove its checks. The exam draws tasks by domain weight
   and runs on the clock. → [docs/TASKS.md](docs/TASKS.md)
-- **Labs on demand on Kubernetes.** Hosted, the platform uses client-go to create a privileged lab pod when
-  you click Start lab, on its own node from a pool that scales from zero, and deletes it when you stop. It is
-  scoped by RBAC and fenced by a NetworkPolicy, and Terraform and kustomize set it up. The platform only knows
-  the agent's contract, so the same lab runs as a container or a pod. → [docs/HOSTING.md](docs/HOSTING.md)
+- **A lab per student on Kubernetes.** Hosted, each student joins with an invite link, and the platform uses
+  client-go to create their own privileged lab pod when they click Start lab, on its own node from a pool that
+  scales from zero up to a cap, and deletes it when they stop. It is scoped by RBAC and fenced by a
+  NetworkPolicy, and Terraform and kustomize set it up. The platform only knows the agent's contract, so the
+  same lab runs as a container or a pod. → [docs/HOSTING.md](docs/HOSTING.md)
 
 ## The code
 

@@ -66,6 +66,11 @@ context on your task. Three parts, in [ASSISTANT.md](ASSISTANT.md).
 No database and no login page. A student is a token signed with the server's key, so the token itself is the
 account.
 
+> [!NOTE]
+> A first, simpler version is built (see [STATUS.md](STATUS.md)): a fixed `CKA_SIM_STUDENTS` list of
+> `name=token`, joined at `/api/join?token=`, with an empty list meaning everyone is `local`. What's left is
+> the signed token below: `mint`, expiry and the denylist, so students change without a restart.
+
 - **Scope:**
   - **The token:** an HS256 JWT `{sub, exp}` signed with `CKA_SIM_SECRET`.
   - **The verifier**, a small piece in the platform:
@@ -96,6 +101,11 @@ account.
   cookies, and revocation without a database.
 
 ### 3.2 A lab per student
+
+> [!NOTE]
+> Mostly built: the fleet, per-owner use cases and exams, the `max_labs` cap, `make labs`. The pod is named
+> `lab-<student>` rather than a hash, since a student's name is already DNS-safe. Left: the idle stop, the
+> "site is full" message, and the live review below.
 
 - **Scope:**
   - **`kube.Pod`:** named `lab-<short hash of sub>` (pod names must be DNS-safe), and labelled

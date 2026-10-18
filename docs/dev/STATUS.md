@@ -1,7 +1,7 @@
 # Status
 
-Where cka-sim stands against [BUILD-IN-STEPS.md](BUILD-IN-STEPS.md). Its **Before** lines point at the first
-version on the `archive/v2` branch; [AGENTS.md](../../AGENTS.md) wins wherever the two disagree.
+What has been built, step by step, under the original plan's step numbers. What's left is in
+[BUILD-IN-STEPS.md](BUILD-IN-STEPS.md) and [ASSISTANT.md](ASSISTANT.md).
 
 Update this file when a step lands, and the [cka-sim docs](https://claude.ai/code/artifact/5f47a2bd-5b68-4d15-b90f-1d76ae14750d)
 when what they describe changes.
@@ -33,5 +33,4 @@ when what they describe changes.
 
 ## Next
 
-Every task now has a solution and the selftest grades them all; five still fail it. Next: tests for the lab
-machines, a first live run on GKE, then the assistant (Part 3).
+The assistant ([ASSISTANT.md](ASSISTANT.md)), then the rest of [BUILD-IN-STEPS.md](BUILD-IN-STEPS.md).

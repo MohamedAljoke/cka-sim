@@ -124,7 +124,9 @@ func labOf(cfg settings) (lab, error) {
 
 		return labagent.NewLab(labagent.Fixed(cfg.LabURL), cfg.AgentToken), nil
 	case "kubernetes":
-		pod, err := kube.NewInClusterPod(cfg.LabNamespace, kube.PodSettings{Image: cfg.LabImage, TokenSecret: cfg.LabTokenSecret})
+		settings := kube.PodSettings{Image: cfg.LabImage, TokenSecret: cfg.LabTokenSecret}
+
+		pod, err := kube.NewInClusterPod(cfg.LabNamespace, settings)
 		if err != nil {
 			return nil, err
 		}

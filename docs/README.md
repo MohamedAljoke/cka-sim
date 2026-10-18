@@ -9,5 +9,6 @@ How cka-sim works, part by part. Start with the [project README](../README.md) f
 | [TASKS.md](TASKS.md) | Tasks: the scripts in a task folder, how they run on a node, grading, heal and tidy, the selftest, the exam |
 | [HOSTING.md](HOSTING.md) | Labs on demand on Kubernetes: the Machine seam, the lab pod, RBAC and NetworkPolicy, Terraform, kustomize and Caddy |
 
-How it was built, step by step, is in [dev/](dev/): [BUILD-IN-STEPS.md](dev/BUILD-IN-STEPS.md) is the plan and
-[STATUS.md](dev/STATUS.md) where each step stands.
+Development notes are in [dev/](dev/): [STATUS.md](dev/STATUS.md) is what's built,
+[BUILD-IN-STEPS.md](dev/BUILD-IN-STEPS.md) what's left, and [ASSISTANT.md](dev/ASSISTANT.md) the plan for the AI
+assistant.

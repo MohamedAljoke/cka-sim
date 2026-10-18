@@ -109,9 +109,11 @@ func (s PodSettings) spec() *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: podName, Labels: map[string]string{"app": "cka-sim-lab"}},
 		Spec: corev1.PodSpec{
-			RestartPolicy:                 corev1.RestartPolicyNever,
-			NodeSelector:                  map[string]string{"pool": "labs"},
-			Tolerations:                   []corev1.Toleration{{Key: "lab", Operator: corev1.TolerationOpEqual, Value: "true", Effect: corev1.TaintEffectNoSchedule}},
+			RestartPolicy: corev1.RestartPolicyNever,
+			NodeSelector:  map[string]string{"pool": "labs"},
+			Tolerations: []corev1.Toleration{{
+				Key: "lab", Operator: corev1.TolerationOpEqual, Value: "true", Effect: corev1.TaintEffectNoSchedule,
+			}},
 			AutomountServiceAccountToken:  &noToken,
 			EnableServiceLinks:            &noLinks,
 			TerminationGracePeriodSeconds: &grace,
@@ -128,7 +130,9 @@ func (s PodSettings) spec() *corev1.Pod {
 				},
 				Ports: []corev1.ContainerPort{{Name: "agent", ContainerPort: 7171}},
 				ReadinessProbe: &corev1.Probe{
-					ProbeHandler:  corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromString("agent")}},
+					ProbeHandler: corev1.ProbeHandler{
+						HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromString("agent")},
+					},
 					PeriodSeconds: 2,
 				},
 				Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{

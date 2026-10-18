@@ -39,7 +39,7 @@ func (p *Provisioner) startBase(ctx context.Context) error {
 
 // Task scripts run as root on the task's host, and only the control plane comes with a kubeconfig.
 func (p *Provisioner) trustBase(ctx context.Context, publicKey string) error {
-	kubeconfig, err := docker(ctx, "", "exec", p.name+"-control-plane", "cat", "/etc/kubernetes/admin.conf")
+	kubeconfig, err := docker(ctx, "", "exec", p.controlPlane(), "cat", "/etc/kubernetes/admin.conf")
 	if err != nil {
 		return err
 	}

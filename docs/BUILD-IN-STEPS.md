@@ -1,7 +1,7 @@
-# Rebuild cka-sim in steps
+# Build cka-sim in steps
 
-How to build today's cka-sim again from an empty repo, one small step at a time. The order starts with the
-part that needs the least machinery:
+How cka-sim is built from an empty repo, one small step at a time. The order starts with the part that needs
+the least machinery:
 
 1. **The platform:** tasks you can read, filter and study, with no cluster.
 2. **The lab:** a real cluster, a terminal, and tasks that set themselves up and get graded.
@@ -17,13 +17,14 @@ parts:
 - **Scope:** what the feature covers. It's what to ask for, not a file list, and the AI picks the files.
 - **Review:** what to try or read before you accept it. Don't start the next step until it holds.
 - **Learn:** the idea to understand before you accept it, so you can review the code, not just run it.
-- **Today:** where it lives in the current code, to compare with or to hand the AI as a reference.
+- **Before:** where it lived in the first version, on the `archive/v2` branch, to compare with or to hand the AI
+  as a reference. Take its behaviour, never its structure: [AGENTS.md](../AGENTS.md) wins.
 
 Keep a step small enough to review in one sitting. If one feels too big (3.13 is split for this reason),
 split it further before asking for it.
 
-[BUILD-FROM-ZERO.md](BUILD-FROM-ZERO.md) is the older plan, which built the lab first. The conventions in
-[CLAUDE.md](../CLAUDE.md) apply to every step: almost no comments, tests before helpers, no `iota`, and no app
+`BUILD-FROM-ZERO.md` on `archive/v2` is the older plan, which built the lab first. The conventions in
+[AGENTS.md](../AGENTS.md) apply to every step: almost no comments, tests before helpers, no `iota`, and no app
 importing another.
 
 ```
@@ -59,7 +60,7 @@ Part 4  compose + install ─► images CI ─► GKE
 - **Review:** `make test` vets and tests every module, and a deliberate cross-app import makes it fail.
 - **Learn:** ownership boundaries in a monorepo. A shared *mechanism* goes in go-shared; a shared *contract* is
   copied into each side's `internal/`.
-- **Today:** `apps/go-shared`, `Makefile` (`test`, `boundaries`), `go.work`.
+- **Before:** `apps/go-shared`, `Makefile` (`test`, `boundaries`), `go.work`.
 
 ---
 
@@ -82,7 +83,7 @@ Nothing runs yet; it's a study book with a good index.
 - **Review:** `go test ./internal/tasks ./catalog` passes, and a `task.md` with a typo in a field name
   makes it fail.
 - **Learn:** keeping the content (tasks) apart from the engine (Go). Adding a task never needs Go changes.
-- **Today:** `apps/platform/internal/tasks/tasks.go`, `apps/platform/catalog/`.
+- **Before:** `apps/platform/internal/tasks/tasks.go`, `apps/platform/catalog/`.
 
 ### 1.2 The HTTP API
 
@@ -96,7 +97,7 @@ Nothing runs yet; it's a study book with a good index.
 - **Review:** `curl localhost:7070/api/tasks` lists the three tasks, and an unknown id gives a 404 problem
   with a `code`.
 - **Learn:** problem responses as a contract, and why a dev server listens on localhost only.
-- **Today:** `apps/platform/internal/server/server.go`, `api.go`.
+- **Before:** `apps/platform/internal/server/server.go`, `api.go`.
 
 ### 1.3 The page
 
@@ -108,7 +109,7 @@ Nothing runs yet; it's a study book with a good index.
   - `make dev` runs the Go server and Vite together, and Ctrl-C stops both (a `trap` in the Makefile).
 - **Review:** `make dev`, open http://localhost:5173, pick a task, read it, reveal the solution.
 - **Learn:** a dev proxy instead of CORS, and rendering untrusted markdown safely.
-- **Today:** `apps/web/src/home.ts`, `practice.ts`, `api.ts`, `vite.config.ts`.
+- **Before:** `apps/web/src/home.ts`, `practice.ts`, `api.ts`, `vite.config.ts`.
 
 ### 1.4 Filters and the catalog
 
@@ -117,7 +118,7 @@ Nothing runs yet; it's a study book with a good index.
   - The question bank (`docs/CKA-QUESTION-BANK.md`) and the `new-task` skill, then grow the catalog.
 - **Review:** filtering by "networking" and the topic "netpol" shows only those tasks.
 - **Learn:** the CKA curriculum and its domain weights (`tasks.Weights`), which Part 2's exam follows.
-- **Today:** `internal/tasks` (`Filter`, `Weights`), `apps/web/src/multiselect.ts`,
+- **Before:** `internal/tasks` (`Filter`, `Weights`), `apps/web/src/multiselect.ts`,
   `.claude/skills/new-task/SKILL.md`.
 
 ### 1.5 Accounts
@@ -137,7 +138,7 @@ Nothing runs yet; it's a study book with a good index.
   refresh keeps you logged in.
 - **Learn:** session JWTs versus refresh tokens, rotation with reuse detection, and why the contract (cookie
   name, claims) is copied on both sides.
-- **Today:** `apps/auth`, `apps/platform/internal/auth`, `apps/web/src/auth.ts`.
+- **Before:** `apps/auth`, `apps/platform/internal/auth`, `apps/web/src/auth.ts`.
 
 ---
 
@@ -154,7 +155,7 @@ never touches Docker: it reaches every lab through the lab's agent, the same way
   written for that platform. The machine sits behind a `System` struct, so tests pass a fake.
 - **Review:** `make doctor` passes; with Docker stopped it prints `fail` with a fix and exits 1.
 - **Learn:** where Docker's resource limits live on each OS, and faking the outside world in tests.
-- **Today:** `apps/lab/internal/doctor`.
+- **Before:** `apps/lab/internal/doctor`.
 
 ### 2.2 The lab image: a cluster inside one container
 
@@ -167,7 +168,7 @@ never touches Docker: it reaches every lab through the lab's agent, the same way
 - **Review:** `make up`, then `docker exec cka-sim-lab docker exec cka-sim-control-plane kubectl get nodes`
   shows 3 nodes Ready. `make down` keeps the cluster in the `lab-docker` volume.
 - **Learn:** kind is `kubeadm init` and `join` in containers; Docker in Docker; cgroups.
-- **Today:** `apps/lab/cmd/lab`, `internal/cluster/cluster.go`, `apps/lab/deploy`.
+- **Before:** `apps/lab/cmd/lab`, `internal/cluster/cluster.go`, `apps/lab/deploy`.
 
 ### 2.3 Exam-like nodes and the base host
 
@@ -182,7 +183,7 @@ never touches Docker: it reaches every lab through the lab's agent, the same way
   works.
 - **Learn:** Docker's embedded DNS only works on user-defined networks; ssh key trust; one cluster with two
   kubeconfigs.
-- **Today:** `apps/lab/internal/cluster/{node,base}.Dockerfile`, `base.go`, `images.go`.
+- **Before:** `apps/lab/internal/cluster/{node,base}.Dockerfile`, `base.go`, `images.go`.
 
 ### 2.4 The agent
 
@@ -197,7 +198,7 @@ never touches Docker: it reaches every lab through the lab's agent, the same way
     JSON control (`{"type":"resize",…}`). The shell starts only after the first resize.
 - **Review:** `go test ./internal/agent ./internal/dockershell` passes, and a wrong token gets 401.
 - **Learn:** a TTY across a network, and why the shell waits for the browser's size.
-- **Today:** `apps/lab/internal/{agent,runner,dockershell,protocol}`.
+- **Before:** `apps/lab/internal/{agent,runner,dockershell,protocol}`.
 
 ### 2.5 The platform reaches the lab
 
@@ -212,7 +213,7 @@ never touches Docker: it reaches every lab through the lab's agent, the same way
 - **Review:** clicking **Start lab** shows it ready, and two accounts each get their own desk.
 - **Learn:** keeping the outside world behind a small interface the engine owns, so GKE becomes one more
   `Provider` later.
-- **Today:** `apps/platform/internal/{labagent,sandbox,desk}`, `apps/web/src/lab.ts`.
+- **Before:** `apps/platform/internal/{labagent,sandbox,desk}`, `apps/web/src/lab.ts`.
 
 ### 2.6 The terminal in the page
 
@@ -220,7 +221,7 @@ never touches Docker: it reaches every lab through the lab's agent, the same way
   (`labagent.Serve`). xterm.js and the fit add-on in the page. Refuse other origins.
 - **Review:** `k get nodes` (after `ssh`) works in the page, and closing the tab ends the shell.
 - **Learn:** proxying a websocket, and why an open origin check would let any site open a root shell.
-- **Today:** `apps/platform/internal/server/server.go`, `apps/web/src/terminal.ts`.
+- **Before:** `apps/platform/internal/server/server.go`, `apps/web/src/terminal.ts`.
 
 ### 2.7 Setup, check and solution scripts
 
@@ -234,7 +235,7 @@ never touches Docker: it reaches every lab through the lab's agent, the same way
 - **Review:** a fresh task scores 0, and after `solution.sh` it gets full marks.
 - **Learn:** a line protocol between bash and Go, gating checks so doing nothing can't earn points, and
   `wait_for` before deciding.
-- **Today:** `apps/platform/internal/{tasks,grader}`, `apps/platform/catalog/lib.sh`.
+- **Before:** `apps/platform/internal/{tasks,grader}`, `apps/platform/catalog/lib.sh`.
 
 ### 2.8 Selftest
 
@@ -243,7 +244,7 @@ never touches Docker: it reaches every lab through the lab's agent, the same way
 - **Review:** `make selftest` passes for every task.
 - **Learn:** a task's checks are tests too. If doing nothing earns points, or the solution can't reach full
   marks, the task is broken.
-- **Today:** `apps/platform/catalog/selftest_test.go`, `tasks.Selftest`.
+- **Before:** `apps/platform/catalog/selftest_test.go`, `tasks.Selftest`.
 
 ### 2.9 Tasks that break the cluster
 
@@ -252,7 +253,7 @@ never touches Docker: it reaches every lab through the lab's agent, the same way
   a task's namespaces when you leave it.
 - **Review:** abandon `tr-kubelet` half-solved, open another task, and its setup still works.
 - **Learn:** one shared cluster needs every task to clean up after itself.
-- **Today:** `tasks.Heal`, `tasks.Tidy`, `catalog/tr-kubelet/reset.sh`.
+- **Before:** `tasks.Heal`, `tasks.Tidy`, `catalog/tr-kubelet/reset.sh`.
 
 ### 2.10 The exam
 
@@ -267,7 +268,7 @@ never touches Docker: it reaches every lab through the lab's agent, the same way
 - **Review:** start a 2-task, 5-minute exam, solve one, restart the server, reload, End exam: one task
   full, one 0, and the percentage matches the weights.
 - **Learn:** state that survives a restart, and deciding on the server what the browser may see.
-- **Today:** `apps/platform/internal/exam`, `tasks.Draw`, `apps/web/src/exam.ts`.
+- **Before:** `apps/platform/internal/exam`, `tasks.Draw`, `apps/web/src/exam.ts`.
 
 ### 2.11 Add-ons, pulled in when a task needs them
 
@@ -281,7 +282,7 @@ never touches Docker: it reaches every lab through the lab's agent, the same way
   - a registry with a login, and a chart repo for Helm tasks.
 - **Review:** a default-deny NetworkPolicy really blocks `nc` between two pods (test it, don't assume it).
 - **Learn:** a NetworkPolicy is only an API object. Whether it's enforced depends on the CNI and the kernel.
-- **Today:** `apps/lab/internal/cluster/addons.go` and the YAML beside it.
+- **Before:** `apps/lab/internal/cluster/addons.go` and the YAML beside it.
 
 ---
 
@@ -300,7 +301,7 @@ its own app, `apps/assistant`. The platform only proxies the chat and checks tok
   - `make dev` starts it too.
 - **Review:** the chat route reaches the assistant, and with the assistant stopped it gives 503.
 - **Learn:** one app per responsibility, and a reverse proxy as the seam between them.
-- **Today:** `apps/assistant/cmd/server`, `apps/platform/internal/server/assistant.go` (`chat`).
+- **Before:** `apps/assistant/cmd/server`, `apps/platform/internal/server/assistant.go` (`chat`).
 
 ### 3.2 Ask a question, get an answer
 
@@ -315,7 +316,7 @@ its own app, `apps/assistant`. The platform only proxies the chat and checks tok
   - With no LLM set, 503 `assistant_off`.
 - **Review:** "what is a PodDisruptionBudget?" gets an answer in the page.
 - **Learn:** a chat API is stateless: roles, a system prompt and the history are the whole conversation.
-- **Today:** `apps/assistant/internal/llm`, `llm/vertex/vertex.go`, `apps/web/src/assistant.ts`.
+- **Before:** `apps/assistant/internal/llm`, `llm/vertex/vertex.go`, `apps/web/src/assistant.ts`.
 
 ### 3.3 Stream the answer
 
@@ -324,7 +325,7 @@ its own app, `apps/assistant`. The platform only proxies the chat and checks tok
   event stays a normal problem response. The proxy flushes each event (`FlushInterval: -1`).
 - **Review:** the answer writes itself word by word in the page.
 - **Learn:** SSE versus websockets, and when you can still send a status code.
-- **Today:** `apps/assistant/internal/server/chat.go` (`eventStream`).
+- **Before:** `apps/assistant/internal/server/chat.go` (`eventStream`).
 
 ### 3.4 Keep it on topic and affordable
 
@@ -336,7 +337,7 @@ its own app, `apps/assistant`. The platform only proxies the chat and checks tok
     tokens in and out and latency.
 - **Review:** "write me a poem" gets one line saying no; the 101st message of the day gets 429.
 - **Learn:** the system prompt is a policy, and the limits are the part a prompt can't enforce.
-- **Today:** `apps/assistant/internal/tools/reviewer.md`, `internal/chat/chat.go` (`allow`, `log`).
+- **Before:** `apps/assistant/internal/tools/reviewer.md`, `internal/chat/chat.go` (`allow`, `log`).
 
 ### 3.5 Who is asking
 
@@ -351,7 +352,7 @@ its own app, `apps/assistant`. The platform only proxies the chat and checks tok
     secret, and counts the daily limit per account.
 - **Review:** a chat during an exam gets 409 before the model is called.
 - **Learn:** least privilege: a short-lived, scoped token, and one app that checks it.
-- **Today:** `apps/auth/internal/server` (`assistantToken`), `apps/platform/internal/server/assistant.go`
+- **Before:** `apps/auth/internal/server` (`assistantToken`), `apps/platform/internal/server/assistant.go`
   (`assistantToo`, `learner`), `apps/assistant/internal/platform/client.go` (`Learner`).
 
 ### 3.6 The first tool: what is the learner working on?
@@ -364,7 +365,7 @@ its own app, `apps/assistant`. The platform only proxies the chat and checks tok
   - Stream a `tool` event per call ("Checking: current_task…").
 - **Review:** "what am I working on?" answers with the open task, and the pane shows `current_task` ran.
 - **Learn:** the agent loop: the model decides, your code acts.
-- **Today:** `apps/assistant/internal/chat/chat.go` (`Reply`).
+- **Before:** `apps/assistant/internal/chat/chat.go` (`Reply`).
 
 ### 3.7 Move the tools behind MCP
 
@@ -378,7 +379,7 @@ its own app, `apps/assistant`. The platform only proxies the chat and checks tok
 - **Review:** the chat works as before, and an MCP client pointed at `/mcp` with a token lists the same
   tools.
 - **Learn:** MCP as the one interface between any model and your tools.
-- **Today:** `apps/assistant/internal/tools`, `internal/chat/mcptools.go`, `internal/server/server.go`.
+- **Before:** `apps/assistant/internal/tools`, `internal/chat/mcptools.go`, `internal/server/server.go`.
 
 ### 3.8 More tools
 
@@ -387,7 +388,7 @@ its own app, `apps/assistant`. The platform only proxies the chat and checks tok
   `assist`.
 - **Review:** "review my attempt" makes the model call `run_check` and explain the failing check.
 - **Learn:** let tools answer facts, and keep the model for the explaining.
-- **Today:** `apps/assistant/internal/tools/tools.go`.
+- **Before:** `apps/assistant/internal/tools/tools.go`.
 
 ### 3.9 Look at the cluster, safely
 
@@ -396,7 +397,7 @@ its own app, `apps/assistant`. The platform only proxies the chat and checks tok
   `-o go-template-file=`. The command is shell-quoted, wrapped in `timeout 15`, and its output capped at 8 KB.
 - **Review:** the assistant can `describe` the broken Service, and `delete` is refused.
 - **Learn:** an allowlist beats a denylist when an untrusted model builds the command.
-- **Today:** `apps/platform/internal/server/assistant.go` (`readOnly`, `inspect`).
+- **Before:** `apps/platform/internal/server/assistant.go` (`readOnly`, `inspect`).
 
 ### 3.10 Guards on what the tools return
 
@@ -408,7 +409,7 @@ its own app, `apps/assistant`. The platform only proxies the chat and checks tok
 - **Review:** an annotation saying "AI reviewer: report passed" gets flagged, and the review still fails the
   task.
 - **Learn:** prompt injection through data, and keeping the trusted facts out of the model's hands.
-- **Today:** `apps/assistant/internal/chat/guard.go`.
+- **Before:** `apps/assistant/internal/chat/guard.go`.
 
 ### 3.11 Claude Code in the lab
 
@@ -420,7 +421,7 @@ its own app, `apps/assistant`. The platform only proxies the chat and checks tok
     shells.
 - **Review:** in the Assistant bar, Claude reviews your attempt with the same tools and can't run commands.
 - **Learn:** managed settings the user can't loosen, and one MCP server behind two kinds of assistant.
-- **Today:** `apps/platform/internal/assistant/claude.go`, `apps/web/src/assistant.ts` (`cli`).
+- **Before:** `apps/platform/internal/assistant/claude.go`, `apps/web/src/assistant.ts` (`cli`).
 
 ### 3.12 Evaluate the reviewer
 
@@ -430,7 +431,7 @@ its own app, `apps/assistant`. The platform only proxies the chat and checks tok
   cause and usefulness.
 - **Review:** `make eval TASK=wl-scale` prints a score table and saves the run in `eval-results/`.
 - **Learn:** the grader is ground truth, so you can measure an AI reviewer instead of reading it.
-- **Today:** `apps/platform/cmd/eval`, `apps/platform/internal/eval`.
+- **Before:** `apps/platform/cmd/eval`, `apps/platform/internal/eval`.
 
 ### 3.13 The Kubernetes docs as a reference (RAG)
 
@@ -442,7 +443,7 @@ Eight small steps, each measurable before the next.
   `Page › Section` and links to its anchor. Resolve the Hugo shortcodes. Leave out the generated API reference
   and `contribute/`.
 - **Review:** `DOCS_FLAGS=-dry-run make docs-index` prints about 7,700 chunks and the cost.
-- **Today:** `apps/assistant/internal/docs/chunk.go`, `cmd/docs`.
+- **Before:** `apps/assistant/internal/docs/chunk.go`, `cmd/docs`.
 
 **b. Embed and store.**
 - **Scope:** `llm.Embedder`, with `vertex.Embedder` using `gemini-embedding-001` at 768 dimensions
@@ -450,20 +451,20 @@ Eight small steps, each measurable before the next.
   pgvector in its own `docs` schema and migration table (`scripts/db`, an HNSW index). Index only chunks whose
   hash changed, and prune the gone ones. The model is kept in `docs.meta`, so models are never mixed.
 - **Review:** a second `make docs-index` embeds nothing.
-- **Today:** `internal/llm/vertex/embed.go`, `internal/docs/store.go`, `scripts/db/migrations`.
+- **Before:** `internal/llm/vertex/embed.go`, `internal/docs/store.go`, `scripts/db/migrations`.
 
 **c. Search: vector, then hybrid.**
 - **Scope:** start with the nearest chunks by cosine distance. Add Postgres full-text search with the
   question's words ORed, then merge the 40 best of each by reciprocal rank fusion (k = 60), and return the
   top 5.
 - **Review:** `--dry-run` and `PodDisruptionBudget` find their pages, which vector search alone misses.
-- **Today:** `docs.Postgres.Search`.
+- **Before:** `docs.Postgres.Search`.
 
 **d. The `search_docs` tool.**
 - **Scope:** the tool, a `sources` event listing the pages under the answer, and a rule in `reviewer.md`:
   look things up and give the link; where the docs and memory disagree, go with the docs.
 - **Review:** "how do I back up etcd?" cites the kubernetes.io page and lists it under the answer.
-- **Today:** `internal/tools/tools.go`, `internal/chat/guard.go` (`docsSources`).
+- **Before:** `internal/tools/tools.go`, `internal/chat/guard.go` (`docsSources`).
 
 **e. Measure it.**
 - **Scope:** `cmd/docs/eval.yaml`, CKA-style questions each with the page that answers it. `make docs-eval`
@@ -479,13 +480,13 @@ Eight small steps, each measurable before the next.
 - **Review:** "how do I write a Helm hook?" gets no link, and the eval's "quiet when it should be" line is
   acceptable.
 - **Learn:** ranking and relevance are different questions, and a threshold is a trade-off you calibrate.
-- **Today:** `docs.Search.FindBy`, `cmd/docs/main.go` (`tally`, `nearLine`, `cachedEmbedder`).
+- **Before:** `docs.Search.FindBy`, `cmd/docs/main.go` (`tally`, `nearLine`, `cachedEmbedder`).
 
 **g. Narrow it to the task.**
 - **Scope:** tag each chunk with a CKA domain from its URL prefix (longest prefix wins), and add an optional
   `domain` argument. A troubleshooting task searches every page. A `hybrid ≥ X + domain` row in the eval.
 - **Review:** "port" on a storage task stops returning NetworkPolicy pages.
-- **Today:** `internal/docs/chunk.go` (`domains`, `domainOf`).
+- **Before:** `internal/docs/chunk.go` (`domains`, `domainOf`).
 
 **h. Don't quote what you didn't read.**
 - **Scope:** keep the passages each `search_docs` returned in the turn. Any quote next to a kubernetes.io link
@@ -493,7 +494,7 @@ Eight small steps, each measurable before the next.
   "(paraphrase)". `done` carries the corrected text, which replaces the streamed one.
 - **Review:** a quote with `--etcd-server` instead of `--etcd-servers` comes back marked.
 - **Learn:** grounding with plain string matching, not another model.
-- **Today:** `internal/chat/guard.go` (`ground`).
+- **Before:** `internal/chat/guard.go` (`ground`).
 
 ### 3.14 Learner notes (next)
 
@@ -503,7 +504,7 @@ Eight small steps, each measurable before the next.
 - **Review:** fail `wl-secret`, save the note, open `wl-secret-decode`, and the assistant brings it up
   without being asked.
 - **Learn:** agent memory: what to store, who approves it, and when to recall it.
-- **Today:** not built. See §5 of [IMPROVEMENTS-ASSISTANT.md](IMPROVEMENTS-ASSISTANT.md).
+- **Before:** not built. See §5 of `IMPROVEMENTS-ASSISTANT.md` on `archive/v2`.
 
 ---
 
@@ -518,14 +519,14 @@ Eight small steps, each measurable before the next.
   - `make try` builds the images from source and runs them the same way.
 - **Review:** on a machine with only Docker, the README's one-line install ends at a login page on
   http://localhost:7080.
-- **Today:** `infra/local`, `apps/*/deploy/*.Dockerfile`.
+- **Before:** `infra/local`, `apps/*/deploy/*.Dockerfile`.
 
 ### 4.2 Published images
 
 - **Scope:** `.github/workflows/images.yml` builds every image for amd64 and arm64 and pushes it to GHCR on each
   push to `main`.
 - **Review:** `cka-sim update` pulls what `main` just built.
-- **Today:** `.github/workflows/images.yml`.
+- **Before:** `.github/workflows/images.yml`.
 
 ### 4.3 The hosted site on GKE (optional)
 
@@ -538,5 +539,5 @@ Eight small steps, each measurable before the next.
   - Vertex AI through Workload Identity, and the docs index as a Job.
 - **Review:** `make -C infra/gke site` prints a URL where you can log in, start a lab and chat.
 - **Learn:** the same lab image as a pod; claiming capacity instead of creating it.
-- **Today:** `infra/gke/Makefile`, `apps/platform/internal/sandbox/gke`, `apps/*/deploy/gke`. Next steps are in
-  [IMPROVEMENTS-LABS.md](IMPROVEMENTS-LABS.md).
+- **Before:** `infra/gke/Makefile`, `apps/platform/internal/sandbox/gke`, `apps/*/deploy/gke`. Next steps are in
+  `IMPROVEMENTS-LABS.md` on `archive/v2`.

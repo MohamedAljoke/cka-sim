@@ -80,11 +80,17 @@ func (p *Provisioner) Create(ctx context.Context, progress func(step string)) er
 
 	progress("Starting the base host")
 
-	return p.startBase(ctx)
+	if err := p.startBase(ctx); err != nil {
+		return err
+	}
+
+	progress("Installing the add-ons")
+
+	return p.installAddons(ctx)
 }
 
 func (p *Provisioner) Delete(ctx context.Context) error {
-	if _, err := docker(ctx, "", "rm", "-f", p.Base()); err != nil {
+	if _, err := docker(ctx, "", "rm", "-f", p.Base(), p.registry(), p.charts()); err != nil {
 		return err
 	}
 
@@ -116,7 +122,7 @@ func newProvider(progress func(string)) *kindcluster.Provider {
 // kind only waits for the control plane; the workers join after it.
 func (p *Provisioner) waitForNodes(ctx context.Context) error {
 	//nolint:gosec // no shell runs the arguments, and the name comes from the agent's own settings
-	out, err := exec.CommandContext(ctx, "docker", "exec", p.name+"-control-plane",
+	out, err := exec.CommandContext(ctx, "docker", "exec", p.controlPlane(),
 		"kubectl", "--kubeconfig=/etc/kubernetes/admin.conf",
 		"wait", "--for=condition=Ready", "nodes", "--all", "--timeout=5m").CombinedOutput()
 	if err != nil {

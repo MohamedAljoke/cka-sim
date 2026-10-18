@@ -11,7 +11,7 @@ break a control plane and fix it the way the exam asks you to.
 You need Docker, with at least 2 CPUs and 4 GiB of memory for it. No clone needed:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/MohamedAljoke/cka-sim/rebuild/infra/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MohamedAljoke/cka-sim/main/infra/install.sh | sh
 ```
 
 That installs the `cka-sim` command in `~/.local/bin` and starts it. Open http://localhost:7080, pick a task
@@ -77,6 +77,6 @@ end-to-end tests against the real binary. The rules are in [AGENTS.md](AGENTS.md
 
 ## Status
 
-Being rebuilt step by step on this branch; [docs/REBUILD-STATUS.md](docs/REBUILD-STATUS.md) tracks what has
-landed and [docs/REBUILD-IN-STEPS.md](docs/REBUILD-IN-STEPS.md) what comes next. Next up: a killer.sh-style exam
-mode.
+Built step by step: [docs/STATUS.md](docs/STATUS.md) tracks what has landed and
+[docs/BUILD-IN-STEPS.md](docs/BUILD-IN-STEPS.md) what comes next. Practice tasks, a killer.sh-style exam mode and
+the cluster add-ons are in; next up is the assistant. The first version lives on the `archive/v2` branch.

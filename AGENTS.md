@@ -1,6 +1,7 @@
 # Agent Guide
 
-These rules win over the patterns on `main`. Use `main` as a reference for behaviour, not for structure.
+These rules win over the patterns of the first version on `archive/v2`. Use it as a reference for behaviour, not
+for structure.
 
 ## 1. Apps never import each other
 

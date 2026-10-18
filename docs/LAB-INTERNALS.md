@@ -261,7 +261,7 @@ the first message is the size.
 Killing the `docker exec` client does **not** kill what it started: bash keeps running on base. So every shell
 gets a random tag in its environment. `Close` kills the CLI, then runs a script on base that finds every process
 whose `/proc/<pid>/environ` holds that tag and sends it HUP, then KILL. An `ssh` the shell started carries the tag
-too, and when it dies, sshd ends the session on the node. The idea comes from `main`'s `dockershell.go`.
+too, and when it dies, sshd ends the session on the node. The idea comes from the first version's `dockershell.go` (`archive/v2`).
 
 On the agent (`apps/lab/internal/api/shell.go`), each direction has its own goroutine, because Connect allows one
 `Send` and one `Receive` at a time:

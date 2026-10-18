@@ -2,7 +2,7 @@
 set -eu
 
 repo=${CKA_SIM_REPO:-MohamedAljoke/cka-sim}
-ref=${CKA_SIM_REF:-rebuild}
+ref=${CKA_SIM_REF:-main}
 dir=${CKA_SIM_HOME:-$HOME/.cka-sim}
 raw=https://raw.githubusercontent.com/$repo/$ref/infra
 

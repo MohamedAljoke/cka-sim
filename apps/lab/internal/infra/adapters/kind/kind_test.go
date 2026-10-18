@@ -47,20 +47,51 @@ func TestTheClusterHasOneControlPlaneAndTwoWorkers(t *testing.T) {
 	}
 }
 
-func TestTheNodeImageTagMatchesItsDockerfile(t *testing.T) {
+func TestTheNodeImageTagMatchesItsDockerfiles(t *testing.T) {
 	_, version, _ := strings.Cut(nodeImage, ":")
 
 	if !strings.HasPrefix(nodeDockerfile, "FROM kindest/node:"+version+"\n") {
 		t.Errorf("%s isn't built from kindest/node:%s", nodeImage, version)
 	}
+	if !strings.HasPrefix(webOperatorDockerfile, "FROM "+nodeImage+" AS node\n") {
+		t.Errorf("web-operator.Dockerfile doesn't take kubectl from %s", nodeImage)
+	}
 }
 
-func TestOnlyCgroupV1GetsThePatch(t *testing.T) {
-	if strings.Contains(kindConfig("2"), "failCgroupV1") {
-		t.Error("cgroup v2 got the v1 patch")
+func TestCgroupV1GetsTheGracePeriodThenItsOwnPatch(t *testing.T) {
+	patches := patchesOf(t, kindConfig("1"))
+
+	if len(patches) != 2 || !strings.Contains(patches[0], "node-monitor-grace-period") ||
+		!strings.Contains(patches[1], "failCgroupV1: false") {
+		t.Errorf("patches = %q, want the grace period's, then failCgroupV1: false", patches)
 	}
-	var parsed map[string]any
-	if err := yaml.Unmarshal([]byte(kindConfig("1")), &parsed); err != nil || parsed["kubeadmConfigPatches"] == nil {
-		t.Errorf("cgroup v1 config: %v, %v", parsed, err)
+}
+
+func TestCgroupV2GetsOnlyTheGracePeriod(t *testing.T) {
+	patches := patchesOf(t, kindConfig("2"))
+
+	if len(patches) != 1 || !strings.Contains(patches[0], "node-monitor-grace-period") {
+		t.Errorf("patches = %q, want only the node grace period", patches)
 	}
+}
+
+func TestMetricsServerRunsThePreloadedImageWithoutKubeletCerts(t *testing.T) {
+	for _, want := range []string{"image: " + metricsServerImage + "\n", "- --kubelet-insecure-tls\n"} {
+		if !strings.Contains(metricsServerManifest, want) {
+			t.Errorf("metrics-server.yaml lacks %q", want)
+		}
+	}
+}
+
+func patchesOf(t *testing.T, config string) []string {
+	t.Helper()
+
+	var parsed struct {
+		KubeadmConfigPatches []string `json:"kubeadmConfigPatches"`
+	}
+	if err := yaml.Unmarshal([]byte(config), &parsed); err != nil {
+		t.Fatal(err)
+	}
+
+	return parsed.KubeadmConfigPatches
 }

@@ -57,6 +57,20 @@ body {
   font-size: 14px;
 }
 
+.topbar .student {
+  margin-left: auto;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.topbar .student + .lab-panel {
+  margin-left: 0;
+}
+
+.needs-token h1 {
+  margin-top: 0;
+}
+
 .topbar .action {
   padding: 4px 12px;
 }

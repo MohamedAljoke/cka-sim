@@ -25,7 +25,7 @@ func (a *api) labRoutes(handle handleFunc) {
 }
 
 func (a *api) getLabStatus(w http.ResponseWriter, r *http.Request) error {
-	lab, err := a.labs.Get.Execute(r.Context())
+	lab, err := a.labs.Get.Execute(r.Context(), studentOf(r))
 	switch {
 	case errors.Is(err, labs.ErrUnavailable):
 		return httpx.Unavailable(err)
@@ -37,7 +37,7 @@ func (a *api) getLabStatus(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) postLab(w http.ResponseWriter, r *http.Request) error {
-	lab, err := a.labs.Start.Execute(r.Context())
+	lab, err := a.labs.Start.Execute(r.Context(), studentOf(r))
 	switch {
 	case errors.Is(err, labs.ErrBusy):
 		return httpx.Conflict(err)
@@ -51,7 +51,7 @@ func (a *api) postLab(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) deleteLab(w http.ResponseWriter, r *http.Request) error {
-	lab, err := a.labs.Stop.Execute(r.Context())
+	lab, err := a.labs.Stop.Execute(r.Context(), studentOf(r))
 	switch {
 	case errors.Is(err, labs.ErrBusy):
 		return httpx.Conflict(err)

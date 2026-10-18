@@ -28,7 +28,7 @@ func NewCheckTask(repo TaskRepository, runner ScriptRunner) *CheckTask {
 	return &CheckTask{repo: repo, runner: runner}
 }
 
-func (uc *CheckTask) Execute(ctx context.Context, id string) (Checked, error) {
+func (uc *CheckTask) Execute(ctx context.Context, owner, id string) (Checked, error) {
 	task, err := uc.repo.Get(ctx, id)
 	if errors.Is(err, tasks.ErrNotFound) {
 		return Checked{}, err
@@ -41,7 +41,7 @@ func (uc *CheckTask) Execute(ctx context.Context, id string) (Checked, error) {
 	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
 
-	result, err := uc.runner.RunScript(ctx, task.Host, task.Check)
+	result, err := uc.runner.RunScript(ctx, owner, task.Host, task.Check)
 	switch {
 	case errors.Is(err, labs.ErrNotReady):
 		return Checked{}, err

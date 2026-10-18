@@ -19,10 +19,7 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/infra/adapters/labagent"
 )
 
-const (
-	podName   = "lab"
-	agentPort = "7171"
-)
+const agentPort = "7171"
 
 type PodSettings struct {
 	Image string
@@ -30,15 +27,17 @@ type PodSettings struct {
 	TokenSecret string
 }
 
-// Pod is a lab machine made on demand: Up creates the lab pod, and the labs node pool grows a node for it; Down
-// deletes it, and the node goes away.
+// Pod is one owner's lab machine, made on demand: Up creates the lab pod, and the labs node pool grows a node for
+// it; Down deletes it, and the node goes away.
 type Pod struct {
 	pods     corev1client.PodInterface
 	settings PodSettings
+	owner    string
 }
 
-// NewInClusterPod manages the lab pod in namespace with the identity of the pod the platform runs in.
-func NewInClusterPod(namespace string, settings PodSettings) (*Pod, error) {
+// NewInClusterPods gives each owner a lab pod in namespace, managed with the identity of the pod the platform runs
+// in.
+func NewInClusterPods(namespace string, settings PodSettings) (func(owner string) *Pod, error) {
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("reach the Kubernetes API from inside the cluster: %w", err)
@@ -49,15 +48,18 @@ func NewInClusterPod(namespace string, settings PodSettings) (*Pod, error) {
 		return nil, err
 	}
 
-	return NewPod(client.CoreV1().Pods(namespace), settings), nil
+	pods := client.CoreV1().Pods(namespace)
+
+	return func(owner string) *Pod { return NewPod(pods, settings, owner) }, nil
 }
 
-func NewPod(pods corev1client.PodInterface, settings PodSettings) *Pod {
-	return &Pod{pods: pods, settings: settings}
+// The owner is already a DNS-safe name, so it makes the pod's name as it is.
+func NewPod(pods corev1client.PodInterface, settings PodSettings, owner string) *Pod {
+	return &Pod{pods: pods, settings: settings, owner: owner}
 }
 
 func (p *Pod) Up(ctx context.Context) error {
-	_, err := p.pods.Create(ctx, p.settings.spec(), metav1.CreateOptions{})
+	_, err := p.pods.Create(ctx, p.settings.spec(p.name(), p.owner), metav1.CreateOptions{})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("create the lab pod: %w", err)
 	}
@@ -66,7 +68,7 @@ func (p *Pod) Up(ctx context.Context) error {
 }
 
 func (p *Pod) Down(ctx context.Context) (bool, error) {
-	err := p.pods.Delete(ctx, podName, metav1.DeleteOptions{})
+	err := p.pods.Delete(ctx, p.name(), metav1.DeleteOptions{})
 	if apierrors.IsNotFound(err) {
 		return false, nil
 	}
@@ -79,7 +81,7 @@ func (p *Pod) Down(ctx context.Context) (bool, error) {
 }
 
 func (p *Pod) Where(ctx context.Context) (labagent.Place, error) {
-	pod, err := p.pods.Get(ctx, podName, metav1.GetOptions{})
+	pod, err := p.pods.Get(ctx, p.name(), metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		return labagent.Place{Lab: labs.Lab{State: labs.None}}, nil
 	}
@@ -95,6 +97,10 @@ func (p *Pod) Where(ctx context.Context) (labagent.Place, error) {
 	return labagent.Place{URL: "http://" + net.JoinHostPort(pod.Status.PodIP, agentPort), OnDemand: true}, nil
 }
 
+func (p *Pod) name() string {
+	return "lab-" + p.owner
+}
+
 // Pull and config errors don't fix themselves, so the lab fails instead of starting forever.
 var brokenContainer = map[string]bool{
 	"ErrImagePull": true, "ImagePullBackOff": true, "InvalidImageName": true,
@@ -103,11 +109,14 @@ var brokenContainer = map[string]bool{
 
 // The same container as the compose file's lab: Docker inside runs the kind cluster, so it is privileged. It gets a
 // labs node to itself, and is never restarted: a crashed lab shows as failed, and Start makes a new one.
-func (s PodSettings) spec() *corev1.Pod {
+func (s PodSettings) spec(name, owner string) *corev1.Pod {
 	privileged, noToken, noLinks, grace := true, false, false, int64(30)
 
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: podName, Labels: map[string]string{"app": "cka-sim-lab"}},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: map[string]string{"app": "cka-sim-lab", "cka-sim/owner": owner},
+		},
 		Spec: corev1.PodSpec{
 			RestartPolicy: corev1.RestartPolicyNever,
 			NodeSelector:  map[string]string{"pool": "labs"},

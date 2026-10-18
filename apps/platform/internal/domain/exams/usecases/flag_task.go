@@ -7,35 +7,40 @@ import (
 )
 
 type FlagTask struct {
-	s *session
+	ss *sessions
 }
 
-func (uc *FlagTask) Execute(ctx context.Context, id string, flagged bool) error {
-	uc.s.mu.Lock()
-	defer uc.s.mu.Unlock()
+func (uc *FlagTask) Execute(ctx context.Context, owner, id string, flagged bool) error {
+	s, err := uc.ss.of(owner)
+	if err != nil {
+		return err
+	}
 
-	uc.s.endIfExpired(ctx)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.endIfExpired(ctx)
 
 	switch {
-	case uc.s.exam == nil:
+	case s.exam == nil:
 		return exams.ErrNoExam
-	case uc.s.exam.Over():
+	case s.exam.Over():
 		return exams.ErrEnded
 	}
 
-	i := uc.s.exam.Index(id)
+	i := s.exam.Index(id)
 	if i < 0 {
 		return exams.ErrNotInExam
 	}
 
-	changed := uc.s.exam.Clone()
+	changed := s.exam.Clone()
 	changed.Tasks[i].Flagged = flagged
 
-	if err := uc.s.save(changed); err != nil {
+	if err := s.save(changed); err != nil {
 		return err
 	}
 
-	uc.s.exam.Tasks[i].Flagged = flagged
+	s.exam.Tasks[i].Flagged = flagged
 
 	return nil
 }

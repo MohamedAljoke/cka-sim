@@ -17,7 +17,7 @@ var fair = tasks.Task{ID: "wl-scale", Host: "cka-sim-control-plane", Setup: "set
 func TestAFairTaskPassesItsSelftest(t *testing.T) {
 	l := &lab{before: "FAIL 2 web has 4 replicas\n", after: "PASS 2 web has 4 replicas\n"}
 
-	err := newSelftest(l).Execute(context.Background(), "wl-scale")
+	err := newSelftest(l).Execute(context.Background(), owner, "wl-scale")
 
 	if err != nil || !slices.Equal(l.ran, []string{"set up", "check", "solve", "check"}) {
 		t.Errorf("got %v, ran %v", err, l.ran)
@@ -27,7 +27,7 @@ func TestAFairTaskPassesItsSelftest(t *testing.T) {
 func TestATaskThatEarnsPointsBeforeTheSolutionFails(t *testing.T) {
 	l := &lab{before: "PASS 1 Pod web exists\nFAIL 1 Pod web is Running\n"}
 
-	err := newSelftest(l).Execute(context.Background(), "wl-scale")
+	err := newSelftest(l).Execute(context.Background(), owner, "wl-scale")
 
 	if err == nil || err.Error() != `wl-scale earns 1/2 before the solution: "Pod web exists"` || slices.Contains(l.ran, "solve") {
 		t.Errorf("got %v, ran %v", err, l.ran)
@@ -37,7 +37,7 @@ func TestATaskThatEarnsPointsBeforeTheSolutionFails(t *testing.T) {
 func TestASolutionThatMissesACheckFails(t *testing.T) {
 	l := &lab{before: "FAIL 1 Pod web exists\nFAIL 1 Pod web is Running\n", after: "PASS 1 Pod web exists\nFAIL 1 Pod web is Running\n"}
 
-	err := newSelftest(l).Execute(context.Background(), "wl-scale")
+	err := newSelftest(l).Execute(context.Background(), owner, "wl-scale")
 
 	if err == nil || err.Error() != `wl-scale earns 1/2 after the solution: "Pod web is Running"` {
 		t.Errorf("got %v", err)
@@ -47,7 +47,7 @@ func TestASolutionThatMissesACheckFails(t *testing.T) {
 func TestACheckThatPrintsNoChecksFails(t *testing.T) {
 	l := &lab{before: "bash: jq: command not found\n"}
 
-	err := newSelftest(l).Execute(context.Background(), "wl-scale")
+	err := newSelftest(l).Execute(context.Background(), owner, "wl-scale")
 
 	if err == nil || !strings.Contains(err.Error(), "prints no checks") || !strings.Contains(err.Error(), "jq") {
 		t.Errorf("got %v", err)
@@ -57,7 +57,7 @@ func TestACheckThatPrintsNoChecksFails(t *testing.T) {
 func TestAFailedSetupFailsTheSelftest(t *testing.T) {
 	l := &lab{setUp: labs.ScriptResult{Output: "no such node", ExitCode: 1}}
 
-	err := newSelftest(l).Execute(context.Background(), "wl-scale")
+	err := newSelftest(l).Execute(context.Background(), owner, "wl-scale")
 
 	if err == nil || !strings.Contains(err.Error(), "no such node") || len(l.ran) != 1 {
 		t.Errorf("got %v, ran %v", err, l.ran)
@@ -67,7 +67,7 @@ func TestAFailedSetupFailsTheSelftest(t *testing.T) {
 func TestAFailedSolutionFailsTheSelftest(t *testing.T) {
 	l := &lab{before: "FAIL 1 Pod web exists\n", solve: labs.ScriptResult{Output: "image not found", ExitCode: 1}}
 
-	err := newSelftest(l).Execute(context.Background(), "wl-scale")
+	err := newSelftest(l).Execute(context.Background(), owner, "wl-scale")
 
 	if err == nil || !strings.Contains(err.Error(), "solve wl-scale") || !strings.Contains(err.Error(), "image not found") {
 		t.Errorf("got %v", err)
@@ -77,7 +77,7 @@ func TestAFailedSolutionFailsTheSelftest(t *testing.T) {
 func TestASelftestOnALabThatIsNotReadyStaysNotReady(t *testing.T) {
 	l := &lab{err: fmt.Errorf("%w: the cluster is creating", labs.ErrNotReady)}
 
-	err := newSelftest(l).Execute(context.Background(), "wl-scale")
+	err := newSelftest(l).Execute(context.Background(), owner, "wl-scale")
 
 	if !errors.Is(err, labs.ErrNotReady) {
 		t.Errorf("got %v", err)
@@ -87,7 +87,7 @@ func TestASelftestOnALabThatIsNotReadyStaysNotReady(t *testing.T) {
 func TestSelftestingAnUnknownTaskIsNotFound(t *testing.T) {
 	l := &lab{}
 
-	err := newSelftest(l).Execute(context.Background(), "net-svc")
+	err := newSelftest(l).Execute(context.Background(), owner, "net-svc")
 
 	if !errors.Is(err, tasks.ErrNotFound) || len(l.ran) != 0 {
 		t.Errorf("got %v, ran %v", err, l.ran)
@@ -95,7 +95,7 @@ func TestSelftestingAnUnknownTaskIsNotFound(t *testing.T) {
 }
 
 func newSelftest(r ScriptRunner) *SelftestTask {
-	repo, c := fakeRepository{tasks: []tasks.Task{fair}}, newCluster()
+	repo, c := fakeRepository{tasks: []tasks.Task{fair}}, newClusters()
 	start := NewStartTask(repo, NewHealCluster(repo, r, c), NewSetUpTask(repo, r, c))
 
 	return NewSelftestTask(repo, r, c, start, NewCheckTask(repo, r))
@@ -110,7 +110,7 @@ type lab struct {
 	ran           []string
 }
 
-func (l *lab) RunScript(_ context.Context, _, script string) (labs.ScriptResult, error) {
+func (l *lab) RunScript(_ context.Context, _, _, script string) (labs.ScriptResult, error) {
 	l.ran = append(l.ran, script)
 
 	switch {

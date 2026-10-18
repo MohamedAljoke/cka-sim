@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"syscall"
 	"time"
 
@@ -35,9 +37,11 @@ type settings struct {
 	LabNamespace   string `key:"CKA_SIM_LAB_NAMESPACE" default:"cka-sim-labs"`
 	LabImage       string `key:"CKA_SIM_LAB_IMAGE" default:"ghcr.io/mohamedaljoke/cka-sim-lab:main"`
 	LabTokenSecret string `key:"CKA_SIM_LAB_TOKEN_SECRET" default:"cka-sim-agent"`
+	// "alice=<token>,bob=<token>": each student, with the token their link carries. Empty: everyone is "local".
+	Students string `key:"CKA_SIM_STUDENTS" default:""`
 }
 
-type lab interface {
+type labFleet interface {
 	labusecases.LabProvider
 	usecases.ScriptRunner
 }
@@ -73,24 +77,30 @@ func run() error {
 		return err
 	}
 
-	lab, err := labOf(cfg)
+	students, err := studentsOf(cfg.Students)
 	if err != nil {
 		return err
 	}
 
-	taskCases, labCases := usecases.New(taskRepo, lab), labusecases.New(lab)
-	examRepo := files.NewExamFile(filepath.Join(stateDir, "exam.json"))
+	fleet, err := fleetOf(cfg)
+	if err != nil {
+		return err
+	}
 
+	examDir, err := examDirOf(stateDir)
+	if err != nil {
+		return err
+	}
+
+	taskCases, labCases := usecases.New(taskRepo, fleet), labusecases.New(fleet)
 	rng := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
+	examCases := examusecases.New(files.NewExamFiles(examDir), taskCases, labCases.Get, time.Now, rng)
 
-	examCases, err := examusecases.New(examRepo, taskCases, labCases.Get, time.Now, rng)
-	if err != nil {
+	if err := examCases.Resume.Execute(ctx); err != nil {
 		return err
 	}
 
-	examCases.Resume.Execute(ctx)
-
-	handler := api.New(taskCases, labCases, examCases)
+	handler := api.New(taskCases, labCases, examCases, students)
 	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 
 	go func() {
@@ -115,26 +125,83 @@ func run() error {
 	return nil
 }
 
-func labOf(cfg settings) (lab, error) {
+// fleetOf gives each student a lab: their own pod on Kubernetes, or the one lab container on this machine.
+func fleetOf(cfg settings) (labFleet, error) {
 	switch cfg.Labs {
 	case "local":
 		if cfg.LabURL == "" {
 			return nil, errors.New("CKA_SIM_LAB_URL is required")
 		}
 
-		return labagent.NewLab(labagent.Fixed(cfg.LabURL), cfg.AgentToken), nil
+		container := labagent.Fixed(cfg.LabURL)
+
+		return labagent.NewFleet(func(string) labagent.Machine { return container }, cfg.AgentToken), nil
 	case "kubernetes":
 		settings := kube.PodSettings{Image: cfg.LabImage, TokenSecret: cfg.LabTokenSecret}
 
-		pod, err := kube.NewInClusterPod(cfg.LabNamespace, settings)
+		podOf, err := kube.NewInClusterPods(cfg.LabNamespace, settings)
 		if err != nil {
 			return nil, err
 		}
 
-		return labagent.NewLab(pod, cfg.AgentToken), nil
+		return labagent.NewFleet(func(owner string) labagent.Machine { return podOf(owner) }, cfg.AgentToken), nil
 	}
 
 	return nil, fmt.Errorf("CKA_SIM_LABS is %q; it must be local or kubernetes", cfg.Labs)
+}
+
+// examDirOf answers the folder of every student's exam. The one exam a server saved before there were students is
+// the local student's.
+func examDirOf(stateDir string) (string, error) {
+	dir := filepath.Join(stateDir, "exams")
+	before := filepath.Join(stateDir, "exam.json")
+
+	if _, err := os.Stat(before); errors.Is(err, os.ErrNotExist) {
+		return dir, nil
+	}
+
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", fmt.Errorf("make the exams folder: %w", err)
+	}
+
+	if err := os.Rename(before, filepath.Join(dir, localStudent+".json")); err != nil {
+		return "", fmt.Errorf("move the saved exam to the local student: %w", err)
+	}
+
+	return dir, nil
+}
+
+// The student on one person's machine, where no tokens are set; the API uses the same name.
+const localStudent = "local"
+
+// A name becomes the lab pod's name and the exam's file name, so it stays short, lowercase and DNS-safe.
+var studentName = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,28}[a-z0-9])?$`)
+
+const minToken = 32
+
+// studentsOf reads "alice=<token>,bob=<token>" into token → name.
+func studentsOf(list string) (map[string]string, error) {
+	students := map[string]string{}
+
+	for entry := range strings.SplitSeq(list, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+
+		name, token, _ := strings.Cut(entry, "=")
+		switch {
+		case !studentName.MatchString(name):
+			return nil, fmt.Errorf("CKA_SIM_STUDENTS: %q must be name=token, the name 1 to 30 lowercase letters, "+
+				"digits or dashes", name)
+		case len(token) < minToken:
+			return nil, fmt.Errorf("CKA_SIM_STUDENTS: %s's token must be at least %d characters", name, minToken)
+		}
+
+		students[token] = name
+	}
+
+	return students, nil
 }
 
 func stateDirOf(cfg settings) (string, error) {

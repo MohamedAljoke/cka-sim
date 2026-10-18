@@ -11,22 +11,22 @@ import (
 )
 
 type SelftestTask struct {
-	repo    TaskRepository
-	runner  ScriptRunner
-	cluster *cluster
-	start   *StartTask
-	check   *CheckTask
+	repo     TaskRepository
+	runner   ScriptRunner
+	clusters *clusters
+	start    *StartTask
+	check    *CheckTask
 }
 
-func NewSelftestTask(repo TaskRepository, runner ScriptRunner, cluster *cluster, start *StartTask,
+func NewSelftestTask(repo TaskRepository, runner ScriptRunner, clusters *clusters, start *StartTask,
 	check *CheckTask,
 ) *SelftestTask {
-	return &SelftestTask{repo: repo, runner: runner, cluster: cluster, start: start, check: check}
+	return &SelftestTask{repo: repo, runner: runner, clusters: clusters, start: start, check: check}
 }
 
 // Execute proves a task is fair on the running lab: after its setup nothing earns points, and after its
 // solution everything does.
-func (uc *SelftestTask) Execute(ctx context.Context, id string) error {
+func (uc *SelftestTask) Execute(ctx context.Context, owner, id string) error {
 	task, err := uc.repo.Get(ctx, id)
 	if errors.Is(err, tasks.ErrNotFound) {
 		return err
@@ -36,7 +36,7 @@ func (uc *SelftestTask) Execute(ctx context.Context, id string) error {
 		return fmt.Errorf("%w: %w", tasks.ErrUnavailable, err)
 	}
 
-	started, err := uc.start.Execute(ctx, id)
+	started, err := uc.start.Execute(ctx, owner, id)
 	if err != nil {
 		return err
 	}
@@ -45,7 +45,7 @@ func (uc *SelftestTask) Execute(ctx context.Context, id string) error {
 		return fmt.Errorf("set up %s: exit code %d:\n%s", id, started.ExitCode, started.Output)
 	}
 
-	before, err := uc.check.Execute(ctx, id)
+	before, err := uc.check.Execute(ctx, owner, id)
 	if err != nil {
 		return err
 	}
@@ -58,11 +58,11 @@ func (uc *SelftestTask) Execute(ctx context.Context, id string) error {
 			checks(before.Grade, true))
 	}
 
-	if err := uc.solve(ctx, task); err != nil {
+	if err := uc.solve(ctx, owner, task); err != nil {
 		return err
 	}
 
-	after, err := uc.check.Execute(ctx, id)
+	after, err := uc.check.Execute(ctx, owner, id)
 	if err != nil {
 		return err
 	}
@@ -75,14 +75,16 @@ func (uc *SelftestTask) Execute(ctx context.Context, id string) error {
 	return nil
 }
 
-func (uc *SelftestTask) solve(ctx context.Context, task tasks.Task) error {
+func (uc *SelftestTask) solve(ctx context.Context, owner string, task tasks.Task) error {
 	ctx, cancel := context.WithTimeout(ctx, setupTimeout)
 	defer cancel()
 
-	uc.cluster.scripts.RLock()
-	defer uc.cluster.scripts.RUnlock()
+	cluster := uc.clusters.of(owner)
 
-	result, err := uc.runner.RunScript(ctx, task.Host, task.Solve)
+	cluster.scripts.RLock()
+	defer cluster.scripts.RUnlock()
+
+	result, err := uc.runner.RunScript(ctx, owner, task.Host, task.Solve)
 	switch {
 	case errors.Is(err, labs.ErrNotReady):
 		return err

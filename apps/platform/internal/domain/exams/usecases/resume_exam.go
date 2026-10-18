@@ -1,23 +1,50 @@
 package usecases
 
-import "context"
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/exams"
+)
 
 type ResumeExam struct {
-	s *session
+	ss *sessions
 }
 
-// Execute picks up the setups or checks that a stopped server left unfinished.
-func (uc *ResumeExam) Execute(ctx context.Context) {
-	uc.s.mu.Lock()
-	defer uc.s.mu.Unlock()
+// Execute picks up the setups or checks that a stopped server left unfinished, for every owner with an exam.
+func (uc *ResumeExam) Execute(ctx context.Context) error {
+	owners, err := uc.ss.repo.Owners()
+	if err != nil {
+		return fmt.Errorf("%w: list the saved exams: %w", exams.ErrUnavailable, err)
+	}
+
+	var errs []error
+
+	for _, owner := range owners {
+		s, err := uc.ss.of(owner)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		s.resume(ctx)
+	}
+
+	return errors.Join(errs...)
+}
+
+func (s *session) resume(ctx context.Context) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	switch {
-	case uc.s.exam == nil:
-	case uc.s.exam.Scoring():
-		uc.s.grade(ctx)
-	case uc.s.exam.SettingUp():
-		uc.s.setUp(ctx)
+	case s.exam == nil:
+	case s.exam.Scoring():
+		s.grade(ctx)
+	case s.exam.SettingUp():
+		s.setUp(ctx)
 	default:
-		uc.s.endIfExpired(ctx)
+		s.endIfExpired(ctx)
 	}
 }

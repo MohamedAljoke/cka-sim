@@ -1,7 +1,6 @@
 package usecases
 
 import (
-	"fmt"
 	"math/rand/v2"
 	"time"
 
@@ -20,21 +19,15 @@ type UseCases struct {
 
 func New(
 	repo ExamRepository, tasks taskusecases.UseCases, lab *labusecases.GetLab, now func() time.Time, rng *rand.Rand,
-) (UseCases, error) {
-	saved, err := repo.Load()
-	if err != nil {
-		return UseCases{}, fmt.Errorf("load the saved exam: %w", err)
-	}
-
-	s := &session{exam: saved, repo: repo, heal: tasks.Heal, setUpTask: tasks.SetUp, check: tasks.Check,
-		tidy: tasks.Tidy, now: now, rng: rng}
+) UseCases {
+	perOwner := &sessions{all: map[string]*session{}, repo: repo, tasks: tasks, now: now, rng: rng}
 
 	return UseCases{
-		Begin:   &BeginExam{s: s, list: tasks.List, lab: lab},
-		Get:     &GetExam{s: s},
-		Flag:    &FlagTask{s: s},
-		End:     &EndExam{s: s},
-		Discard: &DiscardExam{s: s},
-		Resume:  &ResumeExam{s: s},
-	}, nil
+		Begin:   &BeginExam{ss: perOwner, list: tasks.List, lab: lab},
+		Get:     &GetExam{ss: perOwner},
+		Flag:    &FlagTask{ss: perOwner},
+		End:     &EndExam{ss: perOwner},
+		Discard: &DiscardExam{ss: perOwner},
+		Resume:  &ResumeExam{ss: perOwner},
+	}
 }

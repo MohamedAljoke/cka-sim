@@ -35,7 +35,7 @@ browser ──WebSocket /ws/assistant──► platform ──Connect stream─�
 - **The contract** is a `.proto` in `apps/go-shared/contract/assistant/v1/`, served and called with Connect, like
   `lab.proto`. Its one call is a bidirectional `OpenSession` stream that mirrors `OpenShell`: the first message
   carries the terminal size (and, from Part 3, the task), then keys, resizes and output.
-- **Tokens, with no accounts yet:**
+- **Tokens (until students, 3.1 in BUILD-IN-STEPS, add a `sub`):**
   - The platform calls the assistant with a bearer token (`rpcauth`, as with the agent).
   - The assistant calls the platform back with a second token, which is accepted only on the read-only
     assistant routes.
@@ -95,7 +95,7 @@ its settings files, its environment), so a second one is one more adapter.
     read-only locally). With none, the session prints one line saying the assistant isn't configured and
     ends.
   - Limits:
-    - one session per lab;
+    - one session per student (per lab, until each student has one);
     - an idle timeout (`CKA_SIM_ASSISTANT_IDLE`);
     - a log line per session (start, end, duration).
 - **Review:**

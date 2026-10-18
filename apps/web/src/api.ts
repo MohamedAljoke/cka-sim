@@ -138,6 +138,15 @@ export async function flagTask(id: string, flagged: boolean, signal?: AbortSigna
   await call(flagged ? 'PUT' : 'DELETE', `/api/exam/tasks/${encodeURIComponent(id)}/flag`, signal)
 }
 
+// Null when the site gives each student a token and this browser has none.
+export async function getStudent(): Promise<string | null> {
+  const res = await fetch('/api/student')
+  if (res.status === 401) return null
+  if (!res.ok) throw await failure(res, 'GET', '/api/student')
+  const student: { name: string } = await res.json()
+  return student.name
+}
+
 async function call(method: string, path: string, signal?: AbortSignal, body?: unknown): Promise<Response> {
   const res = await fetch(path, body === undefined ? { method, signal } : {
     method,

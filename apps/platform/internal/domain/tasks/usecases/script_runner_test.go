@@ -6,6 +6,9 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
 )
 
+// owner is the student every task test acts for.
+const owner = "alice"
+
 type fakeRunner struct {
 	result      labs.ScriptResult
 	results     map[string]labs.ScriptResult
@@ -17,7 +20,7 @@ type fakeRunner struct {
 	hasDeadline bool
 }
 
-func (r *fakeRunner) RunScript(ctx context.Context, host, script string) (labs.ScriptResult, error) {
+func (r *fakeRunner) RunScript(ctx context.Context, _, host, script string) (labs.ScriptResult, error) {
 	r.host, r.script, r.ctxErr = host, script, ctx.Err()
 	r.ran = append(r.ran, script)
 	_, r.hasDeadline = ctx.Deadline()

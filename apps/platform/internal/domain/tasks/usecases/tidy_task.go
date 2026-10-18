@@ -13,19 +13,19 @@ import (
 const tidyTimeout = time.Minute
 
 type TidyTask struct {
-	repo    TaskRepository
-	runner  ScriptRunner
-	cluster *cluster
+	repo     TaskRepository
+	runner   ScriptRunner
+	clusters *clusters
 }
 
-func NewTidyTask(repo TaskRepository, runner ScriptRunner, cluster *cluster) *TidyTask {
-	return &TidyTask{repo: repo, runner: runner, cluster: cluster}
+func NewTidyTask(repo TaskRepository, runner ScriptRunner, clusters *clusters) *TidyTask {
+	return &TidyTask{repo: repo, runner: runner, clusters: clusters}
 }
 
 // Execute undoes what each task broke, then deletes the namespaces its setup made without waiting for them to go.
 // The tasks are tidied together, so no setup runs between two of them. A reset runs even on a task that isn't
 // touched: a restarted server no longer knows what was set up.
-func (uc *TidyTask) Execute(ctx context.Context, ids ...string) error {
+func (uc *TidyTask) Execute(ctx context.Context, owner string, ids ...string) error {
 	all := make([]tasks.Task, 0, len(ids))
 
 	for _, id := range ids {
@@ -41,13 +41,15 @@ func (uc *TidyTask) Execute(ctx context.Context, ids ...string) error {
 		all = append(all, task)
 	}
 
-	uc.cluster.scripts.Lock()
-	defer uc.cluster.scripts.Unlock()
+	cluster := uc.clusters.of(owner)
+
+	cluster.scripts.Lock()
+	defer cluster.scripts.Unlock()
 
 	var errs []error
 
 	for _, task := range all {
-		err := uc.tidy(ctx, task)
+		err := uc.tidy(ctx, owner, cluster, task)
 		if errors.Is(err, labs.ErrNotReady) || errors.Is(err, labs.ErrUnavailable) {
 			return err
 		}
@@ -58,25 +60,25 @@ func (uc *TidyTask) Execute(ctx context.Context, ids ...string) error {
 	return errors.Join(errs...)
 }
 
-func (uc *TidyTask) tidy(ctx context.Context, task tasks.Task) error {
+func (uc *TidyTask) tidy(ctx context.Context, owner string, cluster *cluster, task tasks.Task) error {
 	if task.Reset != "" {
-		result, err := reset(ctx, uc.runner, task)
+		result, err := reset(ctx, uc.runner, owner, task)
 		if err != nil {
 			return err
 		}
 
 		if !result.Passed() {
-			uc.cluster.touch(task.ID)
+			cluster.touch(task.ID)
 			return fmt.Errorf("reset %s exited with code %d:\n%s", task.ID, result.ExitCode, result.Output)
 		}
 	}
 
-	uc.cluster.forget(task.ID)
+	cluster.forget(task.ID)
 
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), tidyTimeout)
 	defer cancel()
 
-	result, err := uc.runner.RunScript(ctx, task.Host, TidyScript(task.ID))
+	result, err := uc.runner.RunScript(ctx, owner, task.Host, TidyScript(task.ID))
 	switch {
 	case errors.Is(err, labs.ErrNotReady):
 		return err

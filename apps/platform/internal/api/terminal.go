@@ -48,7 +48,7 @@ func (a *api) terminal(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 
-	shell, err := a.labs.OpenShell.Execute(ctx, size)
+	shell, err := a.labs.OpenShell.Execute(ctx, studentOf(r), size)
 	if err != nil {
 		refuseShell(ctx, conn, err)
 		return nil

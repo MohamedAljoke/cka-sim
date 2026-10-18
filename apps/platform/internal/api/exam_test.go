@@ -128,18 +128,14 @@ func newExamAPI(r *fakeRunner, lab *fakeLabProvider) http.Handler {
 	}
 	taskCases := usecases.New(fakeRepository{tasks: []tasks.Task{wlScale}}, r)
 	labCases := labusecases.New(lab)
-	return New(taskCases, labCases, examsFor(taskCases, labCases, nil))
+	return New(taskCases, labCases, examsFor(taskCases, labCases, nil), nil)
 }
 
 func examsFor(taskCases usecases.UseCases, labCases labusecases.UseCases, repo examusecases.ExamRepository) examusecases.UseCases {
 	if repo == nil {
 		repo = &memoryExams{}
 	}
-	uc, err := examusecases.New(repo, taskCases, labCases.Get, time.Now, rand.New(rand.NewPCG(1, 2)))
-	if err != nil {
-		panic(err)
-	}
-	return uc
+	return examusecases.New(repo, taskCases, labCases.Get, time.Now, rand.New(rand.NewPCG(1, 2)))
 }
 
 func send(t *testing.T, h http.Handler, method, path, body string) (int, string) {
@@ -171,9 +167,11 @@ type memoryExams struct {
 	exam *exams.Exam
 }
 
-func (m *memoryExams) Load() (*exams.Exam, error) { return nil, nil }
+func (m *memoryExams) Load(string) (*exams.Exam, error) { return nil, nil }
 
-func (m *memoryExams) Save(e exams.Exam) error {
+func (m *memoryExams) Owners() ([]string, error) { return nil, nil }
+
+func (m *memoryExams) Save(_ string, e exams.Exam) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	e = e.Clone()
@@ -181,7 +179,7 @@ func (m *memoryExams) Save(e exams.Exam) error {
 	return nil
 }
 
-func (m *memoryExams) Clear() error {
+func (m *memoryExams) Clear(string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.exam = nil

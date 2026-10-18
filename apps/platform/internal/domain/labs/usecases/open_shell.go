@@ -16,8 +16,8 @@ func NewOpenShell(provider LabProvider) *OpenShell {
 	return &OpenShell{provider: provider}
 }
 
-func (uc *OpenShell) Execute(ctx context.Context, size labs.TerminalSize) (Shell, error) {
-	shell, err := uc.provider.OpenShell(ctx, size)
+func (uc *OpenShell) Execute(ctx context.Context, owner string, size labs.TerminalSize) (Shell, error) {
+	shell, err := uc.provider.OpenShell(ctx, owner, size)
 	switch {
 	case errors.Is(err, labs.ErrNotReady):
 		return nil, err

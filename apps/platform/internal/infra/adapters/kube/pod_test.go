@@ -20,12 +20,12 @@ var settings = PodSettings{Image: "ghcr.io/mohamedaljoke/cka-sim-lab:main", Toke
 
 func TestUpCreatesThePodTheManifestsExpect(t *testing.T) {
 	client := fake.NewClientset()
-	pod := NewPod(client.CoreV1().Pods(namespace), settings)
+	pod := NewPod(client.CoreV1().Pods(namespace), settings, "alice")
 
 	if err := pod.Up(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	got, err := client.CoreV1().Pods(namespace).Get(context.Background(), "lab", metav1.GetOptions{})
+	got, err := client.CoreV1().Pods(namespace).Get(context.Background(), "lab-alice", metav1.GetOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestUpCreatesThePodTheManifestsExpect(t *testing.T) {
 }
 
 func TestUpTwiceKeepsTheOnePod(t *testing.T) {
-	pod := NewPod(fake.NewClientset().CoreV1().Pods(namespace), settings)
+	pod := NewPod(fake.NewClientset().CoreV1().Pods(namespace), settings, "alice")
 
 	for range 2 {
 		if err := pod.Up(context.Background()); err != nil {
@@ -66,7 +66,7 @@ func TestUpTwiceKeepsTheOnePod(t *testing.T) {
 
 func TestDownDeletesThePodAndSaysWhetherThereWasOne(t *testing.T) {
 	client := fake.NewClientset(labPod(corev1.PodStatus{}))
-	pod := NewPod(client.CoreV1().Pods(namespace), settings)
+	pod := NewPod(client.CoreV1().Pods(namespace), settings, "alice")
 
 	for _, want := range []bool{true, false} {
 		removed, err := pod.Down(context.Background())
@@ -105,7 +105,7 @@ func TestWhereFollowsThePodUntilItsAgentAnswers(t *testing.T) {
 			want: labagent.Place{Lab: labs.Lab{State: labs.Stopping}},
 		},
 	} {
-		got, err := NewPod(clientWith(tc.pod).CoreV1().Pods(namespace), settings).Where(context.Background())
+		got, err := NewPod(clientWith(tc.pod).CoreV1().Pods(namespace), settings, "alice").Where(context.Background())
 		got.Lab.StartedAt = time.Time{}
 		if err != nil || got != tc.want {
 			t.Errorf("%s: got %+v, %v; want %+v", name, got, err, tc.want)
@@ -134,7 +134,7 @@ func TestALabPodThatCantRunIsAFailedLab(t *testing.T) {
 			want:   "the lab pod stopped",
 		},
 	} {
-		got, err := NewPod(clientWith(labPod(tc.status)).CoreV1().Pods(namespace), settings).Where(context.Background())
+		got, err := NewPod(clientWith(labPod(tc.status)).CoreV1().Pods(namespace), settings, "alice").Where(context.Background())
 		if err != nil || got.URL != "" || got.Lab.State != labs.Failed || got.Lab.Error != tc.want {
 			t.Errorf("%s: got %+v, %v; want failed with %q", name, got, err, tc.want)
 		}
@@ -146,14 +146,14 @@ func TestAStartingLabStartedWhenItsPodWasMade(t *testing.T) {
 	p := labPod(corev1.PodStatus{Phase: corev1.PodPending})
 	p.CreationTimestamp = metav1.NewTime(made)
 
-	got, err := NewPod(clientWith(p).CoreV1().Pods(namespace), settings).Where(context.Background())
+	got, err := NewPod(clientWith(p).CoreV1().Pods(namespace), settings, "alice").Where(context.Background())
 	if err != nil || !got.Lab.StartedAt.Equal(made) {
 		t.Errorf("got %+v, %v; want started at %s", got.Lab, err, made)
 	}
 }
 
 func labPod(status corev1.PodStatus) *corev1.Pod {
-	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "lab", Namespace: namespace}, Status: status}
+	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "lab-alice", Namespace: namespace}, Status: status}
 }
 
 func withDeletion(pod *corev1.Pod, at *metav1.Time) *corev1.Pod {

@@ -16,8 +16,8 @@ func NewStopLab(provider LabProvider) *StopLab {
 	return &StopLab{provider: provider}
 }
 
-func (uc *StopLab) Execute(ctx context.Context) (labs.Lab, error) {
-	lab, err := uc.provider.Stop(ctx)
+func (uc *StopLab) Execute(ctx context.Context, owner string) (labs.Lab, error) {
+	lab, err := uc.provider.Stop(ctx, owner)
 	switch {
 	case errors.Is(err, labs.ErrBusy):
 		return labs.Lab{}, err

@@ -14,8 +14,8 @@ func TestStartHealsWhatAnEarlierTaskBrokeThenSetsUp(t *testing.T) {
 	r := &fakeRunner{}
 	start := newStart(breakers, r)
 
-	start.Execute(context.Background(), "tr-kubelet")
-	got, err := start.Execute(context.Background(), "wl-scale")
+	start.Execute(context.Background(), owner, "tr-kubelet")
+	got, err := start.Execute(context.Background(), owner, "wl-scale")
 
 	if err != nil || !got.Passed() || !slices.Equal(r.ran, []string{"break kubelet", "fix kubelet", "fresh_ns wl-scale\n"}) {
 		t.Errorf("Execute = %+v, %v; ran %v", got, err, r.ran)
@@ -25,9 +25,9 @@ func TestStartHealsWhatAnEarlierTaskBrokeThenSetsUp(t *testing.T) {
 func TestAFailedResetAnswersInPlaceOfTheSetup(t *testing.T) {
 	r := &fakeRunner{results: map[string]labs.ScriptResult{"fix kubelet": {ExitCode: 1}}}
 	start := newStart(breakers, r)
-	start.Execute(context.Background(), "tr-kubelet")
+	start.Execute(context.Background(), owner, "tr-kubelet")
 
-	got, err := start.Execute(context.Background(), "wl-scale")
+	got, err := start.Execute(context.Background(), owner, "wl-scale")
 
 	if err != nil || got.Passed() || slices.Contains(r.ran, "fresh_ns wl-scale\n") {
 		t.Errorf("Execute = %+v, %v; ran %v", got, err, r.ran)
@@ -37,9 +37,9 @@ func TestAFailedResetAnswersInPlaceOfTheSetup(t *testing.T) {
 func TestStartingAnUnknownTaskHealsNothing(t *testing.T) {
 	r := &fakeRunner{}
 	start := newStart(breakers, r)
-	start.Execute(context.Background(), "tr-kubelet")
+	start.Execute(context.Background(), owner, "tr-kubelet")
 
-	_, err := start.Execute(context.Background(), "net-svc")
+	_, err := start.Execute(context.Background(), owner, "net-svc")
 
 	if !errors.Is(err, tasks.ErrNotFound) || len(r.ran) != 1 {
 		t.Errorf("got %v, ran %v", err, r.ran)
@@ -47,7 +47,7 @@ func TestStartingAnUnknownTaskHealsNothing(t *testing.T) {
 }
 
 func TestStartIsUnavailableWhenTheRepositoryFails(t *testing.T) {
-	_, err := newStart(fakeRepository{err: errors.New("disk gone")}, &fakeRunner{}).Execute(context.Background(), "wl-scale")
+	_, err := newStart(fakeRepository{err: errors.New("disk gone")}, &fakeRunner{}).Execute(context.Background(), owner, "wl-scale")
 
 	if !errors.Is(err, tasks.ErrUnavailable) {
 		t.Errorf("got %v", err)
@@ -55,6 +55,6 @@ func TestStartIsUnavailableWhenTheRepositoryFails(t *testing.T) {
 }
 
 func newStart(repo TaskRepository, r ScriptRunner) *StartTask {
-	c := newCluster()
+	c := newClusters()
 	return NewStartTask(repo, NewHealCluster(repo, r, c), NewSetUpTask(repo, r, c))
 }

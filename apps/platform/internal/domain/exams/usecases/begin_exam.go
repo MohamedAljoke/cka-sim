@@ -11,18 +11,18 @@ import (
 )
 
 type BeginExam struct {
-	s    *session
+	ss   *sessions
 	list *taskusecases.ListTasks
 	lab  *labusecases.GetLab
 }
 
 // Setups run in the background; the exam answers at once and its tasks report as each setup lands.
-func (uc *BeginExam) Execute(ctx context.Context, count, minutes int) (exams.Exam, error) {
+func (uc *BeginExam) Execute(ctx context.Context, owner string, count, minutes int) (exams.Exam, error) {
 	if err := exams.Validate(count, minutes); err != nil {
 		return exams.Exam{}, err
 	}
 
-	lab, err := uc.lab.Execute(ctx)
+	lab, err := uc.lab.Execute(ctx, owner)
 	if err != nil {
 		return exams.Exam{}, err
 	}
@@ -36,31 +36,36 @@ func (uc *BeginExam) Execute(ctx context.Context, count, minutes int) (exams.Exa
 		return exams.Exam{}, err
 	}
 
-	uc.s.mu.Lock()
-	defer uc.s.mu.Unlock()
+	s, err := uc.ss.of(owner)
+	if err != nil {
+		return exams.Exam{}, err
+	}
 
-	uc.s.endIfExpired(ctx)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.endIfExpired(ctx)
 
 	switch {
-	case uc.s.exam == nil:
-	case !uc.s.exam.Over():
+	case s.exam == nil:
+	case !s.exam.Over():
 		return exams.Exam{}, exams.ErrRunning
-	case uc.s.exam.Scoring():
+	case s.exam.Scoring():
 		return exams.Exam{}, exams.ErrScoring
 	}
 
-	drawn := tasks.Draw(all, count, uc.s.rng)
+	drawn := tasks.Draw(all, count, s.rng)
 	if len(drawn) == 0 {
 		return exams.Exam{}, exams.ErrNoTasks
 	}
 
 	exam := exams.New(drawn, minutes)
-	if err := uc.s.save(exam); err != nil {
+	if err := s.save(exam); err != nil {
 		return exams.Exam{}, err
 	}
 
-	uc.s.exam = &exam
-	uc.s.setUp(ctx)
+	s.exam = &exam
+	s.setUp(ctx)
 
 	return exam.Clone(), nil
 }

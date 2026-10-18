@@ -13,17 +13,17 @@ import (
 const setupTimeout = 3 * time.Minute
 
 type SetUpTask struct {
-	repo    TaskRepository
-	runner  ScriptRunner
-	cluster *cluster
+	repo     TaskRepository
+	runner   ScriptRunner
+	clusters *clusters
 }
 
-func NewSetUpTask(repo TaskRepository, runner ScriptRunner, cluster *cluster) *SetUpTask {
-	return &SetUpTask{repo: repo, runner: runner, cluster: cluster}
+func NewSetUpTask(repo TaskRepository, runner ScriptRunner, clusters *clusters) *SetUpTask {
+	return &SetUpTask{repo: repo, runner: runner, clusters: clusters}
 }
 
 // A setup left half done breaks the task, so it runs to the end even when the page that asked goes away.
-func (uc *SetUpTask) Execute(ctx context.Context, id string) (labs.ScriptResult, error) {
+func (uc *SetUpTask) Execute(ctx context.Context, owner, id string) (labs.ScriptResult, error) {
 	task, err := uc.repo.Get(ctx, id)
 	if errors.Is(err, tasks.ErrNotFound) {
 		return labs.ScriptResult{}, err
@@ -36,12 +36,14 @@ func (uc *SetUpTask) Execute(ctx context.Context, id string) (labs.ScriptResult,
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), setupTimeout)
 	defer cancel()
 
-	uc.cluster.scripts.RLock()
-	defer uc.cluster.scripts.RUnlock()
+	cluster := uc.clusters.of(owner)
 
-	uc.cluster.touch(id)
+	cluster.scripts.RLock()
+	defer cluster.scripts.RUnlock()
 
-	result, err := uc.runner.RunScript(ctx, task.Host, task.Setup)
+	cluster.touch(id)
+
+	result, err := uc.runner.RunScript(ctx, owner, task.Host, task.Setup)
 	switch {
 	case errors.Is(err, labs.ErrNotReady):
 		return labs.ScriptResult{}, err

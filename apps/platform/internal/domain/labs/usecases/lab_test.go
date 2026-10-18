@@ -14,12 +14,12 @@ import (
 func TestEachUseCaseReturnsWhatTheProviderSays(t *testing.T) {
 	p := fakeProvider{lab: labs.Lab{State: labs.Starting, Step: "Preparing nodes"}}
 
-	for name, execute := range map[string]func(context.Context) (labs.Lab, error){
+	for name, execute := range map[string]func(context.Context, string) (labs.Lab, error){
 		"get":   NewGetLab(p).Execute,
 		"start": NewStartLab(p).Execute,
 		"stop":  NewStopLab(p).Execute,
 	} {
-		got, err := execute(context.Background())
+		got, err := execute(context.Background(), "alice")
 
 		if err != nil || got != p.lab {
 			t.Errorf("%s: got %+v, %v", name, got, err)
@@ -30,12 +30,12 @@ func TestEachUseCaseReturnsWhatTheProviderSays(t *testing.T) {
 func TestAProviderFailureMakesTheLabUnavailableAndKeepsTheCause(t *testing.T) {
 	p := fakeProvider{err: errors.New("dial tcp 127.0.0.1:7171: connection refused")}
 
-	for name, execute := range map[string]func(context.Context) (labs.Lab, error){
+	for name, execute := range map[string]func(context.Context, string) (labs.Lab, error){
 		"get":   NewGetLab(p).Execute,
 		"start": NewStartLab(p).Execute,
 		"stop":  NewStopLab(p).Execute,
 	} {
-		_, err := execute(context.Background())
+		_, err := execute(context.Background(), "alice")
 
 		if !errors.Is(err, labs.ErrUnavailable) || !strings.Contains(err.Error(), "connection refused") {
 			t.Errorf("%s: got %v", name, err)
@@ -46,11 +46,11 @@ func TestAProviderFailureMakesTheLabUnavailableAndKeepsTheCause(t *testing.T) {
 func TestABusyLabStaysBusy(t *testing.T) {
 	p := fakeProvider{err: fmt.Errorf("%w: delete while creating", labs.ErrBusy)}
 
-	for name, execute := range map[string]func(context.Context) (labs.Lab, error){
+	for name, execute := range map[string]func(context.Context, string) (labs.Lab, error){
 		"start": NewStartLab(p).Execute,
 		"stop":  NewStopLab(p).Execute,
 	} {
-		_, err := execute(context.Background())
+		_, err := execute(context.Background(), "alice")
 
 		if !errors.Is(err, labs.ErrBusy) || errors.Is(err, labs.ErrUnavailable) {
 			t.Errorf("%s: got %v", name, err)
@@ -62,7 +62,7 @@ func TestAShellOpensAtTheTerminalsSize(t *testing.T) {
 	p := fakeProvider{}
 	size := labs.TerminalSize{Cols: 120, Rows: 40}
 
-	shell, err := NewOpenShell(p).Execute(context.Background(), size)
+	shell, err := NewOpenShell(p).Execute(context.Background(), "alice", size)
 
 	if err != nil || shell.(fakeShell).size != size {
 		t.Errorf("got %+v, %v", shell, err)
@@ -72,7 +72,7 @@ func TestAShellOpensAtTheTerminalsSize(t *testing.T) {
 func TestAShellOnALabThatIsNotReadyStaysNotReady(t *testing.T) {
 	p := fakeProvider{err: fmt.Errorf("%w: the cluster is creating", labs.ErrNotReady)}
 
-	_, err := NewOpenShell(p).Execute(context.Background(), labs.TerminalSize{Cols: 80, Rows: 24})
+	_, err := NewOpenShell(p).Execute(context.Background(), "alice", labs.TerminalSize{Cols: 80, Rows: 24})
 
 	if !errors.Is(err, labs.ErrNotReady) || errors.Is(err, labs.ErrUnavailable) {
 		t.Errorf("got %v", err)
@@ -82,7 +82,7 @@ func TestAShellOnALabThatIsNotReadyStaysNotReady(t *testing.T) {
 func TestAShellThatCannotOpenMakesTheLabUnavailableAndKeepsTheCause(t *testing.T) {
 	p := fakeProvider{err: errors.New("dial tcp 127.0.0.1:7171: connection refused")}
 
-	_, err := NewOpenShell(p).Execute(context.Background(), labs.TerminalSize{Cols: 80, Rows: 24})
+	_, err := NewOpenShell(p).Execute(context.Background(), "alice", labs.TerminalSize{Cols: 80, Rows: 24})
 
 	if !errors.Is(err, labs.ErrUnavailable) || !strings.Contains(err.Error(), "connection refused") {
 		t.Errorf("got %v", err)
@@ -94,11 +94,11 @@ type fakeProvider struct {
 	err error
 }
 
-func (p fakeProvider) Get(context.Context) (labs.Lab, error)   { return p.lab, p.err }
-func (p fakeProvider) Start(context.Context) (labs.Lab, error) { return p.lab, p.err }
-func (p fakeProvider) Stop(context.Context) (labs.Lab, error)  { return p.lab, p.err }
+func (p fakeProvider) Get(context.Context, string) (labs.Lab, error)   { return p.lab, p.err }
+func (p fakeProvider) Start(context.Context, string) (labs.Lab, error) { return p.lab, p.err }
+func (p fakeProvider) Stop(context.Context, string) (labs.Lab, error)  { return p.lab, p.err }
 
-func (p fakeProvider) OpenShell(_ context.Context, size labs.TerminalSize) (Shell, error) {
+func (p fakeProvider) OpenShell(_ context.Context, _ string, size labs.TerminalSize) (Shell, error) {
 	if p.err != nil {
 		return nil, p.err
 	}

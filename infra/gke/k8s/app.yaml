@@ -40,6 +40,8 @@ spec:
       containers:
         - name: app
           image: ghcr.io/mohamedaljoke/cka-sim-app:main
+          # :main moves with every push; the node's cached copy would otherwise win.
+          imagePullPolicy: Always
           env:
             - name: CKA_SIM_LABS
               value: kubernetes
@@ -48,6 +50,11 @@ spec:
                 secretKeyRef:
                   name: cka-sim-agent
                   key: token
+            - name: CKA_SIM_STUDENTS
+              valueFrom:
+                secretKeyRef:
+                  name: cka-sim-students
+                  key: list
           envFrom:
             - configMapRef:
                 name: site

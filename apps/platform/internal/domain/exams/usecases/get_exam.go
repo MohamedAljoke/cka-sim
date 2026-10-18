@@ -7,19 +7,24 @@ import (
 )
 
 type GetExam struct {
-	s *session
+	ss *sessions
 }
 
 // Reading an exam past its deadline ends it, so the server decides when time is up, not the browser.
-func (uc *GetExam) Execute(ctx context.Context) (exams.Exam, error) {
-	uc.s.mu.Lock()
-	defer uc.s.mu.Unlock()
+func (uc *GetExam) Execute(ctx context.Context, owner string) (exams.Exam, error) {
+	s, err := uc.ss.of(owner)
+	if err != nil {
+		return exams.Exam{}, err
+	}
 
-	uc.s.endIfExpired(ctx)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if uc.s.exam == nil {
+	s.endIfExpired(ctx)
+
+	if s.exam == nil {
 		return exams.Exam{}, exams.ErrNoExam
 	}
 
-	return uc.s.exam.Clone(), nil
+	return s.exam.Clone(), nil
 }

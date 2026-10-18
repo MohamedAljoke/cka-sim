@@ -15,9 +15,10 @@ import (
 
 const outputTail = 2000
 
-// session is the one exam every use case shares. A request's change is saved before it shows; setups and checks run
-// in the background and take the lock again to record each result.
+// session is one owner's exam, which every use case shares. A request's change is saved before it shows; setups
+// and checks run in the background and take the lock again to record each result.
 type session struct {
+	owner     string
 	mu        sync.Mutex
 	exam      *exams.Exam
 	repo      ExamRepository
@@ -34,7 +35,7 @@ type session struct {
 }
 
 func (s *session) save(e exams.Exam) error {
-	if err := s.repo.Save(e); err != nil {
+	if err := s.repo.Save(s.owner, e); err != nil {
 		return fmt.Errorf("%w: %w", exams.ErrUnavailable, err)
 	}
 
@@ -43,7 +44,7 @@ func (s *session) save(e exams.Exam) error {
 
 // A background change stays in memory when the save fails, so the exam goes on; the next save catches the file up.
 func (s *session) saveInBackground() {
-	if err := s.repo.Save(*s.exam); err != nil {
+	if err := s.repo.Save(s.owner, *s.exam); err != nil {
 		slog.Error("save the exam", "err", err)
 	}
 }
@@ -78,7 +79,7 @@ func (s *session) setUp(ctx context.Context) {
 	s.work.Go(func() {
 		s.tidying.Wait()
 
-		if healed, err := s.heal.Execute(ctx); err != nil || !healed.Passed() {
+		if healed, err := s.heal.Execute(ctx, s.owner); err != nil || !healed.Passed() {
 			slog.Warn("heal the cluster before the exam", "err", err, "output", tail(healed.Output))
 		}
 
@@ -103,7 +104,7 @@ func (s *session) setUp(ctx context.Context) {
 }
 
 func (s *session) startTask(ctx context.Context, id string) {
-	result, err := s.setUpTask.Execute(ctx, id)
+	result, err := s.setUpTask.Execute(ctx, s.owner, id)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -150,7 +151,7 @@ func (s *session) grade(ctx context.Context) {
 		wg.Wait()
 		s.scored()
 
-		if err := s.tidy.Execute(ctx, all...); err != nil {
+		if err := s.tidy.Execute(ctx, s.owner, all...); err != nil {
 			slog.Error("tidy after the exam", "err", err)
 		}
 	})
@@ -166,7 +167,7 @@ func (s *session) scored() {
 
 // A check that breaks scores 0 and keeps why, so the results can say so.
 func (s *session) checkTask(ctx context.Context, id string) {
-	checked, err := s.check.Execute(ctx, id)
+	checked, err := s.check.Execute(ctx, s.owner, id)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

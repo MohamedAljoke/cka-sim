@@ -58,10 +58,12 @@ func (a *api) examRoutes(handle handleFunc) {
 }
 
 func (a *api) getExam(w http.ResponseWriter, r *http.Request) error {
-	exam, err := a.exams.Get.Execute(r.Context())
+	exam, err := a.exams.Get.Execute(r.Context(), studentOf(r))
 	switch {
 	case errors.Is(err, exams.ErrNoExam):
 		return httpx.NotFound(err)
+	case errors.Is(err, exams.ErrUnavailable):
+		return httpx.Unavailable(err)
 	case err != nil:
 		return err
 	}
@@ -75,7 +77,7 @@ func (a *api) beginExam(w http.ResponseWriter, r *http.Request) error {
 		return httpx.Malformed(`the body must be JSON like {"count": 16, "minutes": 120}`)
 	}
 
-	exam, err := a.exams.Begin.Execute(r.Context(), req.Count, req.Minutes)
+	exam, err := a.exams.Begin.Execute(r.Context(), studentOf(r), req.Count, req.Minutes)
 	switch {
 	case errors.Is(err, exams.ErrInvalid):
 		return httpx.BadRequest(err)
@@ -92,7 +94,7 @@ func (a *api) beginExam(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) endExam(w http.ResponseWriter, r *http.Request) error {
-	exam, err := a.exams.End.Execute(r.Context())
+	exam, err := a.exams.End.Execute(r.Context(), studentOf(r))
 	switch {
 	case errors.Is(err, exams.ErrNoExam):
 		return httpx.NotFound(err)
@@ -108,7 +110,7 @@ func (a *api) endExam(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) discardExam(w http.ResponseWriter, r *http.Request) error {
-	err := a.exams.Discard.Execute(r.Context())
+	err := a.exams.Discard.Execute(r.Context(), studentOf(r))
 	switch {
 	case errors.Is(err, exams.ErrNoExam):
 		return httpx.NotFound(err)
@@ -126,7 +128,7 @@ func (a *api) discardExam(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) flagTask(w http.ResponseWriter, r *http.Request) error {
-	err := a.exams.Flag.Execute(r.Context(), r.PathValue("id"), r.Method == http.MethodPut)
+	err := a.exams.Flag.Execute(r.Context(), studentOf(r), r.PathValue("id"), r.Method == http.MethodPut)
 	switch {
 	case errors.Is(err, exams.ErrNoExam), errors.Is(err, exams.ErrNotInExam):
 		return httpx.NotFound(err)
@@ -145,10 +147,12 @@ func (a *api) flagTask(w http.ResponseWriter, r *http.Request) error {
 
 // Practice runs scripts and shows solutions, so it waits until an exam is over and graded.
 func (a *api) outsideAnExam(r *http.Request) error {
-	exam, err := a.exams.Get.Execute(r.Context())
+	exam, err := a.exams.Get.Execute(r.Context(), studentOf(r))
 	switch {
 	case errors.Is(err, exams.ErrNoExam):
 		return nil
+	case errors.Is(err, exams.ErrUnavailable):
+		return httpx.Unavailable(err)
 	case err != nil:
 		return err
 	case !exam.Over():

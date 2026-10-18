@@ -59,29 +59,71 @@ context on your task. Three parts, in [ASSISTANT.md](ASSISTANT.md).
 - **Learn:** where Docker's resource limits live on each OS.
 - **Before:** `apps/lab/internal/doctor`.
 
-## 3 · Accounts and a lab each
+## 3 · Students and a lab each
 
-### 3.1 Accounts
+### 3.1 Students by signed token
 
-- **Scope:**
-  - `apps/auth`, its own app with Postgres and sql-migrate.
-  - Salted password hashes, with a dummy compare for unknown emails.
-  - A session JWT cookie plus a rotating refresh token. Reusing an old refresh token revokes the whole
-    family.
-  - The platform verifies the JWT with a shared secret and never touches the accounts database.
-  - A login page.
-- **Review:** a wrong password and an unknown email give the same answer; a refresh keeps you logged in.
-- **Learn:** session JWTs versus refresh tokens, and rotation with reuse detection.
-- **Before:** `apps/auth`, `apps/platform/internal/auth`, `apps/web/src/auth.ts`.
-
-### 3.2 A lab per account
+No database and no login page. A student is a token signed with the server's key, so the token itself is the
+account.
 
 - **Scope:**
-  - Each account gets its own lab (a pod per account on Kubernetes), touched set and exam.
-  - An idle lab is stopped after `CKA_SIM_LAB_IDLE`.
-  - The labs pool scales past one node.
-- **Review:** two accounts each get their own lab on their own node; an idle one goes away.
-- **Before:** `apps/platform/internal/desk`.
+  - **The token:** an HS256 JWT `{sub, exp}` signed with `CKA_SIM_SECRET`.
+  - **The verifier**, a small piece in the platform:
+    - it reads the `cka_sim_student` HttpOnly cookie;
+    - it checks the signature, `exp` and a denylist (`CKA_SIM_REVOKED`, a list of `sub`);
+    - it puts `sub` in the request context;
+    - with no valid token it answers 401 `student_unknown`, and the page says to ask for an invite link.
+  - **Invite links:**
+    - `GET /?key=<token>` sets the cookie and redirects, so the token leaves the URL;
+    - `server mint -name alice -days 30` prints the link;
+    - `make -C infra/gke student NAME=alice` runs it inside the app pod, so the secret never leaves the
+      cluster.
+  - **Locally:**
+    - the secret is generated once into the state directory, like the agent token;
+    - `CKA_SIM_STUDENTS=auto` gives `sub: local` to any request without a cookie, so `cka-sim up` and
+      `make dev` behave exactly as today;
+    - hosted uses `invite`.
+  - To everything else the owner is just a string. A login page added later would be one more way to get the
+    same cookie.
+- **Review:**
+  - Locally, nothing changes.
+  - Hosted:
+    - with no link, the page asks for one;
+    - an invite link gets you in;
+    - an edited token is refused;
+    - putting its `sub` on the denylist ends it.
+- **Learn:** signed tokens as stateless identity (what a signature proves and what it doesn't), HttpOnly
+  cookies, and revocation without a database.
+
+### 3.2 A lab per student
+
+- **Scope:**
+  - **`kube.Pod`:** named `lab-<short hash of sub>` (pod names must be DNS-safe), and labelled
+    `cka-sim/owner=<hash>`. `Up`, `Down`, `Where` and the pod spec don't change.
+  - **A registry, `Labs.For(owner) *labagent.Lab`:** it makes each lab lazily. Locally, every owner gets the
+    one `Fixed` lab.
+  - **The use cases take the owner:**
+    - `LabProvider` and `ScriptRunner` get an owner argument;
+    - the touched set and the script lock (`cluster`) are one per owner;
+    - the exam is `<state>/exams/<owner>.json`, with a session per owner;
+    - handlers and `/ws/terminal` pass the `sub` from the request.
+  - **Idle stop:** a lab with no request for `CKA_SIM_LAB_IDLE` (default 1h) is stopped. The Role gains `list` on
+    pods.
+  - **The cap:** the labs pool's `max_node_count` becomes `var.max_labs`, the cap on concurrent labs. Past it,
+    the pod waits for a node, and the page says the site is full.
+  - **Seeing the fleet:** `make -C infra/gke labs` lists each lab pod with its owner, phase, node and age, and the
+    labs pool's nodes.
+- **Review, live on GKE:**
+  - **The fleet grows.** Two invite links in two browser profiles start two labs. `make labs` shows two pods on
+    two nodes. Stopping one removes only that pod, and its node a few minutes later.
+  - **Students can't reach each other.** From student A's terminal, `curl -m 5 <B's pod IP>:7171` and
+    `ssh <B's pod IP>` time out:
+    - the NetworkPolicy lets only the app into a lab, and only on 7171;
+    - labs have no egress to `10.0.0.0/8`, which holds every pod IP.
+  - **The work stays separate.** A's practice and exam never show for B.
+  - **Idle labs stop.** A lab left idle past the limit stops by itself.
+- **Learn:** the owner as a parameter rather than objects per user; a fleet whose size is a node pool's
+  maximum; testing isolation instead of assuming it.
 
 ## 4 · The catalog and shipping
 

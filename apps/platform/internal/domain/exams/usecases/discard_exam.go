@@ -8,29 +8,34 @@ import (
 )
 
 type DiscardExam struct {
-	s *session
+	ss *sessions
 }
 
-func (uc *DiscardExam) Execute(ctx context.Context) error {
-	uc.s.mu.Lock()
-	defer uc.s.mu.Unlock()
+func (uc *DiscardExam) Execute(ctx context.Context, owner string) error {
+	s, err := uc.ss.of(owner)
+	if err != nil {
+		return err
+	}
 
-	uc.s.endIfExpired(ctx)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.endIfExpired(ctx)
 
 	switch {
-	case uc.s.exam == nil:
+	case s.exam == nil:
 		return exams.ErrNoExam
-	case !uc.s.exam.Over():
+	case !s.exam.Over():
 		return exams.ErrRunning
-	case uc.s.exam.Scoring():
+	case s.exam.Scoring():
 		return exams.ErrScoring
 	}
 
-	if err := uc.s.repo.Clear(); err != nil {
+	if err := s.repo.Clear(s.owner); err != nil {
 		return fmt.Errorf("%w: %w", exams.ErrUnavailable, err)
 	}
 
-	uc.s.exam = nil
+	s.exam = nil
 
 	return nil
 }

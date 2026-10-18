@@ -13,9 +13,9 @@ type UseCases struct {
 }
 
 func New(repo TaskRepository, runner ScriptRunner) UseCases {
-	cluster := newCluster()
-	heal := NewHealCluster(repo, runner, cluster)
-	setUp := NewSetUpTask(repo, runner, cluster)
+	clusters := newClusters()
+	heal := NewHealCluster(repo, runner, clusters)
+	setUp := NewSetUpTask(repo, runner, clusters)
 	start := NewStartTask(repo, heal, setUp)
 	check := NewCheckTask(repo, runner)
 
@@ -27,7 +27,7 @@ func New(repo TaskRepository, runner ScriptRunner) UseCases {
 		SetUp:    setUp,
 		Start:    start,
 		Check:    check,
-		Tidy:     NewTidyTask(repo, runner, cluster),
-		Selftest: NewSelftestTask(repo, runner, cluster, start, check),
+		Tidy:     NewTidyTask(repo, runner, clusters),
+		Selftest: NewSelftestTask(repo, runner, clusters, start, check),
 	}
 }

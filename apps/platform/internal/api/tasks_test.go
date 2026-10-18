@@ -327,12 +327,12 @@ func newAPI(all ...tasks.Task) http.Handler {
 
 func newAPIWith(repo usecases.TaskRepository) http.Handler {
 	taskCases := usecases.New(repo, &fakeRunner{})
-	return New(taskCases, labusecases.UseCases{}, examsFor(taskCases, labusecases.UseCases{}, nil))
+	return New(taskCases, labusecases.UseCases{}, examsFor(taskCases, labusecases.UseCases{}, nil), nil)
 }
 
 func newAPIRunning(r *fakeRunner, all ...tasks.Task) http.Handler {
 	taskCases := usecases.New(fakeRepository{tasks: all}, r)
-	return New(taskCases, labusecases.UseCases{}, examsFor(taskCases, labusecases.UseCases{}, nil))
+	return New(taskCases, labusecases.UseCases{}, examsFor(taskCases, labusecases.UseCases{}, nil), nil)
 }
 
 type fakeRunner struct {
@@ -342,7 +342,7 @@ type fakeRunner struct {
 	script string
 }
 
-func (r *fakeRunner) RunScript(_ context.Context, host, script string) (labs.ScriptResult, error) {
+func (r *fakeRunner) RunScript(_ context.Context, _, host, script string) (labs.ScriptResult, error) {
 	r.host, r.script = host, script
 	return r.result, r.err
 }

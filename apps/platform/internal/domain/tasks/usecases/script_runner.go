@@ -7,5 +7,5 @@ import (
 )
 
 type ScriptRunner interface {
-	RunScript(ctx context.Context, host, script string) (labs.ScriptResult, error)
+	RunScript(ctx context.Context, owner, host, script string) (labs.ScriptResult, error)
 }

@@ -15,8 +15,8 @@ func NewGetLab(provider LabProvider) *GetLab {
 	return &GetLab{provider: provider}
 }
 
-func (uc *GetLab) Execute(ctx context.Context) (labs.Lab, error) {
-	lab, err := uc.provider.Get(ctx)
+func (uc *GetLab) Execute(ctx context.Context, owner string) (labs.Lab, error) {
+	lab, err := uc.provider.Get(ctx, owner)
 	if err != nil {
 		return labs.Lab{}, fmt.Errorf("%w: %w", labs.ErrUnavailable, err)
 	}

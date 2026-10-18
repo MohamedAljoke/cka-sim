@@ -119,7 +119,7 @@ func (a *api) startTask(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	result, err := a.tasks.Start.Execute(r.Context(), r.PathValue("id"))
+	result, err := a.tasks.Start.Execute(r.Context(), studentOf(r), r.PathValue("id"))
 	switch {
 	case errors.Is(err, tasks.ErrNotFound):
 		return httpx.NotFound(err)
@@ -141,7 +141,7 @@ func (a *api) checkTask(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	checked, err := a.tasks.Check.Execute(r.Context(), r.PathValue("id"))
+	checked, err := a.tasks.Check.Execute(r.Context(), studentOf(r), r.PathValue("id"))
 	switch {
 	case errors.Is(err, tasks.ErrNotFound):
 		return httpx.NotFound(err)
@@ -161,7 +161,7 @@ func (a *api) tidyTask(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	err := a.tasks.Tidy.Execute(r.Context(), r.PathValue("id"))
+	err := a.tasks.Tidy.Execute(r.Context(), studentOf(r), r.PathValue("id"))
 	switch {
 	case errors.Is(err, tasks.ErrNotFound):
 		return httpx.NotFound(err)

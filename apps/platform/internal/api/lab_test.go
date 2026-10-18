@@ -74,19 +74,19 @@ type fakeLabProvider struct {
 	shell *echoShell
 }
 
-func (p *fakeLabProvider) Get(context.Context) (labs.Lab, error) { return p.lab, p.err }
+func (p *fakeLabProvider) Get(context.Context, string) (labs.Lab, error) { return p.lab, p.err }
 
-func (p *fakeLabProvider) Start(context.Context) (labs.Lab, error) {
+func (p *fakeLabProvider) Start(context.Context, string) (labs.Lab, error) {
 	p.calls = append(p.calls, "start")
 	return p.lab, p.err
 }
 
-func (p *fakeLabProvider) Stop(context.Context) (labs.Lab, error) {
+func (p *fakeLabProvider) Stop(context.Context, string) (labs.Lab, error) {
 	p.calls = append(p.calls, "stop")
 	return p.lab, p.err
 }
 
-func (p *fakeLabProvider) OpenShell(_ context.Context, size labs.TerminalSize) (labusecases.Shell, error) {
+func (p *fakeLabProvider) OpenShell(_ context.Context, _ string, size labs.TerminalSize) (labusecases.Shell, error) {
 	if p.err != nil {
 		return nil, p.err
 	}
@@ -96,5 +96,5 @@ func (p *fakeLabProvider) OpenShell(_ context.Context, size labs.TerminalSize) (
 
 func newLabAPI(p labusecases.LabProvider) http.Handler {
 	labCases := labusecases.New(p)
-	return New(usecases.UseCases{}, labCases, examsFor(usecases.UseCases{}, labCases, nil))
+	return New(usecases.UseCases{}, labCases, examsFor(usecases.UseCases{}, labCases, nil), nil)
 }

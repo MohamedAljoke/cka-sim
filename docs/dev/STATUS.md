@@ -1,9 +1,7 @@
 # Status
 
 Where cka-sim stands against [BUILD-IN-STEPS.md](BUILD-IN-STEPS.md). Its **Before** lines point at the first
-version on the `archive/v2` branch; [AGENTS.md](../AGENTS.md) wins wherever the two disagree.
-
-Out of scope for now: 4.3 (GKE).
+version on the `archive/v2` branch; [AGENTS.md](../../AGENTS.md) wins wherever the two disagree.
 
 Update this file when a step lands, and the [cka-sim docs](https://claude.ai/code/artifact/5f47a2bd-5b68-4d15-b90f-1d76ae14750d)
 when what they describe changes.
@@ -22,18 +20,18 @@ when what they describe changes.
 | 2.2 The lab image | Partly | Same image shape, but the agent builds the cluster on `CreateCluster` instead of `lab up` at start |
 | 2.3 Exam-like nodes and base host | Done | The kind adapter builds `cka-sim/node` (`candidate` with sudo, sshd, `k`) and `cka-sim/base` (no kubectl) inside the lab's Docker; `<cluster>-base` joins the `kind` network, its key and the admin kubeconfig go to every node, and root gets a kubeconfig on every node for task scripts. `OpenShell` lands on base as `candidate`; `cka-sim shell` too. No image preload from `catalog/images.txt` yet |
 | 2.4 The agent | Done | `/healthz`, token, `LabService` Get/Create/Delete, `OpenShell` (a bidi stream; `docker exec` under a pty, tagged shells hung up on close) and `RunScript` (bash as root on a node; exit code and the last 64 KiB of output; a deadline kills the script's whole process group) |
-| 2.5 The platform reaches the lab | Partly | `labagent` adapter, `/api/lab`, polling page; no sandbox `Provider`, desks or idle end |
+| 2.5 The platform reaches the lab | Partly | `labagent.Lab` talks to the agent of a `Machine`: `labagent.Fixed` (one URL, locally) or `kube.Pod` (a pod made on Start lab); `/api/lab`, polling page. One lab, no desks or idle end |
 | 2.6 Terminal in the page | Done | `/ws/terminal` bridges the page's websocket to `OpenShell`; the shell is `candidate` on the base host, so the page's `ssh <host>` hint is the first command |
-| 2.7 Setup, check, solution | Partly | `lib.sh`, every `setup.sh` and `check.sh` are in the catalog. `/api/tasks/{id}/start` runs setup and `/api/tasks/{id}/check` grades the check's PASS/FAIL lines (`tasks.ReadGrade`), both through `RunScript`; the page has Set up task and Check. No `solution.sh` yet (the selftest, 2.8, needs it) |
-| 2.8 Selftest | Not started | |
+| 2.7 Setup, check, solution | Partly | `lib.sh`, every `setup.sh` and `check.sh` are in the catalog. `/api/tasks/{id}/start` runs setup and `/api/tasks/{id}/check` grades the check's PASS/FAIL lines (`tasks.ReadGrade`), both through `RunScript`; the page has Set up task and Check. Every task has a `solution.sh` |
+| 2.8 Selftest | Done | `tasks/usecases.SelftestTask`: start (heal + setup), check earns 0, `solution.sh`, check earns full. `make selftest [TASK=<id>]` runs `catalog/selftest_test.go` behind `-selftest`. 198 of 203 pass: `tr-events` earns 3/4 after its solution, and the four `wl-hpa-*` checks outlast the 2-minute check timeout |
 | 2.9 Tasks that break the cluster | Done | 25 tasks have a `reset.sh` that does nothing on a healthy cluster. A setup marks its task touched; `HealCluster` runs the touched tasks' resets one at a time before every practice start and before an exam's setups, and a failed reset is tried again next time. `TidyTask` (`POST /api/tasks/{id}/tidy`, sent by the page when it leaves a task it set up) resets the task and deletes the namespaces `fresh_ns` labelled. A scored exam tidies all its tasks, and the next exam waits for that. Setups share the cluster; a reset or tidy has it alone. The touched list lives in memory, so a restarted platform forgets what practice broke |
 | 2.10 The exam | Done | `tasks.Draw` (domain weights, at most one `order: last` task, set up last and shown first); the `exams` domain with Begin, Get, Flag, End, Discard and Resume. The exam is saved to `<CKA_SIM_STATE_DIR>/exam.json`; setups and checks run in the background and a restart resumes them. The clock starts once every setup is done, and the server ends an exam read past its deadline. Score weighted by task, pass at 66%; a task whose setup failed counts in neither earned nor total. `/api/exam*`; practice start, check and solution answer 409 during an exam. The page at `#/exam`: form, setup progress, pills, flags, countdown, terminal, results. Healed before and tidied after (2.9) |
 | 2.11 Add-ons | Done | The kind adapter installs them after the base host, from images in the lab's Docker: metrics-server, kube-router (firewall only) plus an nftables table that refuses Services without endpoints, Gateway API + Traefik (also serving the `nginx` IngressClass), the VPA recommender, helm on every node, a private registry (`cka-sim-registry:5000`, with auth) and a chart repo (`http://cka-sim-charts`); the web-operator is only staged for `ar-operator`. The controller manager marks a node NotReady after 20s. Any add-on that fails fails the whole build |
 | 4.1 One command, Docker only | Partly | `install.sh` puts the `cka-sim` command (`up`, `down`, `status`, `logs`, `update`, `uninstall`) and `infra/local/compose.yml` in `~/.cka-sim`; it runs the lab and the app (the page and the platform behind Caddy) on :7080 with a token generated once. `cka-sim shell` opens the base host. No auth or assistant yet |
 | 4.2 Published images | Partly | `images.yml` pushes `cka-sim-lab` and `cka-sim-app` (amd64 + arm64) to GHCR as `:main` and `:sha-…` on every push to `main`; no `ci.yml` yet |
+| 4.3 The hosted site on GKE | Partly | `infra/gke`: Terraform (zonal cluster, a system pool and a tainted labs pool scaling 0..1, the site's IP) and kustomize manifests (the app with `CKA_SIM_LABS=kubernetes`, RBAC on pods in `cka-sim-labs`, a NetworkPolicy, a Caddy IP allowlist on `<ip>.sslip.io`). One lab, no accounts. Validated offline, not yet run live; `kube.Pod` and `labagent.Lab` have no tests yet |
 
 ## Next
 
-Practice and exams now share one cluster without a restart in between: what a task breaks is reset before the
-next setup, and its namespaces go when you leave it. Selftest (2.8) is the way to find out which tasks set up,
-reset and grade cleanly; after it, the assistant (Part 3).
+Every task now has a solution and the selftest grades them all; five still fail it. Next: tests for the lab
+machines, a first live run on GKE, then the assistant (Part 3).

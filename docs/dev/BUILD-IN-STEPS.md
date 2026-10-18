@@ -18,13 +18,13 @@ parts:
 - **Review:** what to try or read before you accept it. Don't start the next step until it holds.
 - **Learn:** the idea to understand before you accept it, so you can review the code, not just run it.
 - **Before:** where it lived in the first version, on the `archive/v2` branch, to compare with or to hand the AI
-  as a reference. Take its behaviour, never its structure: [AGENTS.md](../AGENTS.md) wins.
+  as a reference. Take its behaviour, never its structure: [AGENTS.md](../../AGENTS.md) wins.
 
 Keep a step small enough to review in one sitting. If one feels too big (3.13 is split for this reason),
 split it further before asking for it.
 
 `BUILD-FROM-ZERO.md` on `archive/v2` is the older plan, which built the lab first. The conventions in
-[AGENTS.md](../AGENTS.md) apply to every step: almost no comments, tests before helpers, no `iota`, and no app
+[AGENTS.md](../../AGENTS.md) apply to every step: almost no comments, tests before helpers, no `iota`, and no app
 importing another.
 
 ```
@@ -531,13 +531,15 @@ Eight small steps, each measurable before the next.
 ### 4.3 The hosted site on GKE (optional)
 
 - **Scope:**
-  - `sandbox/gke.Provider`: a `SandboxClaim` per lab from a warm pool (agent-sandbox), with each lab alone on
-    its own VM.
-  - A NetworkPolicy and a firewall rule that keep labs apart.
-  - The `app` pod: the platform, Caddy (HTTPS on `<ip>.sslip.io`) and the assistant side by side, and Cloud SQL
-    through a proxy sidecar.
-  - Vertex AI through Workload Identity, and the docs index as a Job.
-- **Review:** `make -C infra/gke site` prints a URL where you can log in, start a lab and chat.
-- **Learn:** the same lab image as a pod; claiming capacity instead of creating it.
+  - A `Machine` behind `labagent.Lab`: `Fixed` locally, `kube.Pod` on Kubernetes, which makes the lab pod
+    with client-go on Start lab and deletes it on Stop. The lab image doesn't change.
+  - `infra/gke`: Terraform for the cluster, a system pool, a tainted labs pool scaling from 0, and the site's
+    IP; kustomize for the app, RBAC on pods in `cka-sim-labs` only, and a NetworkPolicy.
+  - No accounts yet: Caddy lets in only an IP allowlist on `<ip>.sslip.io`. One lab.
+  - Later: accounts (1.5) and a lab per account, then the assistant and Cloud SQL.
+- **Review:** `make -C infra/gke up` prints a URL; Start lab brings up a node and a pod, a task sets up and
+  checks, and another IP gets no page.
+- **Learn:** the same lab image as a pod; a pod made and watched through the API server; RBAC, NetworkPolicy
+  and a node pool that scales to zero.
 - **Before:** `infra/gke/Makefile`, `apps/platform/internal/sandbox/gke`, `apps/*/deploy/gke`. Next steps are in
   `IMPROVEMENTS-LABS.md` on `archive/v2`.

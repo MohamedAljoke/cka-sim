@@ -7,7 +7,7 @@ PLATFORM := apps/platform
 LAB := apps/lab
 SHARED := apps/go-shared
 WEB := apps/web
-COMPOSE := docker compose -f infra/compose.yml
+COMPOSE := docker compose -f infra/local/compose.yml
 BUF := go run github.com/bufbuild/buf/cmd/buf@v1.74.0
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.0
 

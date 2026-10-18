@@ -1,4 +1,4 @@
-package gke
+package kube
 
 import (
 	"context"

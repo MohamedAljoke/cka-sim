@@ -4,7 +4,7 @@ set -eu
 repo=${CKA_SIM_REPO:-MohamedAljoke/cka-sim}
 ref=${CKA_SIM_REF:-main}
 dir=${CKA_SIM_HOME:-$HOME/.cka-sim}
-raw=https://raw.githubusercontent.com/$repo/$ref/infra
+raw=https://raw.githubusercontent.com/$repo/$ref/infra/local
 
 command -v curl >/dev/null 2>&1 || { echo "install.sh: needs curl" >&2; exit 1; }
 

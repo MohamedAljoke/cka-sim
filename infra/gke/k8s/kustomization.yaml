@@ -1,0 +1,28 @@
+# `make site` writes site.env (SITE_IP, CKA_SIM_SITE_HOST, CKA_SIM_ALLOW) from Terraform's output and your address.
+# A change to it or to the Caddyfile renames the generated ConfigMap, which restarts the app.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespaces.yaml
+  - app.yaml
+  - lab.yaml
+
+configMapGenerator:
+  - name: site
+    namespace: cka-sim
+    envs: [site.env]
+  - name: caddy
+    namespace: cka-sim
+    files: [Caddyfile]
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: site
+      fieldPath: data.SITE_IP
+    targets:
+      - select:
+          kind: Service
+          name: site
+        fieldPaths: [spec.loadBalancerIP]

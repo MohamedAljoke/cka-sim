@@ -1,0 +1,68 @@
+# What the app may do with the lab pod, and who may reach it. The pod itself is made by the platform on Start lab
+# (apps/platform/internal/infra/adapters/kube/pod.go).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: lab-pod
+  namespace: cka-sim-labs
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, create, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cka-sim-app
+  namespace: cka-sim-labs
+subjects:
+  - kind: ServiceAccount
+    name: cka-sim-app
+    namespace: cka-sim
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: lab-pod
+---
+# Only the app reaches the agent. The lab gets the internet, for the images its cluster pulls, and DNS, but no
+# private range or the metadata server.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lab
+  namespace: cka-sim-labs
+spec:
+  podSelector:
+    matchLabels:
+      app: cka-sim-lab
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cka-sim
+          podSelector:
+            matchLabels:
+              app: cka-sim-app
+      ports:
+        - protocol: TCP
+          port: 7171
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchExpressions:
+              - key: k8s-app
+                operator: In
+                values: [kube-dns, node-local-dns]
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16]

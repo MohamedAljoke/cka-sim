@@ -1,0 +1,96 @@
+# The page, the platform and Caddy in one pod, the same image as `cka-sim up`. It may make the lab pod (lab.yaml).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cka-sim-app
+  namespace: cka-sim
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-data
+  namespace: cka-sim
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: standard-rwo
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+  namespace: cka-sim
+spec:
+  replicas: 1
+  # The disk can be attached to one pod at a time.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: cka-sim-app
+  template:
+    metadata:
+      labels:
+        app: cka-sim-app
+    spec:
+      serviceAccountName: cka-sim-app
+      enableServiceLinks: false
+      containers:
+        - name: app
+          image: ghcr.io/mohamedaljoke/cka-sim-app:main
+          env:
+            - name: CKA_SIM_LABS
+              value: kubernetes
+            - name: CKA_SIM_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cka-sim-agent
+                  key: token
+          envFrom:
+            - configMapRef:
+                name: site
+          ports:
+            - containerPort: 80
+            - containerPort: 443
+          volumeMounts:
+            # The exam, and Caddy's certificates, so a restart asks Let's Encrypt for none.
+            - name: data
+              mountPath: /var/lib/cka-sim
+              subPath: state
+            - name: data
+              mountPath: /root/.local/share/caddy
+              subPath: caddy
+            - name: caddy
+              mountPath: /etc/caddy/Caddyfile
+              subPath: Caddyfile
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: app-data
+        - name: caddy
+          configMap:
+            name: caddy
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: site
+  namespace: cka-sim
+spec:
+  type: LoadBalancer
+  loadBalancerIP: SITE_IP
+  # Keeps the visitor's address, which the Caddyfile's allowlist checks.
+  externalTrafficPolicy: Local
+  selector:
+    app: cka-sim-app
+  ports:
+    - name: http
+      port: 80
+    - name: https
+      port: 443

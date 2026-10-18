@@ -4,7 +4,7 @@ set -eu
 self=$0
 [ -L "$self" ] && self=$(readlink "$self")
 dir=$(cd "$(dirname "$self")" && pwd -P)
-installer=https://raw.githubusercontent.com/${CKA_SIM_REPO:-MohamedAljoke/cka-sim}/${CKA_SIM_REF:-main}/infra/install.sh
+installer=https://raw.githubusercontent.com/${CKA_SIM_REPO:-MohamedAljoke/cka-sim}/${CKA_SIM_REF:-main}/infra/local/install.sh
 
 compose() { docker compose -f "$dir/compose.yml" "$@"; }
 

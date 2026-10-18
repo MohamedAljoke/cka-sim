@@ -11,7 +11,7 @@ break a control plane and fix it the way the exam asks you to.
 You need Docker, with at least 2 CPUs and 4 GiB of memory for it. No clone needed:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/MohamedAljoke/cka-sim/main/infra/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MohamedAljoke/cka-sim/main/infra/local/install.sh | sh
 ```
 
 That installs the `cka-sim` command in `~/.local/bin` and starts it. Open http://localhost:7080, pick a task
@@ -68,7 +68,9 @@ The full walkthrough, from Docker-in-Docker quirks to the base host's ssh setup 
 | `apps/lab` | Go agent that runs inside the lab container: cluster lifecycle and shells |
 | `apps/web` | TypeScript + Vite page with xterm.js |
 | `apps/go-shared` | Protobuf contracts and shared helpers, the only code apps may share |
-| `infra` | The images, the one Compose file that runs them, and the `cka-sim` command with its installer |
+| `infra/app`, `infra/lab` | The two images, the same wherever they run |
+| `infra/local` | The Compose file that runs them with only Docker, and the `cka-sim` command with its installer |
+| `infra/gke` | The hosted version: Terraform for the cluster and its IP, and the Kubernetes manifests for the app |
 
 Apps never import each other, each follows a domain / use cases / adapters layout, and every endpoint has
 end-to-end tests against the real binary. The rules are in [AGENTS.md](AGENTS.md).

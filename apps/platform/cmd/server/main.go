@@ -21,7 +21,7 @@ import (
 	labusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/infra/adapters/files"
-	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/infra/adapters/gke"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/infra/adapters/kube"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/infra/adapters/labagent"
 )
 
@@ -29,7 +29,7 @@ type settings struct {
 	Addr       string `key:"CKA_SIM_PLATFORM_ADDR"`
 	AgentToken string `key:"CKA_SIM_AGENT_TOKEN" minLength:"32"`
 	StateDir   string `key:"CKA_SIM_STATE_DIR" default:""`
-	// local: the lab container at LabURL. gke: a lab pod in LabNamespace, made on Start lab.
+	// local: the lab container at LabURL. kubernetes: a lab pod in LabNamespace, made on Start lab.
 	Labs           string `key:"CKA_SIM_LABS" default:"local"`
 	LabURL         string `key:"CKA_SIM_LAB_URL" default:""`
 	LabNamespace   string `key:"CKA_SIM_LAB_NAMESPACE" default:"cka-sim-labs"`
@@ -123,8 +123,8 @@ func labOf(cfg settings) (lab, error) {
 		}
 
 		return labagent.NewLab(labagent.Fixed(cfg.LabURL), cfg.AgentToken), nil
-	case "gke":
-		pod, err := gke.NewInClusterPod(cfg.LabNamespace, gke.PodSettings{Image: cfg.LabImage, TokenSecret: cfg.LabTokenSecret})
+	case "kubernetes":
+		pod, err := kube.NewInClusterPod(cfg.LabNamespace, kube.PodSettings{Image: cfg.LabImage, TokenSecret: cfg.LabTokenSecret})
 		if err != nil {
 			return nil, err
 		}
@@ -132,7 +132,7 @@ func labOf(cfg settings) (lab, error) {
 		return labagent.NewLab(pod, cfg.AgentToken), nil
 	}
 
-	return nil, fmt.Errorf("CKA_SIM_LABS is %q; it must be local or gke", cfg.Labs)
+	return nil, fmt.Errorf("CKA_SIM_LABS is %q; it must be local or kubernetes", cfg.Labs)
 }
 
 func stateDirOf(cfg settings) (string, error) {

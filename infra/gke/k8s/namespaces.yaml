@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cka-sim
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cka-sim-labs

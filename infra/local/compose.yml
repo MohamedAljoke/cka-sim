@@ -17,7 +17,7 @@ services:
 
   lab:
     build:
-      context: ..
+      context: ../..
       dockerfile: infra/lab/lab.Dockerfile
     image: ghcr.io/mohamedaljoke/cka-sim-lab:${CKA_SIM_VERSION:-main}
     restart: unless-stopped
@@ -51,7 +51,7 @@ services:
 
   app:
     build:
-      context: ..
+      context: ../..
       dockerfile: infra/app/app.Dockerfile
     image: ghcr.io/mohamedaljoke/cka-sim-app:${CKA_SIM_VERSION:-main}
     restart: unless-stopped

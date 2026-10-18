@@ -1,0 +1,14 @@
+{$CKA_SIM_SITE_HOST} {
+	@outsider not remote_ip {$CKA_SIM_ALLOW}
+	@backend path /api/* /ws/*
+
+	# A route keeps this order: anyone else is dropped before anything is served. Let's Encrypt still gets
+	# through, since Caddy answers its challenges before any route runs.
+	route {
+		abort @outsider
+		reverse_proxy @backend 127.0.0.1:7070
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -14,7 +14,7 @@ GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v
 # The Kubernetes docs the tutor searches: v1.37's live on kubernetes/website's main until release-1.37 is cut.
 DOCS_REF ?= main
 DOCS_DIR := $(HOME)/.cache/cka-sim/website
-DOCS_INDEX := $(HOME)/.cache/cka-sim/docs-index.gob.gz
+DOCS_INDEX := $(CURDIR)/$(ASSISTANT)/data/docs-index.gob.gz
 
 .PHONY: help up down serve web dev lab lab-logs assistant docs-index test e2e lab-e2e selftest eval lint proto boundaries
 

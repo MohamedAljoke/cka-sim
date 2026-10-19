@@ -141,7 +141,8 @@ errors, the exam rule, the page) are reviewed before any model is involved.
     command cuts every page at its `#`, `##` and `###` headings (the `website` adapter, ported from
     `archive/v2`: Hugo shortcodes resolved, examples inlined, about 2,000 characters a chunk, each with its
     `Page › Section` trail and anchor link). It embeds the chunks with Ollama (`nomic-embed-text`, with its
-    `search_document:` / `search_query:` prefixes) into one gzipped gob file, `~/.cache/cka-sim/docs-index.gob.gz`.
+    `search_document:` / `search_query:` prefixes) into one gzipped gob file,
+    `apps/assistant/data/docs-index.gob.gz`, committed so the tutor has its docs without a local Ollama run.
   - **Each page has a hash** of its chunks (and of the chunking's version), so a re-run embeds only the pages
     that changed, and drops the pages that are gone. The index is saved every 512 chunks, so a stopped run
     carries on. Another embedding model embeds every page again.

@@ -264,6 +264,48 @@ func TestTidyingAnUnknownTaskIsNotFound(t *testing.T) {
 	}
 }
 
+func TestSolvingATaskRunsItsSolutionOnItsHost(t *testing.T) {
+	r := &fakeRunner{result: labs.ScriptResult{Output: "deployment.apps/web scaled\n"}}
+	task := wlScale
+	task.Solve = "kubectl scale deployment web --replicas=4\n"
+
+	status, body := call(t, newAPIRunning(r, task), http.MethodPost, "/api/tasks/wl-scale/solve")
+
+	if status != http.StatusOK || !strings.Contains(body, `"passed":true`) || r.host != "node-1" || r.script != task.Solve {
+		t.Errorf("status %d: %s; ran %q on %q", status, body, r.script, r.host)
+	}
+}
+
+func TestAFailedSolutionAnswersItsExitCodeAndOutput(t *testing.T) {
+	r := &fakeRunner{result: labs.ScriptResult{Output: "image not found\n", ExitCode: 1}}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/wl-scale/solve")
+
+	if status != http.StatusOK || !strings.Contains(body, `"passed":false,"exitCode":1`) || !strings.Contains(body, "image not found") {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestSolvingATaskWhileTheLabIsNotReadyIsAConflict(t *testing.T) {
+	r := &fakeRunner{err: fmt.Errorf("%w: the cluster is creating", labs.ErrNotReady)}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/wl-scale/solve")
+
+	if status != http.StatusConflict || !strings.Contains(body, `"code":"lab_not_ready"`) {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestSolvingAnUnknownTaskIsNotFound(t *testing.T) {
+	r := &fakeRunner{}
+
+	status, body := call(t, newAPIRunning(r, wlScale), http.MethodPost, "/api/tasks/net-svc/solve")
+
+	if status != http.StatusNotFound || !strings.Contains(body, `"code":"task_not_found"`) || r.host != "" {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
 func TestCheckingATaskAnswersItsGrade(t *testing.T) {
 	r := &fakeRunner{result: labs.ScriptResult{Output: "deployment.apps/web\nPASS 2 web has 4 replicas\nFAIL 1 web is Ready\n"}}
 

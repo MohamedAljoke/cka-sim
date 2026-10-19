@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -60,7 +61,7 @@ func (uc *IndexDocs) Execute(ctx context.Context, pages []docs.Page, old docs.In
 
 	for _, batch := range batches(changed, batchChunks) {
 		if err := uc.embed(ctx, batch, indexed); err != nil {
-			return docs.Index{}, counts, err
+			return docs.Index{}, counts, errors.Join(err, progress.Save(snapshot()))
 		}
 
 		for _, page := range batch {

@@ -315,8 +315,8 @@ func sections(title, body string) []section {
 	current := section{trail: title}
 
 	var (
-		out []section
-		chapter  string
+		out     []section
+		chapter string
 	)
 	fenced := false
 

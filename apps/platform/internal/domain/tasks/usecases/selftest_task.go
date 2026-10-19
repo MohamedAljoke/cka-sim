@@ -2,40 +2,25 @@ package usecases
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks"
 )
 
 type SelftestTask struct {
-	repo     TaskRepository
-	runner   ScriptRunner
-	clusters *clusters
-	start    *StartTask
-	check    *CheckTask
+	start *StartTask
+	check *CheckTask
+	solve *SolveTask
 }
 
-func NewSelftestTask(repo TaskRepository, runner ScriptRunner, clusters *clusters, start *StartTask,
-	check *CheckTask,
-) *SelftestTask {
-	return &SelftestTask{repo: repo, runner: runner, clusters: clusters, start: start, check: check}
+func NewSelftestTask(start *StartTask, check *CheckTask, solve *SolveTask) *SelftestTask {
+	return &SelftestTask{start: start, check: check, solve: solve}
 }
 
 // Execute proves a task is fair on the running lab: after its setup nothing earns points, and after its
 // solution everything does.
 func (uc *SelftestTask) Execute(ctx context.Context, owner, id string) error {
-	task, err := uc.repo.Get(ctx, id)
-	if errors.Is(err, tasks.ErrNotFound) {
-		return err
-	}
-
-	if err != nil {
-		return fmt.Errorf("%w: %w", tasks.ErrUnavailable, err)
-	}
-
 	started, err := uc.start.Execute(ctx, owner, id)
 	if err != nil {
 		return err
@@ -58,8 +43,13 @@ func (uc *SelftestTask) Execute(ctx context.Context, owner, id string) error {
 			checks(before.Grade, true))
 	}
 
-	if err := uc.solve(ctx, owner, task); err != nil {
+	solved, err := uc.solve.Execute(ctx, owner, id)
+	if err != nil {
 		return err
+	}
+
+	if !solved.Passed() {
+		return fmt.Errorf("solve %s: exit code %d:\n%s", id, solved.ExitCode, solved.Output)
 	}
 
 	after, err := uc.check.Execute(ctx, owner, id)
@@ -70,28 +60,6 @@ func (uc *SelftestTask) Execute(ctx context.Context, owner, id string) error {
 	if after.Grade.Total == 0 || after.Grade.Earned != after.Grade.Total {
 		return fmt.Errorf("%s earns %d/%d after the solution: %s", id, after.Grade.Earned, after.Grade.Total,
 			checks(after.Grade, false))
-	}
-
-	return nil
-}
-
-func (uc *SelftestTask) solve(ctx context.Context, owner string, task tasks.Task) error {
-	ctx, cancel := context.WithTimeout(ctx, setupTimeout)
-	defer cancel()
-
-	cluster := uc.clusters.of(owner)
-
-	cluster.scripts.RLock()
-	defer cluster.scripts.RUnlock()
-
-	result, err := uc.runner.RunScript(ctx, owner, task.Host, task.Solve)
-	switch {
-	case errors.Is(err, labs.ErrNotReady):
-		return err
-	case err != nil:
-		return fmt.Errorf("%w: solve %s: %w", labs.ErrUnavailable, task.ID, err)
-	case !result.Passed():
-		return fmt.Errorf("solve %s: exit code %d:\n%s", task.ID, result.ExitCode, result.Output)
 	}
 
 	return nil

@@ -124,6 +124,23 @@ errors, the exam rule, the page) are reviewed before any model is involved.
   wrong. A second score: did a hint give the answer away?
 - **Review:** a report per task and a total; a run on a handful of tasks is cheap enough to repeat.
 - **Learn:** measuring an agent against ground truth you already have.
+- **Built:** `apps/assistant/cmd/eval`, the `evals` domain and the `pageapi` adapter.
+  - **Flow:** per task, through the page's API as the local student: `start` (heal and setup), `check`, `solution`
+    (the explain), then the tutor is asked, then `POST /api/tasks/{id}/solve` (new: runs `solution.sh`, refused
+    during an exam, also used by the selftest), `check`, the tutor again, and `tidy` whatever happened. The tutor
+    is the real `Reply` loop run in the eval's own process over the same in-memory MCP server and `reviewer.md`,
+    so a prompt or model change is measured without restarting `make assistant`.
+  - **Scoring:** an LLM judge, the same Gemini through `Model`, with two strict rubrics that answer JSON only.
+    Broken: which of the numbered failing checks (`tasks.ReadGrade`'s FAIL lines) the answer names, and whether
+    it gave the answer away (a full manifest or pasteable commands, judged against the explain), with the quote
+    that did. Solved: whether it says nothing is wrong. A task passes when it names every failing check, gives
+    nothing away and finds nothing wrong after the solution. Keywords can't tell "check the Service type" from a
+    restated task, and the checks' descriptions are short enough for a judge to match reliably. The report keeps
+    the answers, the tools used and the judge's reasons, so any verdict can be checked by eye.
+  - **Run:** with `make dev` (or `make serve`) on a ready lab, `CKA_SIM_ASSISTANT_TOKEN` and
+    `CKA_SIM_VERTEX_PROJECT` set, and `gcloud auth application-default login`: `make eval` runs five tasks, one
+    per domain; `make eval TASK=nw-nodeport,tr-cni` picks. It prints a line per task and the total, and writes
+    `apps/assistant/bin/eval-report.md`. About four model answers per task. Not part of `make test`.
 
 ## Part 5 · The Kubernetes docs (built before Part 4)
 

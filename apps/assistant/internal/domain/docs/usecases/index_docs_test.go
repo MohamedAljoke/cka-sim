@@ -72,7 +72,7 @@ func TestAFailedRunKeepsWhatItEmbedded(t *testing.T) {
 	if err == nil {
 		t.Fatal("no error after the embedder failed")
 	}
-	if len(saved) != 1 || len(saved[0].Pages) != 512 {
+	if len(saved) != 2 || len(saved[0].Pages) != 512 || len(saved[1].Pages) != 512 {
 		t.Fatalf("saved %d times, last with %d pages", len(saved), len(saved[len(saved)-1].Pages))
 	}
 }

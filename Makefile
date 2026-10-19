@@ -16,7 +16,7 @@ DOCS_REF ?= main
 DOCS_DIR := $(HOME)/.cache/cka-sim/website
 DOCS_INDEX := $(HOME)/.cache/cka-sim/docs-index.gob.gz
 
-.PHONY: help up down serve web dev lab lab-logs assistant docs-index test e2e lab-e2e selftest lint proto boundaries
+.PHONY: help up down serve web dev lab lab-logs assistant docs-index test e2e lab-e2e selftest eval lint proto boundaries
 
 help:
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
@@ -77,6 +77,9 @@ lab-e2e: ## build and delete a real kind cluster through the agent on this machi
 
 selftest: ## set up, solve and grade every task on the running lab (long); one task: make selftest TASK=<id>
 	cd $(PLATFORM) && go test ./catalog -run 'TestSelftest$(if $(TASK),/^$(TASK)$$)' -selftest -count=1 -v -timeout 90m
+
+eval: ## ask the tutor about broken, then solved tasks on the running lab, judged by Gemini; make eval TASK=a,b
+	cd $(ASSISTANT) && go run ./cmd/eval $(if $(TASK),-tasks $(TASK))
 
 lint: ## lint every Go module with the rules in .golangci.yml
 	@for mod in apps/*/go.mod; do (cd $$(dirname $$mod) && $(GOLANGCI_LINT) run ./...) || exit 1; done

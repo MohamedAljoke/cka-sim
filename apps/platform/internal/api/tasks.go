@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -32,8 +33,8 @@ type solutionView struct {
 	Solution string `json:"solution"`
 }
 
-// A setup that fails is still an answer: the page shows its exit code and the end of its output.
-type setupView struct {
+// A setup or solution that fails is still an answer: its exit code and the end of its output.
+type scriptView struct {
 	Passed   bool   `json:"passed"`
 	ExitCode int    `json:"exitCode"`
 	Output   string `json:"output,omitempty"`
@@ -61,6 +62,7 @@ func (a *api) taskRoutes(handle handleFunc) {
 	handle("POST /api/tasks/{id}/start", a.startTask)
 	handle("POST /api/tasks/{id}/check", a.checkTask)
 	handle("POST /api/tasks/{id}/tidy", a.tidyTask)
+	handle("POST /api/tasks/{id}/solve", a.solveTask)
 }
 
 func (a *api) getTasks(w http.ResponseWriter, r *http.Request) error {
@@ -115,25 +117,7 @@ func (a *api) getTaskSolution(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) startTask(w http.ResponseWriter, r *http.Request) error {
-	if err := a.outsideAnExam(r); err != nil {
-		return err
-	}
-
-	result, err := a.tasks.Start.Execute(r.Context(), studentOf(r), r.PathValue("id"))
-	switch {
-	case errors.Is(err, tasks.ErrNotFound):
-		return httpx.NotFound(err)
-	case errors.Is(err, labs.ErrNotReady):
-		return httpx.Conflict(err)
-	case errors.Is(err, tasks.ErrUnavailable), errors.Is(err, labs.ErrUnavailable):
-		return httpx.Unavailable(err)
-	case err != nil:
-		return err
-	}
-
-	view := setupView{Passed: result.Passed(), ExitCode: result.ExitCode, Output: result.Output}
-
-	return httpx.WriteJSON(w, http.StatusOK, view)
+	return a.runScript(w, r, a.tasks.Start.Execute)
 }
 
 func (a *api) checkTask(w http.ResponseWriter, r *http.Request) error {
@@ -176,6 +160,36 @@ func (a *api) tidyTask(w http.ResponseWriter, r *http.Request) error {
 	w.WriteHeader(http.StatusNoContent)
 
 	return nil
+}
+
+// solveTask runs the task's solution.sh, for the tutor's evals; a student can already read the solution.
+func (a *api) solveTask(w http.ResponseWriter, r *http.Request) error {
+	return a.runScript(w, r, a.tasks.Solve.Execute)
+}
+
+// runScript answers how a setup or a solution ran; both refuse and fail alike.
+func (a *api) runScript(w http.ResponseWriter, r *http.Request,
+	run func(ctx context.Context, owner, id string) (labs.ScriptResult, error),
+) error {
+	if err := a.outsideAnExam(r); err != nil {
+		return err
+	}
+
+	result, err := run(r.Context(), studentOf(r), r.PathValue("id"))
+	switch {
+	case errors.Is(err, tasks.ErrNotFound):
+		return httpx.NotFound(err)
+	case errors.Is(err, labs.ErrNotReady):
+		return httpx.Conflict(err)
+	case errors.Is(err, tasks.ErrUnavailable), errors.Is(err, labs.ErrUnavailable):
+		return httpx.Unavailable(err)
+	case err != nil:
+		return err
+	}
+
+	view := scriptView{Passed: result.Passed(), ExitCode: result.ExitCode, Output: result.Output}
+
+	return httpx.WriteJSON(w, http.StatusOK, view)
 }
 
 func newGradeView(checked usecases.Checked) gradeView {

@@ -102,12 +102,12 @@ func chatWith(t *testing.T, p *fakePlatform, model *scriptedModel, withToken str
 ) ([]string, string, error) {
 	t.Helper()
 	tutorCases := usecases.New(p)
-	toolbox := mcptools.New(func(student string) *mcp.Server { return NewMCPServer(tutorCases, student) })
+	toolbox := mcptools.New(func(student string) *mcp.Server { return NewMCPServer(tutorCases, nil, student) })
 	var m chatusecases.Model
 	if model != nil {
 		m = model
 	}
-	srv := httptest.NewServer(New(tutorCases, chatusecases.New(m, toolbox), "alice", token))
+	srv := httptest.NewServer(New(tutorCases, nil, chatusecases.New(m, toolbox), "alice", token))
 	t.Cleanup(srv.Close)
 	client := assistantv1connect.NewAssistantServiceClient(
 		connect.NewClient(connecthttp.NewTransport(srv.Client(), srv.URL), rpcauth.Bearer(withToken)))

@@ -13,6 +13,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	chatusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/chat/usecases"
+	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/docs"
+	docsusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/docs/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor/usecases"
 )
@@ -125,6 +127,47 @@ func TestInspectClusterNeedsArgs(t *testing.T) {
 	}
 }
 
+func TestSearchDocsIsOfferedOnlyWithAnIndex(t *testing.T) {
+	res, err := mcpSessionWith(t, &fakePlatform{}, searchDocs(&fakeEmbedder{})).ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !slices.ContainsFunc(res.Tools, func(tool *mcp.Tool) bool { return tool.Name == "search_docs" }) {
+		t.Errorf("no search_docs with an index")
+	}
+}
+
+func TestSearchDocsAnswersPassagesWithTheirLinks(t *testing.T) {
+	var got searchOutput
+	call(t, mcpSessionWith(t, &fakePlatform{}, searchDocs(&fakeEmbedder{})), "search_docs",
+		map[string]any{"query": "drain a node"}, &got)
+
+	if len(got.Passages) != 1 || got.Passages[0].URL != "https://kubernetes.io/docs/drain/" {
+		t.Errorf("got %+v", got)
+	}
+}
+
+func TestSearchDocsRefusesAnEmptyQueryWithItsReason(t *testing.T) {
+	text := callFailing(t, mcpSessionWith(t, &fakePlatform{}, searchDocs(&fakeEmbedder{})), "search_docs",
+		map[string]any{"query": " "})
+
+	if !strings.Contains(text, "docs_query") {
+		t.Errorf("got %q", text)
+	}
+}
+
+func TestSearchDocsWithoutOllamaSaysSoWithoutTheCause(t *testing.T) {
+	embedder := &fakeEmbedder{err: errors.New("dial tcp 127.0.0.1:11434: connection refused")}
+
+	text := callFailing(t, mcpSessionWith(t, &fakePlatform{}, searchDocs(embedder)), "search_docs",
+		map[string]any{"query": "drain a node"})
+
+	if !strings.Contains(text, "docs_unavailable") || strings.Contains(text, "11434") {
+		t.Errorf("got %q", text)
+	}
+}
+
 type fakePlatform struct {
 	current    tutor.Task
 	grade      tutor.Grade
@@ -152,9 +195,38 @@ func (p *fakePlatform) Solution(_ context.Context, _, taskID string) (string, er
 	return "solution of " + taskID, p.err
 }
 
+type fakeEmbedder struct {
+	err error
+}
+
+func (e *fakeEmbedder) Model() string { return "fake" }
+
+func (e *fakeEmbedder) EmbedDocuments(context.Context, []string) ([][]float32, error) {
+	return nil, e.err
+}
+
+func (e *fakeEmbedder) EmbedQuery(context.Context, string) ([]float32, error) {
+	return []float32{1}, e.err
+}
+
+type fakeSearcher struct{}
+
+func (fakeSearcher) Search(query string, _ []float32, _ int) []docs.Chunk {
+	return []docs.Chunk{{Title: "Drain", URL: "https://kubernetes.io/docs/drain/", Text: query}}
+}
+
+func searchDocs(embedder *fakeEmbedder) *docsusecases.SearchDocs {
+	return docsusecases.NewSearchDocs(embedder, fakeSearcher{})
+}
+
 func mcpSession(t *testing.T, p *fakePlatform) *mcp.ClientSession {
 	t.Helper()
-	srv := httptest.NewServer(New(usecases.New(p), chatusecases.UseCases{}, "alice", token))
+	return mcpSessionWith(t, p, nil)
+}
+
+func mcpSessionWith(t *testing.T, p *fakePlatform, search *docsusecases.SearchDocs) *mcp.ClientSession {
+	t.Helper()
+	srv := httptest.NewServer(New(usecases.New(p), search, chatusecases.UseCases{}, "alice", token))
 	t.Cleanup(srv.Close)
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil).
 		Connect(context.Background(), &mcp.StreamableClientTransport{Endpoint: srv.URL + "/mcp"}, nil)

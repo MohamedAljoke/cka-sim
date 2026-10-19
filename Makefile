@@ -11,8 +11,12 @@ WEB := apps/web
 COMPOSE := docker compose -f infra/local/compose.yml
 BUF := go run github.com/bufbuild/buf/cmd/buf@v1.74.0
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.0
+# The Kubernetes docs the tutor searches: v1.37's live on kubernetes/website's main until release-1.37 is cut.
+DOCS_REF ?= main
+DOCS_DIR := $(HOME)/.cache/cka-sim/website
+DOCS_INDEX := $(HOME)/.cache/cka-sim/docs-index.gob.gz
 
-.PHONY: help up down serve web dev lab lab-logs assistant test e2e lab-e2e selftest lint proto boundaries
+.PHONY: help up down serve web dev lab lab-logs assistant docs-index test e2e lab-e2e selftest lint proto boundaries
 
 help:
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
@@ -43,7 +47,14 @@ lab-logs: ## follow the lab's log, where a failed cluster build explains itself
 	$(COMPOSE) logs -f lab
 
 assistant: ## serve the tutor's MCP tools on 127.0.0.1:7373/mcp for your own AI CLI; needs make serve or make dev
-	cd $(ASSISTANT) && go run ./cmd/assistant
+	cd $(ASSISTANT) && CKA_SIM_DOCS_INDEX=$${CKA_SIM_DOCS_INDEX:-$(DOCS_INDEX)} go run ./cmd/assistant
+
+docs-index: ## embed the Kubernetes docs for the tutor's search_docs with Ollama; re-runs embed only changed pages
+	@test -d $(DOCS_DIR)/.git || git clone --depth 1 --filter=blob:none --sparse -b $(DOCS_REF) \
+	  https://github.com/kubernetes/website $(DOCS_DIR)
+	git -C $(DOCS_DIR) sparse-checkout set content/en/docs content/en/examples
+	git -C $(DOCS_DIR) fetch --depth 1 origin $(DOCS_REF) && git -C $(DOCS_DIR) checkout -q FETCH_HEAD
+	cd $(ASSISTANT) && go run ./cmd/docs -dir $(DOCS_DIR) -out $(DOCS_INDEX) -ref $$(git -C $(DOCS_DIR) rev-parse HEAD)
 
 test: boundaries $(WEB)/node_modules ## vet and test the Go code, type-check the page
 	cd $(SHARED) && go vet ./... && go test ./...

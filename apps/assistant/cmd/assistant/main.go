@@ -18,8 +18,11 @@ import (
 
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/api"
 	chatusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/chat/usecases"
+	docsusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/docs/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor/usecases"
+	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/files"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/mcptools"
+	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/ollama"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/platform"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/vertex"
 )
@@ -34,6 +37,10 @@ type settings struct {
 	VertexProject  string `key:"CKA_SIM_VERTEX_PROJECT" default:""`
 	VertexLocation string `key:"CKA_SIM_VERTEX_LOCATION" default:"global"`
 	Model          string `key:"CKA_SIM_MODEL" default:"gemini-3.5-flash"`
+	// The index make docs-index writes. Empty or not built yet: the tutor has no search_docs.
+	DocsIndex  string `key:"CKA_SIM_DOCS_INDEX" default:""`
+	OllamaURL  string `key:"CKA_SIM_OLLAMA_URL" default:"http://127.0.0.1:11434"`
+	EmbedModel string `key:"CKA_SIM_EMBED_MODEL" default:"nomic-embed-text"`
 }
 
 func main() {
@@ -62,9 +69,14 @@ func run() error {
 		return err
 	}
 
+	search, docsState, err := searchOf(cfg)
+	if err != nil {
+		return err
+	}
+
 	tutorCases := usecases.New(platform.New(cfg.PlatformURL, cfg.AssistantToken))
-	toolbox := mcptools.New(func(student string) *mcp.Server { return api.NewMCPServer(tutorCases, student) })
-	handler := api.New(tutorCases, chatusecases.New(model, toolbox), cfg.Student, cfg.AssistantToken)
+	toolbox := mcptools.New(func(student string) *mcp.Server { return api.NewMCPServer(tutorCases, search, student) })
+	handler := api.New(tutorCases, search, chatusecases.New(model, toolbox), cfg.Student, cfg.AssistantToken)
 	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 
 	go func() {
@@ -78,8 +90,9 @@ func run() error {
 		}
 	}()
 
-	if _, err := fmt.Fprintf(os.Stdout, "assistant on http://%s (MCP at /mcp for %s, chat on %s); Ctrl-C stops it\n",
-		listener.Addr(), cfg.Student, aiOf(cfg)); err != nil {
+	if _, err := fmt.Fprintf(os.Stdout,
+		"assistant on http://%s (MCP at /mcp for %s, chat on %s, %s); Ctrl-C stops it\n",
+		listener.Addr(), cfg.Student, aiOf(cfg), docsState); err != nil {
 		return err
 	}
 
@@ -97,6 +110,33 @@ func modelOf(ctx context.Context, cfg settings) (chatusecases.Model, error) {
 	}
 
 	return vertex.New(ctx, cfg.VertexProject, cfg.VertexLocation, cfg.Model)
+}
+
+// searchOf loads the docs index into memory. Questions must be embedded by the model that embedded the docs, so
+// an index from another model is refused rather than searched badly.
+func searchOf(cfg settings) (*docsusecases.SearchDocs, string, error) {
+	if cfg.DocsIndex == "" {
+		return nil, "no docs", nil
+	}
+
+	index, err := files.LoadDocs(cfg.DocsIndex)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if len(index.Pages) == 0 {
+		return nil, "no docs: run make docs-index", nil
+	}
+
+	if index.Model != cfg.EmbedModel {
+		return nil, "", fmt.Errorf("the docs index %s was embedded with %s, not %s; set CKA_SIM_EMBED_MODEL=%s or "+
+			"run make docs-index again", cfg.DocsIndex, index.Model, cfg.EmbedModel, index.Model)
+	}
+
+	search := files.NewSearch(index)
+	state := fmt.Sprintf("%d docs passages", search.Chunks())
+
+	return docsusecases.NewSearchDocs(ollama.New(cfg.OllamaURL, cfg.EmbedModel), search), state, nil
 }
 
 func aiOf(cfg settings) string {

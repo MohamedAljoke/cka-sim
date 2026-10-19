@@ -1,4 +1,4 @@
-# The assistant, in four parts
+# The assistant, in five parts
 
 The goal: an AI tutor that knows the task you're on, can look at your cluster and run the grader, and helps you
 learn instead of doing the task for you. It sits in the task page as a chat, beside the terminal.
@@ -14,6 +14,7 @@ Part 1  the tools: TutorService on the platform ─► MCP server in apps/assist
 Part 2  the tutor in the page: chat panel ─► platform ─► AssistantService         (a stand-in answers first)
 Part 3  the AI: a Gemini loop on llm.Model over the MCP tools, in place of the stand-in
 Part 4  evals: break a task, let the tutor diagnose it, score it against the grader
+Part 5  the Kubernetes docs: search_docs over an index of kubernetes.io, embedded with Ollama
 ```
 
 ## The shape
@@ -124,11 +125,32 @@ errors, the exam rule, the page) are reviewed before any model is involved.
 - **Review:** a report per task and a total; a run on a handful of tasks is cheap enough to repeat.
 - **Learn:** measuring an agent against ground truth you already have.
 
+## Part 5 · The Kubernetes docs (built before Part 4)
+
+- **Scope:**
+  - `make docs-index` makes a sparse clone of `kubernetes/website` (`content/en/docs` and `examples`, `main`,
+    which holds v1.37 until `release-1.37` is cut) in `~/.cache/cka-sim/website`, and runs `cmd/docs`. That
+    command cuts every page at its `#`, `##` and `###` headings (the `website` adapter, ported from
+    `archive/v2`: Hugo shortcodes resolved, examples inlined, about 2,000 characters a chunk, each with its
+    `Page › Section` trail and anchor link). It embeds the chunks with Ollama (`nomic-embed-text`, with its
+    `search_document:` / `search_query:` prefixes) into one gzipped gob file, `~/.cache/cka-sim/docs-index.gob.gz`.
+  - **Each page has a hash** of its chunks (and of the chunking's version), so a re-run embeds only the pages
+    that changed, and drops the pages that are gone. The index is saved every 512 chunks, so a stopped run
+    carries on. Another embedding model embeds every page again.
+  - `make assistant` loads the index into memory. `search_docs` embeds the question and searches hybrid: the 40
+    nearest chunks by cosine and the 40 best BM25 matches on any of the question's words, merged by reciprocal
+    rank fusion (k = 60). It answers the top 5 with their links. There's no `search_docs` without an index, and
+    an index from another model stops the assistant at start. `reviewer.md` says to look things up and link them.
+- **Review:** `make docs-index` twice (the second embeds nothing); ask the tutor "what is a
+  PodDisruptionBudget?" and expect a kubernetes.io link.
+- **Learn:** chunking real docs, embeddings, and why keyword search still matters next to vectors.
+- **Left out:** a retrieval eval (recall@5 per mode, with Part 4), the docs in compose or on GKE (no Ollama
+  there yet; the `Embedder` interface takes Vertex in one adapter), Postgres and pgvector.
+
 ## Later
 
 Ideas, each its own step:
 - **An AI CLI in a terminal tab** (gemini-cli or Claude Code in a pty, as `/ws/terminal` does for the shell),
   locked down by managed settings: no shell, edit, write or web tools, only our MCP server.
 - **Guards on tool output:** flag cluster text that reads like instructions to the AI.
-- **The Kubernetes docs as a searchable reference (RAG)**, cited by link.
 - **Learner notes** across tasks.

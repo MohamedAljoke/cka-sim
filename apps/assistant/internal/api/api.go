@@ -16,6 +16,8 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/rpcauth"
 
 	chatusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/chat/usecases"
+	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/docs"
+	docsusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/docs/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor/usecases"
 )
@@ -27,13 +29,15 @@ var errFailed = errors.New("something went wrong; try again")
 
 type tools struct {
 	cases   usecases.UseCases
+	docs    *docsusecases.SearchDocs
 	student string
 }
 
 // New serves the tutor's tools over MCP for one student at /mcp, for an AI CLI on this machine, and the chat
 // over Connect to the platform, which names the student in each call.
-func New(cases usecases.UseCases, chats chatusecases.UseCases, student, token string) http.Handler {
-	server := NewMCPServer(cases, student)
+func New(cases usecases.UseCases, search *docsusecases.SearchDocs, chats chatusecases.UseCases, student, token string,
+) http.Handler {
+	server := NewMCPServer(cases, search, student)
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{SessionTimeout: time.Hour}))
@@ -46,8 +50,9 @@ func New(cases usecases.UseCases, chats chatusecases.UseCases, student, token st
 }
 
 // NewMCPServer is the tutor's tools and instructions for one student, for an AI CLI and for the tutor's own chat.
-func NewMCPServer(cases usecases.UseCases, student string) *mcp.Server {
-	handlers := &tools{cases: cases, student: student}
+// Without a docs index (search is nil) there is no search_docs.
+func NewMCPServer(cases usecases.UseCases, search *docsusecases.SearchDocs, student string) *mcp.Server {
+	handlers := &tools{cases: cases, docs: search, student: student}
 	server := mcp.NewServer(&mcp.Implementation{Name: "cka-sim", Version: "1"},
 		&mcp.ServerOptions{Instructions: reviewer})
 
@@ -72,6 +77,15 @@ func NewMCPServer(cases usecases.UseCases, student string) *mcp.Server {
 		Description: "The solution of a task (the current one by default). Only when the student clearly asks " +
 			"for the solution; otherwise give hints.",
 	}, handlers.explain)
+
+	if search != nil {
+		mcp.AddTool(server, &mcp.Tool{
+			Name: "search_docs",
+			Description: "Search the Kubernetes docs at kubernetes.io (v1.37, the pages allowed during the CKA) and " +
+				"answer the best passages with their links. Ask in words, like a search: \"PodDisruptionBudget " +
+				"minAvailable\", \"drain a node\", \"etcd snapshot restore\".",
+		}, handlers.searchDocs)
+	}
 
 	return server
 }
@@ -117,6 +131,20 @@ type inspectionOutput struct {
 
 type solutionOutput struct {
 	Solution string `json:"solution"`
+}
+
+type searchInput struct {
+	Query string `json:"query" jsonschema:"what to look up, in a few words"`
+}
+
+type passageOutput struct {
+	Title string `json:"title"`
+	URL   string `json:"url"`
+	Text  string `json:"text"`
+}
+
+type searchOutput struct {
+	Passages []passageOutput `json:"passages"`
 }
 
 func (t *tools) currentTask(ctx context.Context, _ *mcp.CallToolRequest, _ noInput,
@@ -171,12 +199,30 @@ func (t *tools) explain(ctx context.Context, _ *mcp.CallToolRequest, in taskInpu
 	return nil, solutionOutput{Solution: solution}, nil
 }
 
+func (t *tools) searchDocs(ctx context.Context, _ *mcp.CallToolRequest, in searchInput,
+) (*mcp.CallToolResult, searchOutput, error) {
+	found, err := t.docs.Execute(ctx, in.Query)
+	if err != nil {
+		return nil, searchOutput{}, answer("search_docs", err)
+	}
+
+	out := searchOutput{Passages: []passageOutput{}}
+	for _, chunk := range found {
+		out.Passages = append(out.Passages, passageOutput{Title: chunk.Title, URL: chunk.URL, Text: chunk.Text})
+	}
+
+	return nil, out, nil
+}
+
 // answer turns a failure into what the AI reads: a refusal with the platform's reason, or a short message for
 // anything it can't act on, logged with its cause.
 func answer(tool string, err error) error {
 	switch {
-	case errors.Is(err, tutor.ErrRefused):
+	case errors.Is(err, tutor.ErrRefused), errors.Is(err, docs.ErrQuery):
 		return err
+	case errors.Is(err, docs.ErrUnavailable):
+		slog.Error("tool failed", "tool", tool, "err", err)
+		return docs.ErrUnavailable
 	case errors.Is(err, tutor.ErrUnavailable):
 		slog.Error("tool failed", "tool", tool, "err", err)
 		return tutor.ErrUnavailable

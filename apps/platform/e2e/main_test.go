@@ -22,8 +22,9 @@ const (
 var (
 	serverBin string
 	baseURL   string
-	agentURL  string
-	agent     = newFakeAgent()
+	agentURL     string
+	agent        = newFakeAgent()
+	assistantURL string
 )
 
 func TestMain(m *testing.M) {
@@ -46,6 +47,9 @@ func run(m *testing.M) int {
 	var closeAgent func()
 	agentURL, closeAgent = serveAgent(agent)
 	defer closeAgent()
+	var closeAssistant func()
+	assistantURL, closeAssistant = serveAssistant()
+	defer closeAssistant()
 	server, url, err := start(agentURL, filepath.Join(dir, "state"))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "start the server:", err)
@@ -66,7 +70,8 @@ var listening = regexp.MustCompile(`http://[0-9.]+:[0-9]+`)
 func start(labURL, stateDir string) (*exec.Cmd, string, error) {
 	server := exec.Command(serverBin)
 	server.Env = append(os.Environ(), "CKA_SIM_PLATFORM_ADDR=127.0.0.1:0", "CKA_SIM_LAB_URL="+labURL,
-		"CKA_SIM_AGENT_TOKEN="+agentToken, "CKA_SIM_STATE_DIR="+stateDir, "CKA_SIM_ASSISTANT_TOKEN="+assistantToken)
+		"CKA_SIM_AGENT_TOKEN="+agentToken, "CKA_SIM_STATE_DIR="+stateDir, "CKA_SIM_ASSISTANT_TOKEN="+assistantToken,
+		"CKA_SIM_ASSISTANT_URL="+assistantURL)
 	server.Stderr = os.Stderr
 	stdout, err := server.StdoutPipe()
 	if err != nil {

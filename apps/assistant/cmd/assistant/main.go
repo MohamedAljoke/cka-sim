@@ -15,6 +15,7 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/config"
 
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/api"
+	chatusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/chat/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/platform"
 )
@@ -23,7 +24,7 @@ type settings struct {
 	Addr           string `key:"CKA_SIM_ASSISTANT_ADDR"`
 	PlatformURL    string `key:"CKA_SIM_PLATFORM_URL"`
 	AssistantToken string `key:"CKA_SIM_ASSISTANT_TOKEN" minLength:"32"`
-	// The student whose task and cluster the tools see, until each session names its own.
+	// The student whose task and cluster the MCP tools see; the chat gets its student from the platform.
 	Student string `key:"CKA_SIM_STUDENT" default:"local"`
 }
 
@@ -48,8 +49,9 @@ func run() error {
 		return fmt.Errorf("claim %s: %w", cfg.Addr, err)
 	}
 
-	cases := usecases.New(platform.New(cfg.PlatformURL, cfg.AssistantToken))
-	srv := &http.Server{Handler: api.New(cases, cfg.Student), ReadHeaderTimeout: 10 * time.Second}
+	tutor := platform.New(cfg.PlatformURL, cfg.AssistantToken)
+	handler := api.New(usecases.New(tutor), chatusecases.New(tutor), cfg.Student, cfg.AssistantToken)
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 
 	go func() {
 		<-ctx.Done()
@@ -62,7 +64,7 @@ func run() error {
 		}
 	}()
 
-	if _, err := fmt.Fprintf(os.Stdout, "assistant on http://%s/mcp for %s; Ctrl-C stops it\n",
+	if _, err := fmt.Fprintf(os.Stdout, "assistant on http://%s (MCP at /mcp for %s); Ctrl-C stops it\n",
 		listener.Addr(), cfg.Student); err != nil {
 		return err
 	}

@@ -4,6 +4,7 @@ import type { LabStatus } from './lab'
 import { homePath } from './routes'
 import { setupPanel } from './setup'
 import { shellPanel } from './shell'
+import { tutorPanel } from './tutor'
 import { chips, copyable, el, markdown, message } from './ui'
 
 export async function showTask(pane: HTMLElement, id: string, lab: LabStatus, signal: AbortSignal) {
@@ -31,7 +32,16 @@ export async function showTask(pane: HTMLElement, id: string, lab: LabStatus, si
   })
 
   const brief = el('article', 'task-brief')
-  brief.append(backLink(), el('h1', '', task.title), chips(task), hostLine(task), question, check.result, solutionPanel(task.id, signal))
+  brief.append(
+    backLink(),
+    el('h1', '', task.title),
+    chips(task),
+    hostLine(task),
+    question,
+    check.result,
+    tutorPanel(task.id, signal),
+    solutionPanel(task.id, signal),
+  )
 
   const bar = el('div', 'task-bar')
   bar.append(setup.panel, check.button)

@@ -905,3 +905,97 @@ body[data-page='exam'][data-phase='running'] main {
     display: block;
   }
 }
+
+.tutor-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+
+.tutor-panel h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.tutor-intro {
+  margin: 0;
+  font-size: 14px;
+}
+
+.tutor-log {
+  display: grid;
+  gap: 10px;
+}
+
+.tutor-log[hidden] {
+  display: none;
+}
+
+.tutor-message {
+  margin: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.tutor-message.student {
+  justify-self: end;
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--chip);
+  white-space: pre-wrap;
+}
+
+.tutor-message.tutor {
+  padding-left: 12px;
+  border-left: 2px solid var(--accent);
+}
+
+.tutor-text {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.tutor-tools {
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.tutor-tools:empty {
+  display: none;
+}
+
+.tutor-tools li::before {
+  content: '↳ ';
+}
+
+.tutor-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.tutor-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  resize: vertical;
+}
+
+.tutor-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

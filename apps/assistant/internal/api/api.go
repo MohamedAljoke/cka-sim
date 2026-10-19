@@ -8,8 +8,14 @@ import (
 	"net/http"
 	"time"
 
+	"connectrpc.com/connect/v2"
+	"connectrpc.com/connect/v2/connecthttp"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/assistant/v1/assistantv1connect"
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/rpcauth"
+
+	chatusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/chat/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor/usecases"
 )
@@ -24,8 +30,9 @@ type tools struct {
 	student string
 }
 
-// New serves the tutor's tools over MCP for one student, at /mcp.
-func New(cases usecases.UseCases, student string) http.Handler {
+// New serves the tutor's tools over MCP for one student at /mcp, for an AI CLI on this machine, and the chat
+// over Connect to the platform, which names the student in each call.
+func New(cases usecases.UseCases, chats chatusecases.UseCases, student, token string) http.Handler {
 	handlers := &tools{cases: cases, student: student}
 	server := mcp.NewServer(&mcp.Implementation{Name: "cka-sim", Version: "1"},
 		&mcp.ServerOptions{Instructions: reviewer})
@@ -55,6 +62,10 @@ func New(cases usecases.UseCases, student string) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{SessionTimeout: time.Hour}))
+
+	rpc := connect.NewServer(rpcauth.RequireBearer(token))
+	assistantv1connect.RegisterAssistantServiceHandler(rpc, &chatService{cases: chats})
+	connecthttp.Mount(mux, rpc)
 
 	return mux
 }

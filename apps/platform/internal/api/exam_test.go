@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	chatusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/chats/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/exams"
 	examusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/exams/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
@@ -128,7 +129,7 @@ func newExamAPI(r *fakeRunner, lab *fakeLabProvider) http.Handler {
 	}
 	taskCases := usecases.New(fakeRepository{tasks: []tasks.Task{wlScale}}, r)
 	labCases := labusecases.New(lab, nil)
-	return New(taskCases, labCases, examsFor(taskCases, labCases, nil), nil)
+	return New(taskCases, labCases, examsFor(taskCases, labCases, nil), chatusecases.UseCases{}, nil)
 }
 
 func examsFor(taskCases usecases.UseCases, labCases labusecases.UseCases, repo examusecases.ExamRepository) examusecases.UseCases {

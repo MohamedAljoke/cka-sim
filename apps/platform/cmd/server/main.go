@@ -19,9 +19,11 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/config"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/catalog"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/api"
+	chatusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/chats/usecases"
 	examusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/exams/usecases"
 	labusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks/usecases"
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/infra/adapters/assistant"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/infra/adapters/files"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/infra/adapters/kube"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/infra/adapters/labagent"
@@ -39,8 +41,10 @@ type settings struct {
 	LabTokenSecret string `key:"CKA_SIM_LAB_TOKEN_SECRET" default:"cka-sim-agent"`
 	// "alice=<token>,bob=<token>": each student, with the token their link carries. Empty: everyone is "local".
 	Students string `key:"CKA_SIM_STUDENTS" default:""`
-	// The assistant's token for TutorService. Empty: TutorService is off.
+	// The assistant's token, for TutorService and for calling its chat. Empty: both are off.
 	AssistantToken string `key:"CKA_SIM_ASSISTANT_TOKEN" default:""`
+	// Where the assistant's chat answers, like http://127.0.0.1:7373. Empty: the page's assistant is off.
+	AssistantURL string `key:"CKA_SIM_ASSISTANT_URL" default:""`
 }
 
 type labFleet interface {
@@ -106,7 +110,7 @@ func run() error {
 		return err
 	}
 
-	handler := api.New(taskCases, labCases, examCases, students)
+	handler := api.New(taskCases, labCases, examCases, chatusecases.New(tutorOf(cfg), examCases.Get), students)
 	if cfg.AssistantToken != "" {
 		handler = api.WithTutor(handler, cfg.AssistantToken, taskCases, labCases, examCases, students)
 	}
@@ -133,6 +137,15 @@ func run() error {
 	}
 
 	return nil
+}
+
+// tutorOf is nil, which turns the page's assistant off, unless both its address and its token are set.
+func tutorOf(cfg settings) chatusecases.Tutor {
+	if cfg.AssistantURL == "" || cfg.AssistantToken == "" {
+		return nil
+	}
+
+	return assistant.New(cfg.AssistantURL, cfg.AssistantToken)
 }
 
 // fleetOf gives each student a lab: their own pod on Kubernetes, or the one lab container on this machine.

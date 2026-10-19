@@ -12,12 +12,15 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	chatusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/chat/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor/usecases"
 )
 
+const token = "unit-assistant-token-0123456789abcdef"
+
 func TestTheServerOffersTheFourToolsAndTheReviewersInstructions(t *testing.T) {
-	session := connect(t, &fakePlatform{})
+	session := mcpSession(t, &fakePlatform{})
 
 	res, err := session.ListTools(context.Background(), nil)
 	if err != nil {
@@ -41,7 +44,7 @@ func TestCurrentTaskIsTheStudentsTask(t *testing.T) {
 	p := &fakePlatform{current: tutor.Task{ID: "wl-scale", Host: "cka-sim-control-plane", Question: "Scale it to 4."}}
 
 	var task taskOutput
-	call(t, connect(t, p), "current_task", nil, &task)
+	call(t, mcpSession(t, p), "current_task", nil, &task)
 
 	if task.ID != "wl-scale" || task.Question != "Scale it to 4." || p.student != "alice" {
 		t.Errorf("got %+v for %q", task, p.student)
@@ -55,7 +58,7 @@ func TestRunCheckGradesTheCurrentTask(t *testing.T) {
 	}
 
 	var grade gradeOutput
-	call(t, connect(t, p), "run_check", nil, &grade)
+	call(t, mcpSession(t, p), "run_check", nil, &grade)
 
 	if grade.TaskID != "wl-scale" || grade.Earned != 3 || len(grade.Checks) != 1 || grade.Checks[0].Description != "labelled" {
 		t.Errorf("got %+v", grade)
@@ -66,7 +69,7 @@ func TestInspectClusterAnswersKubectlsOutput(t *testing.T) {
 	p := &fakePlatform{inspection: tutor.Inspection{Output: "web 1/1\n"}}
 
 	var got inspectionOutput
-	call(t, connect(t, p), "inspect_cluster", map[string]any{"args": []string{"get", "pods"}}, &got)
+	call(t, mcpSession(t, p), "inspect_cluster", map[string]any{"args": []string{"get", "pods"}}, &got)
 
 	if got.Output != "web 1/1\n" || strings.Join(p.args, " ") != "get pods" {
 		t.Errorf("got %+v; sent %q", got, p.args)
@@ -75,7 +78,7 @@ func TestInspectClusterAnswersKubectlsOutput(t *testing.T) {
 
 func TestExplainAnswersTheSolutionOfANamedTask(t *testing.T) {
 	var got solutionOutput
-	call(t, connect(t, &fakePlatform{}), "explain", map[string]any{"task_id": "wl-scale"}, &got)
+	call(t, mcpSession(t, &fakePlatform{}), "explain", map[string]any{"task_id": "wl-scale"}, &got)
 
 	if got.Solution != "solution of wl-scale" {
 		t.Errorf("got %+v", got)
@@ -85,7 +88,7 @@ func TestExplainAnswersTheSolutionOfANamedTask(t *testing.T) {
 func TestARefusalReachesTheAIWithItsReason(t *testing.T) {
 	p := &fakePlatform{err: fmt.Errorf("%w: %s", tutor.ErrRefused, `not_read_only: "delete" isn't allowed`)}
 
-	text := callFailing(t, connect(t, p), "inspect_cluster", map[string]any{"args": []string{"delete", "pod", "web"}})
+	text := callFailing(t, mcpSession(t, p), "inspect_cluster", map[string]any{"args": []string{"delete", "pod", "web"}})
 
 	if !strings.Contains(text, `"delete" isn't allowed`) {
 		t.Errorf("got %q", text)
@@ -95,7 +98,7 @@ func TestARefusalReachesTheAIWithItsReason(t *testing.T) {
 func TestAPlatformThatIsDownSaysSoWithoutTheCause(t *testing.T) {
 	p := &fakePlatform{err: fmt.Errorf("%w: %w", tutor.ErrUnavailable, errors.New("dial tcp 127.0.0.1:7070"))}
 
-	text := callFailing(t, connect(t, p), "explain", nil)
+	text := callFailing(t, mcpSession(t, p), "explain", nil)
 
 	if !strings.Contains(text, "platform_unavailable") || strings.Contains(text, "7070") {
 		t.Errorf("got %q", text)
@@ -105,7 +108,7 @@ func TestAPlatformThatIsDownSaysSoWithoutTheCause(t *testing.T) {
 func TestAnyOtherFailureNeverDescribesItself(t *testing.T) {
 	p := &fakePlatform{err: errors.New("unauthenticated: wrong or missing token")}
 
-	text := callFailing(t, connect(t, p), "current_task", nil)
+	text := callFailing(t, mcpSession(t, p), "current_task", nil)
 
 	if text != errFailed.Error() {
 		t.Errorf("got %q", text)
@@ -115,7 +118,7 @@ func TestAnyOtherFailureNeverDescribesItself(t *testing.T) {
 func TestInspectClusterNeedsArgs(t *testing.T) {
 	p := &fakePlatform{}
 
-	callFailing(t, connect(t, p), "inspect_cluster", nil)
+	callFailing(t, mcpSession(t, p), "inspect_cluster", nil)
 
 	if p.args != nil {
 		t.Errorf("sent %q", p.args)
@@ -149,9 +152,9 @@ func (p *fakePlatform) Solution(_ context.Context, _, taskID string) (string, er
 	return "solution of " + taskID, p.err
 }
 
-func connect(t *testing.T, p *fakePlatform) *mcp.ClientSession {
+func mcpSession(t *testing.T, p *fakePlatform) *mcp.ClientSession {
 	t.Helper()
-	srv := httptest.NewServer(New(usecases.New(p), "alice"))
+	srv := httptest.NewServer(New(usecases.New(p), chatusecases.New(p), "alice", token))
 	t.Cleanup(srv.Close)
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil).
 		Connect(context.Background(), &mcp.StreamableClientTransport{Endpoint: srv.URL + "/mcp"}, nil)

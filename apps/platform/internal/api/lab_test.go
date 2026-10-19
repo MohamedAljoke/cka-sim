@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	chatusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/chats/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
 	labusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks/usecases"
@@ -96,5 +97,5 @@ func (p *fakeLabProvider) OpenShell(_ context.Context, _ string, size labs.Termi
 
 func newLabAPI(p labusecases.LabProvider) http.Handler {
 	labCases := labusecases.New(p, nil)
-	return New(usecases.UseCases{}, labCases, examsFor(usecases.UseCases{}, labCases, nil), nil)
+	return New(usecases.UseCases{}, labCases, examsFor(usecases.UseCases{}, labCases, nil), chatusecases.UseCases{}, nil)
 }

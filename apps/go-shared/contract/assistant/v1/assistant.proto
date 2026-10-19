@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package assistant.v1;
+
+option go_package = "github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/assistant/v1;assistantv1";
+
+// AssistantService is served by the assistant and called by the platform for a student it has already
+// identified. Every call needs "Authorization: Bearer <token>"; a wrong or missing token fails with
+// UNAUTHENTICATED.
+service AssistantService {
+  // Chat answers the last message of a conversation as a stream of events: the tools the tutor uses as it
+  // uses them, and its answer in pieces. The stream ends when the answer is complete. INVALID_ARGUMENT for a
+  // conversation that doesn't end with the student's message.
+  rpc Chat(ChatRequest) returns (stream ChatResponse);
+}
+
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_STUDENT = 1;
+  ROLE_TUTOR = 2;
+}
+
+message Message {
+  Role role = 1;
+  string text = 2;
+}
+
+message ChatRequest {
+  string student = 1;
+  // The task open in the student's page, which may not be the one set up on their cluster.
+  string task_id = 2;
+  // The whole conversation so far, oldest first, ending with the student's message. The assistant keeps none.
+  repeated Message messages = 3;
+}
+
+message ChatResponse {
+  oneof event {
+    // The next piece of the answer.
+    string text = 1;
+    // The tool the tutor is using, like "inspect_cluster".
+    string tool = 2;
+  }
+}

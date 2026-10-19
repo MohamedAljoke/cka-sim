@@ -15,6 +15,7 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/tutor/v1/tutorv1connect"
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/rpcauth"
 
+	chatusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/chats/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
 	labusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks"
@@ -183,7 +184,7 @@ func newTutorAPIWith(repo usecases.TaskRepository, r *fakeRunner, students map[s
 	taskCases := usecases.New(repo, r)
 	labCases := labusecases.New(&fakeLabProvider{lab: labs.Lab{State: labs.Ready}}, r)
 	examCases := examsFor(taskCases, labCases, nil)
-	page := New(taskCases, labCases, examCases, students)
+	page := New(taskCases, labCases, examCases, chatusecases.UseCases{}, students)
 
 	return WithTutor(page, tutorToken, taskCases, labCases, examCases, students)
 }

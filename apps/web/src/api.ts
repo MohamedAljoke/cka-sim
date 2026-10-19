@@ -138,6 +138,33 @@ export async function flagTask(id: string, flagged: boolean, signal?: AbortSigna
   await call(flagged ? 'PUT' : 'DELETE', `/api/exam/tasks/${encodeURIComponent(id)}/flag`, signal)
 }
 
+export type ChatMessage = { role: 'student' | 'tutor'; text: string }
+
+export type ChatEvent = { type: 'tool'; name: string } | { type: 'text'; text: string }
+
+// The answer comes as server-sent events over this POST: "tool" and "text" as the tutor works, then "done", or
+// "error" once it has begun. EventSource can't send a body, so the stream is read by hand.
+export async function chat(taskId: string, messages: ChatMessage[], signal: AbortSignal, onEvent: (event: ChatEvent) => void): Promise<void> {
+  const res = await call('POST', '/api/assistant/chat', signal, { taskId, messages })
+  const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) throw new Error('the answer stopped before it was complete')
+    buffer += value
+    for (let end = buffer.indexOf('\n\n'); end >= 0; end = buffer.indexOf('\n\n')) {
+      const block = buffer.slice(0, end)
+      buffer = buffer.slice(end + 2)
+      const event = /^event: (.*)$/m.exec(block)?.[1]
+      const data = JSON.parse(/^data: (.*)$/m.exec(block)?.[1] ?? '{}')
+      if (event === 'done') return
+      if (event === 'error') throw new Error(data.detail)
+      if (event === 'tool') onEvent({ type: 'tool', name: data.name })
+      if (event === 'text') onEvent({ type: 'text', text: data.text })
+    }
+  }
+}
+
 // Null when the site gives each student a token and this browser has none.
 export async function getStudent(): Promise<string | null> {
   const res = await fetch('/api/student')

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	chatusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/chats/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
 	labusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks"
@@ -327,12 +328,12 @@ func newAPI(all ...tasks.Task) http.Handler {
 
 func newAPIWith(repo usecases.TaskRepository) http.Handler {
 	taskCases := usecases.New(repo, &fakeRunner{})
-	return New(taskCases, labusecases.UseCases{}, examsFor(taskCases, labusecases.UseCases{}, nil), nil)
+	return New(taskCases, labusecases.UseCases{}, examsFor(taskCases, labusecases.UseCases{}, nil), chatusecases.UseCases{}, nil)
 }
 
 func newAPIRunning(r *fakeRunner, all ...tasks.Task) http.Handler {
 	taskCases := usecases.New(fakeRepository{tasks: all}, r)
-	return New(taskCases, labusecases.UseCases{}, examsFor(taskCases, labusecases.UseCases{}, nil), nil)
+	return New(taskCases, labusecases.UseCases{}, examsFor(taskCases, labusecases.UseCases{}, nil), chatusecases.UseCases{}, nil)
 }
 
 type fakeRunner struct {

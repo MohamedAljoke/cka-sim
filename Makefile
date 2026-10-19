@@ -5,13 +5,14 @@ export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' .env 2>/dev/null)
 
 PLATFORM := apps/platform
 LAB := apps/lab
+ASSISTANT := apps/assistant
 SHARED := apps/go-shared
 WEB := apps/web
 COMPOSE := docker compose -f infra/local/compose.yml
 BUF := go run github.com/bufbuild/buf/cmd/buf@v1.74.0
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.0
 
-.PHONY: help up down serve web dev lab lab-logs test e2e lab-e2e selftest lint proto boundaries
+.PHONY: help up down serve web dev lab lab-logs assistant test e2e lab-e2e selftest lint proto boundaries
 
 help:
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
@@ -41,18 +42,24 @@ lab: ## build and start only the lab, for make dev; its agent listens on 127.0.0
 lab-logs: ## follow the lab's log, where a failed cluster build explains itself
 	$(COMPOSE) logs -f lab
 
+assistant: ## serve the tutor's MCP tools on 127.0.0.1:7373/mcp for your own AI CLI; needs make serve or make dev
+	cd $(ASSISTANT) && go run ./cmd/assistant
+
 test: boundaries $(WEB)/node_modules ## vet and test the Go code, type-check the page
 	cd $(SHARED) && go vet ./... && go test ./...
 	cd $(PLATFORM) && go vet ./... && go test $$(go list ./... | grep -v /e2e$$)
 	cd $(LAB) && go vet ./... && go test $$(go list ./... | grep -v /e2e$$)
+	cd $(ASSISTANT) && go vet ./... && go test $$(go list ./... | grep -v /e2e$$)
 	@# Never cached: the e2e tests build their binary in a subprocess, so Go can't see when its code changes.
 	cd $(PLATFORM) && go test -count=1 ./e2e
 	cd $(LAB) && go test -count=1 ./e2e
+	cd $(ASSISTANT) && go test -count=1 ./e2e
 	cd $(WEB) && npx tsc
 
-e2e: ## run the platform's and the lab's end-to-end tests against their real binaries
+e2e: ## run the platform's, the lab's and the assistant's end-to-end tests against their real binaries
 	cd $(PLATFORM) && go test ./e2e -count=1 -v
 	cd $(LAB) && go test ./e2e -count=1 -v
+	cd $(ASSISTANT) && go test ./e2e -count=1 -v
 
 lab-e2e: ## build and delete a real kind cluster through the agent on this machine's Docker (minutes)
 	cd $(LAB) && go test ./e2e -count=1 -v -timeout 30m -run TestARealCluster -create

@@ -78,7 +78,8 @@ Built in two halves, each reviewed on its own.
     `reviewer.md` (who it is: help you learn, don't do the task, stay on the CKA and this lab) as the server's
     instructions.
   - The student is fixed by config (`local` by default) until Part 3 gives each session its own.
-  - `make assistant` runs it; `claude mcp add --transport http cka-sim http://127.0.0.1:7373/mcp` connects it.
+  - `make assistant` runs it (`CKA_SIM_ASSISTANT_ADDR`, `CKA_SIM_PLATFORM_URL`, `CKA_SIM_ASSISTANT_TOKEN` from
+    `.env`); `claude mcp add --transport http cka-sim http://127.0.0.1:7373/mcp` connects it.
 - **Review:** from your own Claude Code, on a task you set up:
   - "what am I working on?" names the task;
   - "review my attempt" runs the grader and explains the failing check without giving the answer;

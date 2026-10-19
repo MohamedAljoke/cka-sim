@@ -58,6 +58,7 @@ To host it on Kubernetes instead, see [docs/HOSTING.md](docs/HOSTING.md).
 | --- | --- |
 | `apps/platform` | Go API: the task catalog, grading, the exam, and the terminal proxy |
 | `apps/lab` | Go agent inside the lab: cluster lifecycle, shells and task scripts |
+| `apps/assistant` | Go MCP server: the tutor's tools for an AI CLI, over the platform's `TutorService` |
 | `apps/web` | TypeScript + Vite page with xterm.js |
 | `apps/go-shared` | Protobuf contracts and shared helpers, the only code apps may share |
 | `infra/app`, `infra/lab` | The two images, the same wherever they run |

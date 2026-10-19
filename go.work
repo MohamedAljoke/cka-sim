@@ -1,6 +1,7 @@
 go 1.26.9
 
 use (
+	./apps/assistant
 	./apps/go-shared
 	./apps/lab
 	./apps/platform

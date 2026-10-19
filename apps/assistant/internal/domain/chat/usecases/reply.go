@@ -82,7 +82,8 @@ func system(instructions, taskID string) string {
 
 	return instructions + "\n\nThe student's page shows task " + taskID + ". current_task says which task is " +
 		"set up on their cluster, which may be another or none. Questions about the page's task, and explain, " +
-		"work with its id either way; its check only means something once they've pressed Set up task."
+		"work with its id either way; its check only means something once the page has set it up, which it does " +
+		"when the lab is ready."
 }
 
 // rounds streams the model's text and tool calls as events, and keeps the texts of different rounds apart.

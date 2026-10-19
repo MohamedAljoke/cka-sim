@@ -99,8 +99,9 @@ errors, the exam rule, the page) are reviewed before any model is involved.
   - The platform: `POST /api/assistant/chat` (at most 40 messages, each at most 8 KiB, alternating and ending
     with the student), answered as server-sent events `tool`, `text`, then `done` or `error`. Refused during the
     student's exam (409); off without `CKA_SIM_ASSISTANT_URL` (503 `assistant_off`).
-  - The page: **Ask the tutor** under the check result, with the tools it used, its answer as plain text, and
-    errors that keep the question to ask again.
+  - The page: **Ask the tutor**, an accordion under the terminal (drag its top edge to resize), with the tools it used, its answer as
+    Markdown built node by node (HTML stays text, only http(s) links are links), and errors that keep the
+    question to ask again.
 - **Review:** with `make dev` and `make assistant`, ask on a task page; set up the task and ask again, and the
   stand-in names it; stop the assistant and the panel says it doesn't answer.
 - **Learn:** streaming an answer through two hops, and why the browser never holds the assistant's token.
@@ -131,4 +132,3 @@ Ideas, each its own step:
 - **Guards on tool output:** flag cluster text that reads like instructions to the AI.
 - **The Kubernetes docs as a searchable reference (RAG)**, cited by link.
 - **Learner notes** across tasks.
-- **Markdown in the tutor's answers**, sanitized.

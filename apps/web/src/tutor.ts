@@ -1,5 +1,5 @@
 import { chat, type ChatMessage } from './api'
-import { el, message } from './ui'
+import { el, message, resizer, untrustedMarkdown } from './ui'
 
 const toolLabels: Record<string, string> = {
   current_task: 'Read your task',
@@ -8,7 +8,6 @@ const toolLabels: Record<string, string> = {
   explain: 'Read the solution',
 }
 
-// The tutor's text is shown as plain text, never as HTML: it comes from a model that reads the cluster.
 export function tutorPanel(taskId: string, signal: AbortSignal): HTMLElement {
   const log = el('div', 'tutor-log')
   log.setAttribute('role', 'log')
@@ -24,13 +23,41 @@ export function tutorPanel(taskId: string, signal: AbortSignal): HTMLElement {
   const form = el('form', 'tutor-form')
   form.append(input, ask)
 
+  const toggle = el('button', 'tutor-summary')
+  toggle.type = 'button'
+  toggle.append(
+    el('span', 'tutor-title', 'Ask the tutor'),
+    el('span', 'muted tutor-intro', 'It reads your task and cluster, then helps you find the answer yourself'),
+  )
+  const body = el('div', 'tutor-body')
+  body.id = `tutor-${taskId}`
+  body.append(log, form)
+  toggle.setAttribute('aria-controls', body.id)
   const panel = el('section', 'tutor-panel')
   panel.append(
-    el('h2', '', 'Ask the tutor'),
-    el('p', 'muted tutor-intro', 'It reads your task and looks at your cluster, then helps you find the answer yourself.'),
-    log,
-    form,
+    toggle,
+    body,
+    resizer({
+      label: 'Resize the tutor',
+      axis: 'y',
+      grow: -1,
+      key: 'cka-sim.tutor-height',
+      size: () => panel.offsetHeight,
+      limits: () => [140, (panel.parentElement?.clientHeight ?? 0) - 260],
+      apply: (px) => panel.style.setProperty('--tutor-height', `${px}px`),
+    }),
   )
+  const show = (open: boolean) => {
+    panel.dataset.open = String(open)
+    body.hidden = !open
+    toggle.setAttribute('aria-expanded', String(open))
+  }
+  show(false)
+  toggle.onclick = () => {
+    const open = panel.dataset.open !== 'true'
+    show(open)
+    if (open) input.focus()
+  }
 
   const history: ChatMessage[] = []
   let busy = false
@@ -44,7 +71,7 @@ export function tutorPanel(taskId: string, signal: AbortSignal): HTMLElement {
     history.push({ role: 'student', text })
 
     const tools = el('ul', 'tutor-tools')
-    const answer = el('p', 'tutor-text muted', 'Thinking…')
+    const answer = el('div', 'tutor-text muted', 'Thinking…')
     const reply = el('div', 'tutor-message tutor')
     reply.append(tools, answer)
     log.hidden = false
@@ -57,8 +84,8 @@ export function tutorPanel(taskId: string, signal: AbortSignal): HTMLElement {
         if (event.type === 'tool') tools.append(el('li', '', toolLabels[event.name] ?? event.name))
         else {
           said += event.text
-          answer.className = 'tutor-text'
-          answer.textContent = said
+          answer.className = 'tutor-text markdown'
+          untrustedMarkdown(answer, said)
         }
       })
       if (!said) throw new Error('the tutor gave no answer')

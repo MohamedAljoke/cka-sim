@@ -5,7 +5,7 @@ import { homePath } from './routes'
 import { setupPanel } from './setup'
 import { shellPanel } from './shell'
 import { tutorPanel } from './tutor'
-import { chips, copyable, el, markdown, message } from './ui'
+import { chips, copyable, el, markdown, message, resizer } from './ui'
 
 export async function showTask(pane: HTMLElement, id: string, lab: LabStatus, signal: AbortSignal) {
   pane.replaceChildren(note(el('p', 'muted', 'Loading the task…')))
@@ -39,7 +39,6 @@ export async function showTask(pane: HTMLElement, id: string, lab: LabStatus, si
     hostLine(task),
     question,
     check.result,
-    tutorPanel(task.id, signal),
     solutionPanel(task.id, signal),
   )
 
@@ -47,10 +46,22 @@ export async function showTask(pane: HTMLElement, id: string, lab: LabStatus, si
   bar.append(setup.panel, check.button)
   const workspace = el('section', 'task-lab')
   workspace.setAttribute('aria-label', 'Workspace')
-  workspace.append(bar, shell.panel)
+  workspace.append(bar, shell.panel, tutorPanel(task.id, signal))
 
   const layout = el('div', 'task-layout')
-  layout.append(brief, workspace)
+  layout.append(
+    brief,
+    resizer({
+      label: 'Resize the task',
+      axis: 'x',
+      grow: 1,
+      key: 'cka-sim.task-width',
+      size: () => brief.offsetWidth,
+      limits: () => [280, layout.clientWidth - 420],
+      apply: (px) => layout.style.setProperty('--task-width', `min(${px}px, calc(100% - 429px))`),
+    }),
+    workspace,
+  )
   pane.replaceChildren(layout)
 }
 

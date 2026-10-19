@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 480" role="img" aria-label="The browser sends the chat to the platform, which passes it to apps/assistant; the assistant's Gemini loop calls its MCP tools, which read the student's task and cluster back through the platform's TutorService, and search a docs index embedded with Ollama" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
+  <style>
+    .ink { fill: #1f2328; }
+    .quiet { fill: #59636e; font-size: 11.5px; }
+    .label { fill: #59636e; font-size: 11px; }
+    .edge { fill: none; stroke: #8c959f; stroke-width: 1.25; }
+    .head { fill: #8c959f; }
+    .node { fill: #0969da; fill-opacity: 0.12; stroke: #0969da; stroke-width: 2; }
+    .ai { fill: #8250df; fill-opacity: 0.12; stroke: #8250df; stroke-width: 2; }
+    .base { fill: #1a7f37; fill-opacity: 0.12; stroke: #1a7f37; stroke-width: 2; }
+    .b { font-weight: 600; }
+    @media (prefers-color-scheme: dark) {
+      .ink { fill: #e6edf3; }
+      .quiet, .label { fill: #9198a1; }
+      .edge { stroke: #6e7681; }
+      .head { fill: #6e7681; }
+      .node { fill: #4493f8; stroke: #4493f8; }
+      .ai { fill: #ab7df8; stroke: #ab7df8; }
+      .base { fill: #3fb950; stroke: #3fb950; }
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path class="head" d="M0 0L10 5L0 10z"/>
+    </marker>
+  </defs>
+  <text class="ink b" x="24" y="34" font-size="15">Everything AI lives in apps/assistant; the platform stays the source of truth</text>
+
+  <rect class="edge" x="24" y="96" width="104" height="100" rx="8"/>
+  <text class="ink b" x="76" y="124" text-anchor="middle">Browser</text>
+  <text class="quiet" x="76" y="148" text-anchor="middle">Ask the tutor,</text>
+  <text class="quiet" x="76" y="164" text-anchor="middle">under the terminal</text>
+
+  <path class="edge" d="M128 132H196" marker-end="url(#arrow)"/>
+  <text class="label" x="162" y="124" text-anchor="middle">POST chat</text>
+  <path class="edge" d="M196 166H128" marker-end="url(#arrow)"/>
+  <text class="label" x="162" y="184" text-anchor="middle">SSE back</text>
+
+  <rect class="node" x="198" y="96" width="150" height="152" rx="8"/>
+  <text class="ink b" x="273" y="124" text-anchor="middle">Platform</text>
+  <text class="quiet" x="273" y="148" text-anchor="middle">knows the student</text>
+  <text class="quiet" x="273" y="164" text-anchor="middle">refuses during an exam</text>
+  <text class="quiet" x="273" y="180" text-anchor="middle">proxies the chat</text>
+  <text class="quiet" x="273" y="196" text-anchor="middle">serves TutorService:</text>
+  <text class="quiet" x="273" y="212" text-anchor="middle">task, check, read-only</text>
+  <text class="quiet" x="273" y="228" text-anchor="middle">kubectl, solution</text>
+
+  <path class="edge" d="M273 248V302" marker-end="url(#arrow)"/>
+  <text class="label" x="281" y="280">RunScript</text>
+
+  <rect class="node" x="198" y="304" width="150" height="56" rx="8"/>
+  <text class="ink b" x="273" y="328" text-anchor="middle">The student's lab</text>
+  <text class="quiet" x="273" y="346" text-anchor="middle">grader and kubectl run here</text>
+
+  <path class="edge" d="M348 124H456" marker-end="url(#arrow)"/>
+  <text class="label" x="394" y="116" text-anchor="middle">Chat</text>
+  <text class="label" x="394" y="140" text-anchor="middle">Connect stream</text>
+
+  <path class="edge" d="M456 222H348" marker-end="url(#arrow)"/>
+  <text class="label" x="394" y="214" text-anchor="middle">TutorService</text>
+  <text class="label" x="394" y="238" text-anchor="middle">Connect, token</text>
+
+  <rect class="edge" x="440" y="60" width="316" height="312" rx="8" stroke-dasharray="4 4"/>
+  <text class="ink b" x="456" y="82">apps/assistant</text>
+  <text class="quiet" x="562" y="82">its own Go module, :7373</text>
+
+  <rect class="ai" x="458" y="96" width="280" height="56" rx="8"/>
+  <text class="ink b" x="598" y="118" text-anchor="middle">Chat loop</text>
+  <text class="quiet" x="598" y="136" text-anchor="middle">at most 8 rounds and 90s per answer</text>
+
+  <path class="edge" d="M598 152V184" marker-end="url(#arrow)"/>
+  <text class="label" x="606" y="172">tool calls, in memory</text>
+
+  <rect class="node" x="458" y="186" width="280" height="76" rx="8"/>
+  <text class="ink b" x="598" y="208" text-anchor="middle">MCP server and reviewer.md</text>
+  <text class="quiet" x="598" y="226" text-anchor="middle">current_task · run_check · inspect_cluster</text>
+  <text class="quiet" x="598" y="242" text-anchor="middle">explain · search_docs</text>
+  <text class="quiet" x="598" y="256" text-anchor="middle" font-size="10.5">also at /mcp for your own AI CLI</text>
+
+  <path class="edge" d="M598 262V292" marker-end="url(#arrow)"/>
+  <text class="label" x="606" y="282">search_docs</text>
+
+  <rect class="base" x="458" y="294" width="280" height="62" rx="8"/>
+  <text class="ink b" x="598" y="316" text-anchor="middle">Docs index, in memory</text>
+  <text class="quiet" x="598" y="334" text-anchor="middle">kubernetes.io chunks, vectors + BM25,</text>
+  <text class="quiet" x="598" y="348" text-anchor="middle">re-embedded only where a page changed</text>
+
+  <path class="edge" d="M738 124H782" marker-end="url(#arrow)"/>
+  <rect class="ai" x="784" y="96" width="88" height="56" rx="8"/>
+  <text class="ink b" x="828" y="118" text-anchor="middle">Vertex AI</text>
+  <text class="quiet" x="828" y="136" text-anchor="middle">Gemini</text>
+
+  <path class="edge" d="M738 325H782" marker-end="url(#arrow)"/>
+  <rect class="base" x="784" y="297" width="88" height="56" rx="8"/>
+  <text class="ink b" x="828" y="319" text-anchor="middle">Ollama</text>
+  <text class="quiet" x="828" y="337" text-anchor="middle">embeddings</text>
+
+  <rect class="edge" x="24" y="304" width="104" height="56" rx="8"/>
+  <text class="ink b" x="76" y="328" text-anchor="middle">make eval</text>
+  <text class="quiet" x="76" y="346" text-anchor="middle">Gemini as judge</text>
+  <path class="edge" d="M128 332H196" marker-end="url(#arrow)"/>
+  <text class="label" x="162" y="324" text-anchor="middle">page API</text>
+
+  <text class="ink b" x="24" y="412">Two contracts, in apps/go-shared/contract</text>
+  <text class="quiet" x="24" y="432">tutor/v1, served by the platform: the read-only view of a student's task and cluster. assistant/v1, served by the</text>
+  <text class="quiet" x="24" y="448">assistant: Chat takes the whole conversation and streams back the tools used and the answer; it keeps no history.</text>
+  <text class="quiet" x="24" y="464">The page never talks to the assistant, and the browser never holds its token. make eval runs the chat loop in its own process.</text>
+</svg>

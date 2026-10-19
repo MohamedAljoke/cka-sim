@@ -9,26 +9,17 @@ harness), and you can try them from your own Claude Code before the page has a t
 Each part is one feature, reviewed and committed before the next, as in [BUILD-IN-STEPS.md](BUILD-IN-STEPS.md):
 **Scope**, **Review** (what to try before accepting it) and **Learn** (the idea to understand first).
 
-```
-Part 1  the tools: TutorService on the platform ─► MCP server in apps/assistant   (your own AI CLI uses them)
-Part 2  the tutor in the page: chat panel ─► platform ─► AssistantService         (a stand-in answers first)
-Part 3  the AI: a Gemini loop on llm.Model over the MCP tools, in place of the stand-in
-Part 4  evals: break a task, let the tutor diagnose it, score it against the grader
-Part 5  the Kubernetes docs: search_docs over an index of kubernetes.io, embedded with Ollama
-```
+![The assistant in five parts: the tools, the tutor in the page, the AI, evals, and the Kubernetes docs](../img/assistant-parts.svg)
 
 ## The shape
 
-```
-browser ──POST /api/assistant/chat (SSE)──► platform ──Chat (Connect stream)──► apps/assistant   (Part 2)
-                                               ▲                                     │ model loop (Part 3)
-                                               └──── TutorService (Connect) ◄──── MCP tools        (Part 1)
-```
+![The chat goes from the browser through the platform to apps/assistant, whose Gemini loop calls its MCP tools; they read the student's task and cluster back through TutorService and search a docs index embedded with Ollama](../img/assistant-shape.svg)
 
 - **Everything AI lives in `apps/assistant`:**
   - the MCP server and its instructions (`reviewer.md`);
   - the chat and, from Part 3, the model loop and its credentials;
-  - the evals.
+  - the evals;
+  - the docs index and its search.
 
   It's its own Go module with the usual domain / use cases / adapters / api / cmd / e2e layout, and it imports
   nothing from the other apps.

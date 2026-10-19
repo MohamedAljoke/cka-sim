@@ -19,10 +19,10 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/evals"
 	evalusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/evals/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor/usecases"
+	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/gemini"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/mcptools"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/pageapi"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/platform"
-	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/vertex"
 )
 
 // One task per domain, each passing its selftest.
@@ -33,7 +33,8 @@ type settings struct {
 	AssistantToken string `key:"CKA_SIM_ASSISTANT_TOKEN" minLength:"32"`
 	// The page's API acts for the local student when the platform has no student tokens, so the tools must too.
 	Student        string `key:"CKA_SIM_STUDENT"         default:"local"`
-	VertexProject  string `key:"CKA_SIM_VERTEX_PROJECT"`
+	GeminiAPIKey   string `key:"CKA_SIM_GEMINI_API_KEY"  default:""`
+	VertexProject  string `key:"CKA_SIM_VERTEX_PROJECT"  default:""`
 	VertexLocation string `key:"CKA_SIM_VERTEX_LOCATION" default:"global"`
 	Model          string `key:"CKA_SIM_MODEL"           default:"gemini-3.5-flash"`
 }
@@ -59,7 +60,9 @@ func run() error {
 		return err
 	}
 
-	model, err := vertex.New(ctx, cfg.VertexProject, cfg.VertexLocation, cfg.Model)
+	model, err := gemini.Open(ctx, gemini.Credentials{
+		APIKey: cfg.GeminiAPIKey, Project: cfg.VertexProject, Location: cfg.VertexLocation,
+	}, cfg.Model)
 	if err != nil {
 		return err
 	}

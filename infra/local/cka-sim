@@ -8,6 +8,9 @@ installer=https://raw.githubusercontent.com/${CKA_SIM_REPO:-MohamedAljoke/cka-si
 
 compose() { docker compose -f "$dir/compose.yml" "$@"; }
 
+# compose reads this file for the tutor's settings; it can hold an API key, so only you can read it.
+settings=$dir/.env
+
 fail() {
   echo "cka-sim: $*" >&2
   exit 1
@@ -20,6 +23,27 @@ check_docker() {
   [ "$(docker info --format '{{.OSType}}')" = linux ] || fail "switch Docker to Linux containers"
 }
 
+setting() { sed -n "s/^$1=//p" "$settings" 2>/dev/null | tail -n 1; }
+
+# save KEY VALUE replaces the key's line in the settings; an empty value removes it.
+save() {
+  touch "$settings"
+  grep -v "^$1=" "$settings" >"$settings.new" || true
+  [ -z "$2" ] || printf '%s=%s\n' "$1" "$2" >>"$settings.new"
+  chmod 600 "$settings.new"
+  mv "$settings.new" "$settings"
+}
+
+tutor_status() {
+  if [ -n "$(setting CKA_SIM_GEMINI_API_KEY)" ]; then
+    echo "the tutor answers with Gemini, through your API key"
+  elif [ -n "$(setting CKA_SIM_VERTEX_PROJECT)" ]; then
+    echo "the tutor answers with Gemini, on Vertex AI in $(setting CKA_SIM_VERTEX_PROJECT)"
+  else
+    echo "the tutor has no AI; give it one with: cka-sim tutor key"
+  fi
+}
+
 usage() {
   cat <<USAGE
 usage: cka-sim <command>
@@ -27,8 +51,12 @@ usage: cka-sim <command>
   up         start cka-sim on http://localhost:${CKA_SIM_PORT:-7080}
   down       stop it; keeps the downloaded images
   status     show what is running
-  logs       follow the logs (cka-sim logs lab for one part)
+  logs       follow the logs (cka-sim logs lab for one part: lab, app or assistant)
   shell      open a shell on the base host, as in the page's terminal
+  tutor      show what the tutor answers with
+    tutor key [key]         a Gemini API key, from https://aistudio.google.com/apikey (asked if left out)
+    tutor vertex <project>  Vertex AI in your GCP project, with your gcloud application-default login
+    tutor off               no AI; the rest of cka-sim is the same
   update     get the latest cka-sim and restart it
   uninstall  delete cka-sim and everything it stored
 USAGE
@@ -42,6 +70,44 @@ up)
   echo
   echo "cka-sim is ready on http://localhost:${CKA_SIM_PORT:-7080}"
   echo "pick a task and click Start lab; the first cluster takes a few minutes"
+  tutor_status
+  ;;
+tutor)
+  case "${2:-}" in
+  "")
+    tutor_status
+    exit 0
+    ;;
+  key)
+    key=${3:-}
+    if [ -z "$key" ]; then
+      printf 'Gemini API key (https://aistudio.google.com/apikey): '
+      stty -echo 2>/dev/null || true
+      read -r key || true
+      stty echo 2>/dev/null || true
+      echo
+    fi
+    [ -n "$key" ] || fail "no key given"
+    save CKA_SIM_GEMINI_API_KEY "$key"
+    ;;
+  vertex)
+    [ -n "${3:-}" ] || fail "usage: cka-sim tutor vertex <gcp-project>"
+    adc=${CLOUDSDK_CONFIG:-$HOME/.config/gcloud}/application_default_credentials.json
+    [ -f "$adc" ] || fail "no gcloud login at $adc; run: gcloud auth application-default login"
+    save CKA_SIM_GEMINI_API_KEY ""
+    save CKA_SIM_VERTEX_PROJECT "$3"
+    save CKA_SIM_GOOGLE_ADC "$adc"
+    ;;
+  off)
+    for key in CKA_SIM_GEMINI_API_KEY CKA_SIM_VERTEX_PROJECT CKA_SIM_GOOGLE_ADC; do save "$key" ""; done
+    ;;
+  *) fail "usage: cka-sim tutor [key [key] | vertex <project> | off]" ;;
+  esac
+  # A running tutor restarts with the new settings; otherwise the next cka-sim up uses them.
+  if [ -n "$(compose ps -q assistant 2>/dev/null)" ]; then
+    compose up -d --no-build assistant >/dev/null 2>&1 || fail "the tutor didn't restart; see: cka-sim logs assistant"
+  fi
+  tutor_status
   ;;
 down) compose down ;;
 status) compose ps ;;
@@ -53,12 +119,12 @@ logs)
 update)
   check_docker
   curl -fsSL "$installer" | CKA_SIM_HOME="$dir" CKA_SIM_INSTALL_ONLY=1 sh
-  compose pull lab app
+  compose pull lab app assistant
   exec "$dir/cka-sim" up
   ;;
 uninstall)
   compose down --volumes
-  for part in app lab; do
+  for part in app lab assistant; do
     docker image rm "ghcr.io/mohamedaljoke/cka-sim-$part:${CKA_SIM_VERSION:-main}" >/dev/null 2>&1 || true
   done
   link=$(command -v cka-sim || true)

@@ -1,6 +1,8 @@
 # cka-sim with only Docker, on http://localhost:7080. `cka-sim up` pulls the published images; `make up` builds
 # them from this clone. make passes the token in .env, so the platform from `make dev` can reach this lab too; without one, a token
 # is generated once and kept in the secrets volume.
+# The tutor's AI is optional: `cka-sim tutor` writes a Gemini API key or a Vertex AI project to the .env next to this
+# file, which compose reads. Without one, everything runs and the tutor says it has no AI.
 name: cka-sim
 
 services:
@@ -14,6 +16,7 @@ services:
       - |
         umask 077
         [ -s /secrets/agent-token ] || od -An -tx1 -N32 /dev/urandom | tr -d ' \n' > /secrets/agent-token
+        [ -s /secrets/assistant-token ] || od -An -tx1 -N32 /dev/urandom | tr -d ' \n' > /secrets/assistant-token
 
   lab:
     build:
@@ -63,16 +66,52 @@ services:
     environment:
       CKA_SIM_LAB_URL: http://lab:7171
       CKA_SIM_AGENT_TOKEN: ${CKA_SIM_AGENT_TOKEN:-}
+      # The assistant calls TutorService here, on the compose network only; the browser still goes through Caddy.
+      CKA_SIM_PLATFORM_ADDR: ":7070"
+      CKA_SIM_ASSISTANT_URL: http://assistant:7373
+      CKA_SIM_ASSISTANT_TOKEN: ${CKA_SIM_ASSISTANT_TOKEN:-}
     volumes:
       - secrets:/secrets:ro
       # Keeps a running exam across restarts and updates.
       - app-state:/var/lib/cka-sim
-    entrypoint: *with-token
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        export CKA_SIM_AGENT_TOKEN="$${CKA_SIM_AGENT_TOKEN:-$$(cat /secrets/agent-token)}"
+        CKA_SIM_ASSISTANT_TOKEN="$${CKA_SIM_ASSISTANT_TOKEN:-$$(cat /secrets/assistant-token)}"; exec "$$@"
+      - sh
     command: /app-start.sh
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/api/tasks"]
       interval: 2s
       timeout: 3s
+
+  assistant:
+    build:
+      context: ../..
+      dockerfile: infra/assistant/assistant.Dockerfile
+    image: ghcr.io/mohamedaljoke/cka-sim-assistant:${CKA_SIM_VERSION:-main}
+    restart: unless-stopped
+    depends_on:
+      secrets:
+        condition: service_completed_successfully
+    environment:
+      CKA_SIM_PLATFORM_URL: http://app:7070
+      CKA_SIM_ASSISTANT_TOKEN: ${CKA_SIM_ASSISTANT_TOKEN:-}
+      CKA_SIM_GEMINI_API_KEY: ${CKA_SIM_GEMINI_API_KEY:-}
+      CKA_SIM_VERTEX_PROJECT: ${CKA_SIM_VERTEX_PROJECT:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${CKA_SIM_GOOGLE_ADC:+/run/cka-sim/adc.json}
+    volumes:
+      - secrets:/secrets:ro
+      # Your gcloud login, for Vertex AI. Without one this mounts a file that is always there and nothing reads it.
+      - ${CKA_SIM_GOOGLE_ADC:-./compose.yml}:/run/cka-sim/adc.json:ro
+    entrypoint:
+      - sh
+      - -c
+      - export CKA_SIM_ASSISTANT_TOKEN="$${CKA_SIM_ASSISTANT_TOKEN:-$$(cat /secrets/assistant-token)}"; exec "$$@"
+      - sh
+    command: cka-sim-assistant
 
 volumes:
   secrets:

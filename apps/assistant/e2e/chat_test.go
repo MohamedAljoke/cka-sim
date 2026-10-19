@@ -1,10 +1,13 @@
 package e2e
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -16,7 +19,7 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/rpcauth"
 )
 
-func TestAChatWithNoVertexProjectSaysTheTutorHasNoAI(t *testing.T) {
+func TestAChatWithNoCredentialsSaysTheTutorHasNoAI(t *testing.T) {
 	_, _, err := chat(assistantToken, "bob", "why does my check fail?")
 
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition || !strings.Contains(err.Error(), "ai_not_configured") {
@@ -29,6 +32,27 @@ func TestTheChatNeedsTheToken(t *testing.T) {
 
 	if connect.CodeOf(err) != connect.CodeUnauthenticated {
 		t.Errorf("got %v", err)
+	}
+}
+
+func TestAGeminiAPIKeyGivesTheTutorAnAIWithoutShowingTheKey(t *testing.T) {
+	cmd := exec.Command(assistantBin)
+	cmd.Env = append(os.Environ(), "CKA_SIM_ASSISTANT_ADDR=127.0.0.1:0", "CKA_SIM_PLATFORM_URL=http://127.0.0.1:1",
+		"CKA_SIM_ASSISTANT_TOKEN="+assistantToken, "CKA_SIM_DOCS_INDEX=", "CKA_SIM_VERTEX_PROJECT=",
+		"CKA_SIM_GEMINI_API_KEY=e2e-secret-gemini-key")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stop(cmd) })
+
+	line, _ := bufio.NewReader(stdout).ReadString('\n')
+
+	if !strings.Contains(line, "through the Gemini API") || strings.Contains(line, "e2e-secret-gemini-key") {
+		t.Errorf("first line %q", line)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -21,10 +22,10 @@ import (
 	docsusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/docs/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/files"
+	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/gemini"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/mcptools"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/ollama"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/platform"
-	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/vertex"
 )
 
 type settings struct {
@@ -33,7 +34,8 @@ type settings struct {
 	AssistantToken string `key:"CKA_SIM_ASSISTANT_TOKEN" minLength:"32"`
 	// The student whose task and cluster the MCP tools see; the chat gets its student from the platform.
 	Student string `key:"CKA_SIM_STUDENT" default:"local"`
-	// The GCP project whose Vertex AI answers the chat. Empty: the chat says it has no AI.
+	// A Gemini API key, or else the GCP project whose Vertex AI answers the chat. Neither: the chat says it has no AI.
+	GeminiAPIKey   string `key:"CKA_SIM_GEMINI_API_KEY" default:""`
 	VertexProject  string `key:"CKA_SIM_VERTEX_PROJECT" default:""`
 	VertexLocation string `key:"CKA_SIM_VERTEX_LOCATION" default:"global"`
 	Model          string `key:"CKA_SIM_MODEL" default:"gemini-3.5-flash"`
@@ -64,10 +66,7 @@ func run() error {
 		return fmt.Errorf("claim %s: %w", cfg.Addr, err)
 	}
 
-	model, err := modelOf(ctx, cfg)
-	if err != nil {
-		return err
-	}
+	model, answersWith := modelOf(ctx, cfg)
 
 	search, docsState, err := searchOf(cfg)
 	if err != nil {
@@ -92,7 +91,7 @@ func run() error {
 
 	if _, err := fmt.Fprintf(os.Stdout,
 		"assistant on http://%s (MCP at /mcp for %s, chat on %s, %s); Ctrl-C stops it\n",
-		listener.Addr(), cfg.Student, aiOf(cfg), docsState); err != nil {
+		listener.Addr(), cfg.Student, answersWith, docsState); err != nil {
 		return err
 	}
 
@@ -103,13 +102,21 @@ func run() error {
 	return nil
 }
 
-// modelOf is nil, which leaves the chat without AI, when no Vertex project is set.
-func modelOf(ctx context.Context, cfg settings) (chatusecases.Model, error) {
-	if cfg.VertexProject == "" {
-		return nil, nil
+// modelOf is nil, which leaves the chat without AI, when there are no credentials or they don't work: the rest
+// of cka-sim runs the same without a tutor.
+func modelOf(ctx context.Context, cfg settings) (chatusecases.Model, string) {
+	creds := gemini.Credentials{APIKey: cfg.GeminiAPIKey, Project: cfg.VertexProject, Location: cfg.VertexLocation}
+
+	model, err := gemini.Open(ctx, creds, cfg.Model)
+	switch {
+	case errors.Is(err, gemini.ErrNoCredentials):
+		return nil, "no AI"
+	case err != nil:
+		slog.Warn("the tutor has no AI", "err", err)
+		return nil, "no AI"
 	}
 
-	return vertex.New(ctx, cfg.VertexProject, cfg.VertexLocation, cfg.Model)
+	return model, cfg.Model + " through " + gemini.Via(creds)
 }
 
 // searchOf loads the docs index into memory. Questions must be embedded by the model that embedded the docs, so
@@ -137,12 +144,4 @@ func searchOf(cfg settings) (*docsusecases.SearchDocs, string, error) {
 	state := fmt.Sprintf("%d docs passages", search.Chunks())
 
 	return docsusecases.NewSearchDocs(ollama.New(cfg.OllamaURL, cfg.EmbedModel), search), state, nil
-}
-
-func aiOf(cfg settings) string {
-	if cfg.VertexProject == "" {
-		return "no AI"
-	}
-
-	return cfg.Model
 }

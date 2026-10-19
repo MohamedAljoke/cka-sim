@@ -1,6 +1,7 @@
-package vertex
+package gemini
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"iter"
@@ -12,6 +13,27 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/chat"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/chat/usecases"
 )
+
+func TestWithNoCredentialsThereIsNoModel(t *testing.T) {
+	_, err := Open(context.Background(), Credentials{Location: "global"}, "gemini-3.5-flash")
+
+	if !errors.Is(err, ErrNoCredentials) {
+		t.Errorf("err %v", err)
+	}
+}
+
+func TestAnAPIKeyWinsOverAVertexProject(t *testing.T) {
+	creds := Credentials{APIKey: "a-key", Project: "my-project", Location: "global"}
+
+	model, err := Open(context.Background(), creds, "gemini-3.5-flash")
+
+	if err != nil || model == nil || Via(creds) != "the Gemini API" {
+		t.Errorf("model %v, err %v, via %q", model, err, Via(creds))
+	}
+	if Via(Credentials{Project: "my-project"}) != "Vertex AI in my-project" {
+		t.Errorf("via %q", Via(Credentials{Project: "my-project"}))
+	}
+}
 
 func TestTurnsBecomeContentsWithSignaturesAndResults(t *testing.T) {
 	contents, err := toContents([]usecases.Turn{

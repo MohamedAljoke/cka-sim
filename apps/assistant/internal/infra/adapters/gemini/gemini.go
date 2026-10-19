@@ -1,8 +1,9 @@
-package vertex
+package gemini
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"iter"
 
@@ -17,25 +18,52 @@ var roles = map[chat.Role]genai.Role{
 	chat.Tutor:   genai.RoleModel,
 }
 
-// Model is Gemini on Vertex AI, with Google's default credentials (gcloud auth application-default login
-// here, Workload Identity on GKE).
+var ErrNoCredentials = errors.New("no Gemini API key and no Vertex AI project")
+
+// Model is Gemini, through the Gemini API with a key or through Vertex AI.
 type Model struct {
 	client *genai.Client
 	model  string
 }
 
-func New(ctx context.Context, project, location, model string) (*Model, error) {
-	config := &genai.ClientConfig{Project: project, Location: location, Backend: genai.BackendVertexAI}
-	if err := config.UseDefaultCredentials(); err != nil {
-		return nil, fmt.Errorf("vertex AI needs Google credentials (gcloud auth application-default login): %w", err)
+type Credentials struct {
+	APIKey   string
+	Project  string
+	Location string
+}
+
+// Open uses an API key from Google AI Studio when there is one, and otherwise Vertex AI with Google's default
+// credentials (gcloud auth application-default login here, Workload Identity on GKE).
+func Open(ctx context.Context, creds Credentials, model string) (*Model, error) {
+	var config *genai.ClientConfig
+
+	switch {
+	case creds.APIKey != "":
+		config = &genai.ClientConfig{APIKey: creds.APIKey, Backend: genai.BackendGeminiAPI}
+	case creds.Project != "":
+		config = &genai.ClientConfig{Project: creds.Project, Location: creds.Location, Backend: genai.BackendVertexAI}
+		if err := config.UseDefaultCredentials(); err != nil {
+			return nil, fmt.Errorf("vertex AI needs Google credentials (gcloud auth application-default login): %w", err)
+		}
+	default:
+		return nil, ErrNoCredentials
 	}
 
 	client, err := genai.NewClient(ctx, config)
 	if err != nil {
-		return nil, fmt.Errorf("vertex AI client: %w", err)
+		return nil, fmt.Errorf("gemini client: %w", err)
 	}
 
 	return &Model{client: client, model: model}, nil
+}
+
+// Via says which way the model is reached, without the key.
+func Via(creds Credentials) string {
+	if creds.APIKey != "" {
+		return "the Gemini API"
+	}
+
+	return "Vertex AI in " + creds.Project
 }
 
 func (m *Model) Generate(ctx context.Context, req usecases.Request, onText func(string)) (usecases.Turn, error) {

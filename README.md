@@ -22,11 +22,24 @@ That installs the `cka-sim` command and starts it. Open http://localhost:7080, p
 
 ```sh
 cka-sim down | up | status | update | uninstall
-cka-sim logs lab     # follow one part's logs: lab or app
+cka-sim logs lab     # follow one part's logs: lab, app or assistant
 cka-sim shell        # the page's terminal, in yours
 ```
 
 To host it on Kubernetes instead, see [docs/HOSTING.md](docs/HOSTING.md).
+
+### Turn on the AI tutor (optional)
+
+Everything above works without it. **Ask the tutor**, under the terminal, answers with Gemini once you give it
+credentials, and says it has no AI until then:
+
+```sh
+cka-sim tutor key                  # paste a Gemini API key from https://aistudio.google.com/apikey
+cka-sim tutor vertex <gcp-project> # or Vertex AI, after gcloud auth application-default login
+cka-sim tutor                      # what it answers with now; cka-sim tutor off removes it
+```
+
+The key stays in `~/.cka-sim/.env`, readable only by you, and the tutor restarts with it.
 
 ## What's inside
 
@@ -56,8 +69,8 @@ To host it on Kubernetes instead, see [docs/HOSTING.md](docs/HOSTING.md).
   read-only kubectl, then hints at what's wrong instead of solving it. It searches the Kubernetes docs: chunked
   from kubernetes.io, embedded locally with Ollama, ranked by vectors and BM25 together, and cited by link. The
   same MCP tools work from your own AI CLI, the platform refuses them during an exam, and `make eval` scores the
-  tutor on broken and solved tasks with a model as judge. Today it runs from a clone (`make assistant`), not
-  yet in the installer. → [docs/dev/ASSISTANT.md](docs/dev/ASSISTANT.md)
+  tutor on broken and solved tasks with a model as judge. The installer runs it too, with your own Gemini key;
+  the docs search still runs only from a clone. → [docs/dev/ASSISTANT.md](docs/dev/ASSISTANT.md)
 
 ## The code
 
@@ -68,7 +81,7 @@ To host it on Kubernetes instead, see [docs/HOSTING.md](docs/HOSTING.md).
 | `apps/assistant` | Go AI tutor: its MCP tools over the platform's `TutorService`, the Gemini chat loop, the docs search and the evals |
 | `apps/web` | TypeScript + Vite page with xterm.js |
 | `apps/go-shared` | Protobuf contracts and shared helpers, the only code apps may share |
-| `infra/app`, `infra/lab` | The two images, the same wherever they run |
+| `infra/app`, `infra/lab`, `infra/assistant` | The three images, the same wherever they run |
 | `infra/local` | Docker Compose and the `cka-sim` command with its installer |
 | `infra/gke` | Terraform for the cluster and kustomize manifests for the app |
 | `docs/` | How it works; `docs/dev/` holds the build plan and status |

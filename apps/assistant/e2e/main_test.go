@@ -72,7 +72,8 @@ var listening = regexp.MustCompile(`http://[0-9.]+:[0-9]+`)
 func start(platformURL, token string, env ...string) (*exec.Cmd, string, error) {
 	assistant := exec.Command(assistantBin)
 	assistant.Env = append(os.Environ(), "CKA_SIM_ASSISTANT_ADDR=127.0.0.1:0", "CKA_SIM_PLATFORM_URL="+platformURL,
-		"CKA_SIM_ASSISTANT_TOKEN="+token, "CKA_SIM_STUDENT="+student, "CKA_SIM_VERTEX_PROJECT=", "CKA_SIM_DOCS_INDEX=")
+		"CKA_SIM_ASSISTANT_TOKEN="+token, "CKA_SIM_STUDENT="+student, "CKA_SIM_VERTEX_PROJECT=", "CKA_SIM_GEMINI_API_KEY=",
+		"CKA_SIM_DOCS_INDEX=")
 	assistant.Env = append(assistant.Env, env...)
 	assistant.Stderr = os.Stderr
 	stdout, err := assistant.StdoutPipe()

@@ -51,6 +51,13 @@ To host it on Kubernetes instead, see [docs/HOSTING.md](docs/HOSTING.md).
   scales from zero up to a cap, and deletes it when they stop. It is scoped by RBAC and fenced by a
   NetworkPolicy, and Terraform and kustomize set it up. The platform only knows the agent's contract, so the
   same lab runs as a container or a pod. → [docs/HOSTING.md](docs/HOSTING.md)
+- **An AI tutor that looks before it talks.** "Ask the tutor" under the terminal runs a Gemini tool loop
+  (Vertex AI) over cka-sim's own MCP server: it reads your task, runs the grader and inspects your cluster with
+  read-only kubectl, then hints at what's wrong instead of solving it. It searches the Kubernetes docs: chunked
+  from kubernetes.io, embedded locally with Ollama, ranked by vectors and BM25 together, and cited by link. The
+  same MCP tools work from your own AI CLI, the platform refuses them during an exam, and `make eval` scores the
+  tutor on broken and solved tasks with a model as judge. Today it runs from a clone (`make assistant`), not
+  yet in the installer. → [docs/dev/ASSISTANT.md](docs/dev/ASSISTANT.md)
 
 ## The code
 
@@ -58,7 +65,7 @@ To host it on Kubernetes instead, see [docs/HOSTING.md](docs/HOSTING.md).
 | --- | --- |
 | `apps/platform` | Go API: the task catalog, grading, the exam, and the terminal proxy |
 | `apps/lab` | Go agent inside the lab: cluster lifecycle, shells and task scripts |
-| `apps/assistant` | Go MCP server: the tutor's tools for an AI CLI, over the platform's `TutorService` |
+| `apps/assistant` | Go AI tutor: its MCP tools over the platform's `TutorService`, the Gemini chat loop, the docs search and the evals |
 | `apps/web` | TypeScript + Vite page with xterm.js |
 | `apps/go-shared` | Protobuf contracts and shared helpers, the only code apps may share |
 | `infra/app`, `infra/lab` | The two images, the same wherever they run |
@@ -70,4 +77,5 @@ Apps never import each other, each follows a domain / use cases / adapters layou
 end-to-end tests against the real binary. The rules are in [AGENTS.md](AGENTS.md). From a clone,
 `cp .env.example .env`, then `make` lists the development commands.
 
-**Stack:** Go, Connect + Protobuf, kind, Docker in Docker, client-go, Terraform, GKE, TypeScript, Vite, xterm.js.
+**Stack:** Go, Connect + Protobuf, kind, Docker in Docker, client-go, Terraform, GKE, TypeScript, Vite, xterm.js,
+MCP, Gemini on Vertex AI, Ollama embeddings.

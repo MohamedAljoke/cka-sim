@@ -95,6 +95,6 @@ func (p *fakeLabProvider) OpenShell(_ context.Context, _ string, size labs.Termi
 }
 
 func newLabAPI(p labusecases.LabProvider) http.Handler {
-	labCases := labusecases.New(p)
+	labCases := labusecases.New(p, nil)
 	return New(usecases.UseCases{}, labCases, examsFor(usecases.UseCases{}, labCases, nil), nil)
 }

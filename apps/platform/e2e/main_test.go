@@ -14,7 +14,10 @@ import (
 	"time"
 )
 
-const agentToken = "e2e-agent-token-0123456789abcdef"
+const (
+	agentToken     = "e2e-agent-token-0123456789abcdef"
+	assistantToken = "e2e-assistant-token-0123456789abcdef"
+)
 
 var (
 	serverBin string
@@ -63,7 +66,7 @@ var listening = regexp.MustCompile(`http://[0-9.]+:[0-9]+`)
 func start(labURL, stateDir string) (*exec.Cmd, string, error) {
 	server := exec.Command(serverBin)
 	server.Env = append(os.Environ(), "CKA_SIM_PLATFORM_ADDR=127.0.0.1:0", "CKA_SIM_LAB_URL="+labURL,
-		"CKA_SIM_AGENT_TOKEN="+agentToken, "CKA_SIM_STATE_DIR="+stateDir)
+		"CKA_SIM_AGENT_TOKEN="+agentToken, "CKA_SIM_STATE_DIR="+stateDir, "CKA_SIM_ASSISTANT_TOKEN="+assistantToken)
 	server.Stderr = os.Stderr
 	stdout, err := server.StdoutPipe()
 	if err != nil {

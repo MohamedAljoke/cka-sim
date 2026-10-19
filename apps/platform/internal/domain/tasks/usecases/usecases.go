@@ -3,6 +3,7 @@ package usecases
 type UseCases struct {
 	List     *ListTasks
 	Get      *GetTask
+	Current  *GetCurrentTask
 	Solution *GetSolution
 	Heal     *HealCluster
 	SetUp    *SetUpTask
@@ -22,6 +23,7 @@ func New(repo TaskRepository, runner ScriptRunner) UseCases {
 	return UseCases{
 		List:     NewListTasks(repo),
 		Get:      NewGetTask(repo),
+		Current:  NewGetCurrentTask(repo, clusters),
 		Solution: NewGetSolution(repo),
 		Heal:     heal,
 		SetUp:    setUp,

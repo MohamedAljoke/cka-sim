@@ -39,6 +39,8 @@ type settings struct {
 	LabTokenSecret string `key:"CKA_SIM_LAB_TOKEN_SECRET" default:"cka-sim-agent"`
 	// "alice=<token>,bob=<token>": each student, with the token their link carries. Empty: everyone is "local".
 	Students string `key:"CKA_SIM_STUDENTS" default:""`
+	// The assistant's token for TutorService. Empty: TutorService is off.
+	AssistantToken string `key:"CKA_SIM_ASSISTANT_TOKEN" default:""`
 }
 
 type labFleet interface {
@@ -77,6 +79,10 @@ func run() error {
 		return err
 	}
 
+	if cfg.AssistantToken != "" && len(cfg.AssistantToken) < minToken {
+		return fmt.Errorf("CKA_SIM_ASSISTANT_TOKEN must be at least %d characters", minToken)
+	}
+
 	students, err := studentsOf(cfg.Students)
 	if err != nil {
 		return err
@@ -92,7 +98,7 @@ func run() error {
 		return err
 	}
 
-	taskCases, labCases := usecases.New(taskRepo, fleet), labusecases.New(fleet)
+	taskCases, labCases := usecases.New(taskRepo, fleet), labusecases.New(fleet, fleet)
 	rng := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	examCases := examusecases.New(files.NewExamFiles(examDir), taskCases, labCases.Get, time.Now, rng)
 
@@ -101,6 +107,10 @@ func run() error {
 	}
 
 	handler := api.New(taskCases, labCases, examCases, students)
+	if cfg.AssistantToken != "" {
+		handler = api.WithTutor(handler, cfg.AssistantToken, taskCases, labCases, examCases, students)
+	}
+
 	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 
 	go func() {

@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package tutor.v1;
+
+option go_package = "github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/tutor/v1;tutorv1";
+
+// TutorService is served by the platform and called by the assistant: what a tutor may see of a student's task
+// and cluster, and nothing that changes them. Every call needs "Authorization: Bearer <token>" (UNAUTHENTICATED
+// otherwise) and names its student: NOT_FOUND for a student the platform doesn't know, FAILED_PRECONDITION while
+// that student has an exam running.
+service TutorService {
+  // GetCurrentTask answers the task the student set up last and hasn't left. NOT_FOUND when there is none.
+  rpc GetCurrentTask(GetCurrentTaskRequest) returns (GetCurrentTaskResponse);
+  // CheckTask runs the task's grader on the student's cluster. NOT_FOUND for an unknown task,
+  // FAILED_PRECONDITION unless the lab is ready.
+  rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse);
+  // InspectCluster runs one read-only kubectl command on the student's control plane. INVALID_ARGUMENT for a
+  // verb or flag outside the allowlist, FAILED_PRECONDITION unless the lab is ready.
+  rpc InspectCluster(InspectClusterRequest) returns (InspectClusterResponse);
+  // GetSolution answers how the task is solved. NOT_FOUND for an unknown task.
+  rpc GetSolution(GetSolutionRequest) returns (GetSolutionResponse);
+}
+
+message Task {
+  string id = 1;
+  string title = 2;
+  // troubleshooting, architecture, networking, workloads or storage.
+  string domain = 3;
+  // The node the task is solved from, like "cka-sim-control-plane".
+  string host = 4;
+  string question = 5;
+}
+
+message GetCurrentTaskRequest {
+  string student = 1;
+}
+
+message GetCurrentTaskResponse {
+  Task task = 1;
+}
+
+message CheckTaskRequest {
+  string student = 1;
+  string task_id = 2;
+}
+
+message Check {
+  bool passed = 1;
+  int32 points = 2;
+  string description = 3;
+}
+
+message CheckTaskResponse {
+  int32 earned = 1;
+  int32 total = 2;
+  repeated Check checks = 3;
+  // Only for a check that printed no PASS or FAIL line: it broke, and these say why.
+  int32 exit_code = 4;
+  string output = 5;
+}
+
+message InspectClusterRequest {
+  string student = 1;
+  // What follows "kubectl", one argument each, like ["get", "pods", "-n", "web"].
+  repeated string args = 2;
+}
+
+message InspectClusterResponse {
+  // stdout and stderr together, cut to their first 16 KiB.
+  string output = 1;
+  int32 exit_code = 2;
+  bool truncated = 3;
+}
+
+message GetSolutionRequest {
+  string student = 1;
+  string task_id = 2;
+}
+
+message GetSolutionResponse {
+  string solution = 1;
+}

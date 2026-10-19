@@ -344,7 +344,7 @@ func newFixture(t *testing.T, saved *exams.Exam) *fixture {
 	t.Helper()
 	f := &fixture{t: t, repo: &fakeExamRepository{exam: saved}, runner: newFakeRunner(), lab: &fakeLab{lab: labs.Lab{State: labs.Ready}}, clock: t0}
 	f.tasks = taskusecases.New(fakeTaskRepository{}, f.runner)
-	f.uc = New(f.repo, f.tasks, labusecases.New(f.lab).Get, func() time.Time { return f.clock }, rand.New(rand.NewPCG(1, 2)))
+	f.uc = New(f.repo, f.tasks, labusecases.New(f.lab, nil).Get, func() time.Time { return f.clock }, rand.New(rand.NewPCG(1, 2)))
 	return f
 }
 

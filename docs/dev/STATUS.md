@@ -32,7 +32,8 @@ when what they describe changes.
 | 4.1 One command, Docker only | Partly | `install.sh` puts the `cka-sim` command (`up`, `down`, `status`, `logs`, `update`, `uninstall`) and `infra/local/compose.yml` in `~/.cka-sim`; it runs the lab and the app (the page and the platform behind Caddy) on :7080 with a token generated once. `cka-sim shell` opens the base host. No auth or assistant yet |
 | 4.2 Published images | Partly | `images.yml` pushes `cka-sim-lab` and `cka-sim-app` (amd64 + arm64) to GHCR as `:main` and `:sha-…` on every push to `main`; no `ci.yml` yet |
 | 4.3 The hosted site on GKE | Partly | `infra/gke`: Terraform (zonal cluster, a system pool and a tainted labs pool scaling 0..`max_labs`, the site's IP) and kustomize manifests (the app with `CKA_SIM_LABS=kubernetes` and the students' Secret, RBAC on pods in `cka-sim-labs`, a NetworkPolicy, a Caddy IP allowlist on `<ip>.sslip.io`). `kube.Pod` and `labagent.Lab` have unit tests; `labagent.Fleet` has none |
+| A1a TutorService | Done | `tutor/v1/tutor.proto`, served by the platform at `/tutor.v1.TutorService/` when `CKA_SIM_ASSISTANT_TOKEN` is set: `GetCurrentTask` (the task set up last and not tidied, per student, in memory), `CheckTask`, `InspectCluster` (`labs.ReadCommand`: an allowlist of kubectl read verbs and flags, quoted, `timeout 15`, run as root on the control plane, output cut to 16 KiB) and `GetSolution`. Unknown students are NOT_FOUND; every call is refused while that student's exam runs |
 
 ## Next
 
-The assistant ([ASSISTANT.md](ASSISTANT.md)), then the rest of [BUILD-IN-STEPS.md](BUILD-IN-STEPS.md).
+The assistant's MCP server (1b in [ASSISTANT.md](ASSISTANT.md)), then evals, then the rest of [BUILD-IN-STEPS.md](BUILD-IN-STEPS.md).

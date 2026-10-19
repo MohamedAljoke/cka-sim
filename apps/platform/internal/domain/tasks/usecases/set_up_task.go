@@ -42,6 +42,7 @@ func (uc *SetUpTask) Execute(ctx context.Context, owner, id string) (labs.Script
 	defer cluster.scripts.RUnlock()
 
 	cluster.touch(id)
+	cluster.enter(id)
 
 	result, err := uc.runner.RunScript(ctx, owner, task.Host, task.Setup)
 	switch {

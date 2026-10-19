@@ -49,6 +49,8 @@ func (uc *TidyTask) Execute(ctx context.Context, owner string, ids ...string) er
 	var errs []error
 
 	for _, task := range all {
+		cluster.leave(task.ID)
+
 		err := uc.tidy(ctx, owner, cluster, task)
 		if errors.Is(err, labs.ErrNotReady) || errors.Is(err, labs.ErrUnavailable) {
 			return err

@@ -13,4 +13,7 @@ var (
 	ErrOff         = domainerr.New("assistant_off", "the assistant isn't set up on this server")
 	ErrUnavailable = domainerr.New("assistant_unavailable",
 		"the assistant doesn't answer; is it running? (make assistant)")
+	ErrNoAnswer = domainerr.New("tutor_no_answer", "the tutor's AI didn't answer; ask again")
+	ErrTooLong  = domainerr.New("tutor_too_long",
+		"the tutor took too many steps without answering; ask again, more narrowly")
 )

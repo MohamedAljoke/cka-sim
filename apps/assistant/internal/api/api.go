@@ -33,6 +33,20 @@ type tools struct {
 // New serves the tutor's tools over MCP for one student at /mcp, for an AI CLI on this machine, and the chat
 // over Connect to the platform, which names the student in each call.
 func New(cases usecases.UseCases, chats chatusecases.UseCases, student, token string) http.Handler {
+	server := NewMCPServer(cases, student)
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server },
+		&mcp.StreamableHTTPOptions{SessionTimeout: time.Hour}))
+
+	rpc := connect.NewServer(rpcauth.RequireBearer(token))
+	assistantv1connect.RegisterAssistantServiceHandler(rpc, &chatService{cases: chats})
+	connecthttp.Mount(mux, rpc)
+
+	return mux
+}
+
+// NewMCPServer is the tutor's tools and instructions for one student, for an AI CLI and for the tutor's own chat.
+func NewMCPServer(cases usecases.UseCases, student string) *mcp.Server {
 	handlers := &tools{cases: cases, student: student}
 	server := mcp.NewServer(&mcp.Implementation{Name: "cka-sim", Version: "1"},
 		&mcp.ServerOptions{Instructions: reviewer})
@@ -59,15 +73,7 @@ func New(cases usecases.UseCases, chats chatusecases.UseCases, student, token st
 			"for the solution; otherwise give hints.",
 	}, handlers.explain)
 
-	mux := http.NewServeMux()
-	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server },
-		&mcp.StreamableHTTPOptions{SessionTimeout: time.Hour}))
-
-	rpc := connect.NewServer(rpcauth.RequireBearer(token))
-	assistantv1connect.RegisterAssistantServiceHandler(rpc, &chatService{cases: chats})
-	connecthttp.Mount(mux, rpc)
-
-	return mux
+	return server
 }
 
 type noInput struct{}

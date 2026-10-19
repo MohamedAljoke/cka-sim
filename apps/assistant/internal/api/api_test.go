@@ -154,7 +154,7 @@ func (p *fakePlatform) Solution(_ context.Context, _, taskID string) (string, er
 
 func mcpSession(t *testing.T, p *fakePlatform) *mcp.ClientSession {
 	t.Helper()
-	srv := httptest.NewServer(New(usecases.New(p), chatusecases.New(p), "alice", token))
+	srv := httptest.NewServer(New(usecases.New(p), chatusecases.UseCases{}, "alice", token))
 	t.Cleanup(srv.Close)
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil).
 		Connect(context.Background(), &mcp.StreamableClientTransport{Endpoint: srv.URL + "/mcp"}, nil)

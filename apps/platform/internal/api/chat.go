@@ -66,7 +66,8 @@ func (a *api) chat(w http.ResponseWriter, r *http.Request) error {
 		return httpx.BadRequest(err)
 	case errors.Is(err, exams.ErrRunning), errors.Is(err, exams.ErrScoring):
 		return httpx.Conflict(err)
-	case errors.Is(err, chats.ErrOff), errors.Is(err, chats.ErrUnavailable), errors.Is(err, exams.ErrUnavailable):
+	case errors.Is(err, chats.ErrOff), errors.Is(err, chats.ErrUnavailable), errors.Is(err, chats.ErrNoAnswer),
+		errors.Is(err, chats.ErrTooLong), errors.Is(err, exams.ErrUnavailable):
 		return httpx.Unavailable(err)
 	}
 

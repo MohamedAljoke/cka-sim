@@ -107,9 +107,10 @@ errors, the exam rule, the page) are reviewed before any model is involved.
 
 ## Part 3 · The AI
 
-- **Scope:** `Reply` becomes a loop on `llm.Model` (Gemini on Vertex, `gemini-3.5-flash`) with `reviewer.md` as
-  the system prompt and the MCP tools, streamed as it goes. A cap on tool calls and on time per answer. Without
-  credentials, the assistant says it isn't configured.
+- **Scope:** `Reply` becomes a loop on the chat's `Model` interface (Gemini on Vertex, `gemini-3.5-flash`,
+  `CKA_SIM_VERTEX_PROJECT`) over our own MCP server, reached in memory for the chat's student, so the page and
+  an AI CLI share the tools and `reviewer.md`. At most 8 rounds and 90s per answer. Without a project, the
+  assistant says it has no AI.
 - **Review:** "why does my check fail?" runs the check and points at the failing part without the answer; "show
   me the solution" uses `explain`; text in the cluster that reads like instructions doesn't steer it.
 - **Learn:** a tool loop, and keeping the model behind an interface so another provider is one adapter.

@@ -4,6 +4,7 @@ type UseCases struct {
 	Reply *Reply
 }
 
-func New(tasks Tasks) UseCases {
-	return UseCases{Reply: NewReply(tasks)}
+// New takes a nil model when no AI is set up.
+func New(model Model, tools Toolbox) UseCases {
+	return UseCases{Reply: NewReply(model, tools)}
 }

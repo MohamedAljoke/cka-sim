@@ -16,12 +16,11 @@ import (
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/rpcauth"
 )
 
-func TestThePlatformChatsForTheStudentItNames(t *testing.T) {
-	tools, text, err := chat(assistantToken, "bob", "why does my check fail?")
+func TestAChatWithNoVertexProjectSaysTheTutorHasNoAI(t *testing.T) {
+	_, _, err := chat(assistantToken, "bob", "why does my check fail?")
 
-	if err != nil || strings.Join(tools, " ") != "current_task" || !strings.Contains(text, "why does my check fail?") ||
-		platform.lastStudent() != "bob" {
-		t.Errorf("tools %q, text %q, err %v, student %q", tools, text, err, platform.lastStudent())
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition || !strings.Contains(err.Error(), "ai_not_configured") {
+		t.Errorf("got %v", err)
 	}
 }
 

@@ -67,15 +67,35 @@ func TestAnEmitThatFailsStopsTheChat(t *testing.T) {
 	}
 }
 
+func TestTheAssistantsRefusalsBecomeTheTutorsErrors(t *testing.T) {
+	for code, want := range map[connect.Code]error{
+		connect.CodeFailedPrecondition: chats.ErrOff,
+		connect.CodeAborted:            chats.ErrNoAnswer,
+		connect.CodeResourceExhausted:  chats.ErrTooLong,
+	} {
+		f := &fakeAssistant{err: connect.NewError(code, "refused")}
+
+		err := New(serve(t, f), token).Chat(context.Background(), "alice", "", nil, func(chats.Event) error { return nil })
+
+		if !errors.Is(err, want) {
+			t.Errorf("%v: got %v", code, err)
+		}
+	}
+}
+
 type fakeAssistant struct {
 	assistantv1connect.UnimplementedAssistantServiceHandler
 	req *assistantv1.ChatRequest
+	err error
 }
 
 func (f *fakeAssistant) Chat(_ context.Context, req *assistantv1.ChatRequest,
 	stream assistantv1connect.AssistantServiceChatServerStream,
 ) error {
 	f.req = req
+	if f.err != nil {
+		return f.err
+	}
 	if err := stream.Send(&assistantv1.ChatResponse{Event: &assistantv1.ChatResponse_Tool{Tool: "current_task"}}); err != nil {
 		return err
 	}

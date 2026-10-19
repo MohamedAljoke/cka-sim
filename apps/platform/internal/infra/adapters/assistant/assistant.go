@@ -46,7 +46,7 @@ func (c *Client) Chat(ctx context.Context, student, taskID string, messages []ch
 
 	stream, err := c.calls.Chat(ctx, req)
 	if err != nil {
-		return unavailable(err)
+		return refusal(err)
 	}
 	defer func() { _ = stream.Close() }()
 
@@ -57,7 +57,7 @@ func (c *Client) Chat(ctx context.Context, student, taskID string, messages []ch
 		}
 
 		if err != nil {
-			return unavailable(err)
+			return refusal(err)
 		}
 
 		if err := emit(chats.Event{Tool: res.GetTool(), Text: res.GetText()}); err != nil {
@@ -66,10 +66,17 @@ func (c *Client) Chat(ctx context.Context, student, taskID string, messages []ch
 	}
 }
 
-func unavailable(err error) error {
-	if connect.CodeOf(err) == connect.CodeUnavailable {
+func refusal(err error) error {
+	switch connect.CodeOf(err) {
+	case connect.CodeUnavailable:
 		return fmt.Errorf("%w: %w", chats.ErrUnavailable, err)
+	case connect.CodeFailedPrecondition:
+		return fmt.Errorf("%w: %w", chats.ErrOff, err)
+	case connect.CodeAborted:
+		return fmt.Errorf("%w: %w", chats.ErrNoAnswer, err)
+	case connect.CodeResourceExhausted:
+		return fmt.Errorf("%w: %w", chats.ErrTooLong, err)
+	default:
+		return err
 	}
-
-	return err
 }

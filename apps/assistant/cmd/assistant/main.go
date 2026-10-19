@@ -12,12 +12,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/config"
 
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/api"
 	chatusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/chat/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor/usecases"
+	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/mcptools"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/platform"
+	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/vertex"
 )
 
 type settings struct {
@@ -26,6 +30,10 @@ type settings struct {
 	AssistantToken string `key:"CKA_SIM_ASSISTANT_TOKEN" minLength:"32"`
 	// The student whose task and cluster the MCP tools see; the chat gets its student from the platform.
 	Student string `key:"CKA_SIM_STUDENT" default:"local"`
+	// The GCP project whose Vertex AI answers the chat. Empty: the chat says it has no AI.
+	VertexProject  string `key:"CKA_SIM_VERTEX_PROJECT" default:""`
+	VertexLocation string `key:"CKA_SIM_VERTEX_LOCATION" default:"global"`
+	Model          string `key:"CKA_SIM_MODEL" default:"gemini-3.5-flash"`
 }
 
 func main() {
@@ -49,8 +57,14 @@ func run() error {
 		return fmt.Errorf("claim %s: %w", cfg.Addr, err)
 	}
 
-	tutor := platform.New(cfg.PlatformURL, cfg.AssistantToken)
-	handler := api.New(usecases.New(tutor), chatusecases.New(tutor), cfg.Student, cfg.AssistantToken)
+	model, err := modelOf(ctx, cfg)
+	if err != nil {
+		return err
+	}
+
+	tutorCases := usecases.New(platform.New(cfg.PlatformURL, cfg.AssistantToken))
+	toolbox := mcptools.New(func(student string) *mcp.Server { return api.NewMCPServer(tutorCases, student) })
+	handler := api.New(tutorCases, chatusecases.New(model, toolbox), cfg.Student, cfg.AssistantToken)
 	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 
 	go func() {
@@ -64,8 +78,8 @@ func run() error {
 		}
 	}()
 
-	if _, err := fmt.Fprintf(os.Stdout, "assistant on http://%s (MCP at /mcp for %s); Ctrl-C stops it\n",
-		listener.Addr(), cfg.Student); err != nil {
+	if _, err := fmt.Fprintf(os.Stdout, "assistant on http://%s (MCP at /mcp for %s, chat on %s); Ctrl-C stops it\n",
+		listener.Addr(), cfg.Student, aiOf(cfg)); err != nil {
 		return err
 	}
 
@@ -74,4 +88,21 @@ func run() error {
 	}
 
 	return nil
+}
+
+// modelOf is nil, which leaves the chat without AI, when no Vertex project is set.
+func modelOf(ctx context.Context, cfg settings) (chatusecases.Model, error) {
+	if cfg.VertexProject == "" {
+		return nil, nil
+	}
+
+	return vertex.New(ctx, cfg.VertexProject, cfg.VertexLocation, cfg.Model)
+}
+
+func aiOf(cfg settings) string {
+	if cfg.VertexProject == "" {
+		return "no AI"
+	}
+
+	return cfg.Model
 }

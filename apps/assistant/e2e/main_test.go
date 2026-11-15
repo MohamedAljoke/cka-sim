@@ -18,6 +18,8 @@ import (
 	"connectrpc.com/connect/v2/connecthttp"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/exam/v1/examv1connect"
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/study/v1/studyv1connect"
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/tutor/v1/tutorv1connect"
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/rpcauth"
 )
@@ -28,9 +30,13 @@ const (
 )
 
 var (
-	assistantBin string
-	platform     = &fakePlatform{}
-	mcpURL       string
+	assistantBin  string
+	platform      = &fakePlatform{}
+	studyPlatform = &fakeStudy{}
+	examPlatform  = &fakeExam{}
+	mcpURL        string
+	assistantURL  string
+	stateDir      string
 )
 
 func TestMain(m *testing.M) {
@@ -50,14 +56,21 @@ func run(m *testing.M) int {
 		fmt.Fprintf(os.Stderr, "build the assistant: %v\n%s", err, out)
 		return 1
 	}
+	stateDir = filepath.Join(dir, "state")
+	fakeClaude := filepath.Join(dir, "claude")
+	if err := os.WriteFile(fakeClaude, []byte(fakeClaudeScript), 0o700); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
 	platformURL, closePlatform := servePlatform(platform)
 	defer closePlatform()
-	assistant, url, err := start(platformURL, assistantToken)
+	assistant, url, err := start(platformURL, assistantToken, "CKA_SIM_CLAUDE="+fakeClaude)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "start the assistant:", err)
 		return 1
 	}
 	mcpURL = url + "/mcp"
+	assistantURL = url
 
 	code := m.Run()
 	if err := stop(assistant); err != nil {
@@ -73,7 +86,7 @@ func start(platformURL, token string, env ...string) (*exec.Cmd, string, error) 
 	assistant := exec.Command(assistantBin)
 	assistant.Env = append(os.Environ(), "CKA_SIM_ASSISTANT_ADDR=127.0.0.1:0", "CKA_SIM_PLATFORM_URL="+platformURL,
 		"CKA_SIM_ASSISTANT_TOKEN="+token, "CKA_SIM_STUDENT="+student, "CKA_SIM_VERTEX_PROJECT=", "CKA_SIM_GEMINI_API_KEY=",
-		"CKA_SIM_DOCS_INDEX=")
+		"CKA_SIM_DOCS_INDEX=", "CKA_SIM_ASSISTANT_STATE_DIR="+stateDir)
 	assistant.Env = append(assistant.Env, env...)
 	assistant.Stderr = os.Stderr
 	stdout, err := assistant.StdoutPipe()
@@ -111,6 +124,8 @@ func stop(assistant *exec.Cmd) error {
 func servePlatform(p *fakePlatform) (string, func()) {
 	server := connect.NewServer(rpcauth.RequireBearer(assistantToken))
 	tutorv1connect.RegisterTutorServiceHandler(server, p)
+	studyv1connect.RegisterStudyServiceHandler(server, studyPlatform)
+	examv1connect.RegisterExamServiceHandler(server, examPlatform)
 	mux := http.NewServeMux()
 	connecthttp.Mount(mux, server)
 	srv := httptest.NewServer(mux)

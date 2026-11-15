@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 
 	"github.com/coder/websocket"
 
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
-	labusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs/usecases"
 )
 
 const (
@@ -29,11 +29,30 @@ func (a *api) terminalRoutes(handle handleFunc) {
 	handle("GET /ws/terminal", a.terminal)
 }
 
-// Accept refuses a page from another origin; without that, any site could open a root shell on the lab.
+type pty interface {
+	io.ReadWriteCloser
+	Resize(size labs.TerminalSize) error
+}
+
+type opener func(ctx context.Context, size labs.TerminalSize) (pty, error)
+
 func (a *api) terminal(w http.ResponseWriter, r *http.Request) error {
+	open := func(ctx context.Context, size labs.TerminalSize) (pty, error) {
+		return a.labs.OpenShell.Execute(ctx, studentOf(r), size)
+	}
+
+	bridge(w, r, open, refuseShell, "the shell ended")
+
+	return nil
+}
+
+// Accept refuses a page from another origin; without that, any site could open a root shell on the lab.
+func bridge(w http.ResponseWriter, r *http.Request, open opener,
+	refuse func(context.Context, *websocket.Conn, error), ended string,
+) {
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
-		return nil
+		return
 	}
 	defer func() { _ = conn.CloseNow() }()
 
@@ -45,30 +64,30 @@ func (a *api) terminal(w http.ResponseWriter, r *http.Request) error {
 
 	size, err := firstSize(ctx, conn)
 	if err != nil {
-		return nil
+		return
 	}
 
-	shell, err := a.labs.OpenShell.Execute(ctx, studentOf(r), size)
+	terminal, err := open(ctx, size)
 	if err != nil {
-		refuseShell(ctx, conn, err)
-		return nil
+		refuse(ctx, conn, err)
+		return
 	}
-	defer func() { _ = shell.Close() }()
+	defer func() { _ = terminal.Close() }()
 
-	go sendOutput(ctx, conn, shell)
+	go sendOutput(ctx, conn, terminal, ended)
 
 	for {
 		typ, data, err := conn.Read(ctx)
 		if err != nil {
-			return nil
+			return
 		}
 
 		if typ == websocket.MessageBinary {
-			if _, err := shell.Write(data); err != nil {
-				return nil
+			if _, err := terminal.Write(data); err != nil {
+				return
 			}
 		} else if size, ok := parseResize(data); ok {
-			_ = shell.Resize(size)
+			_ = terminal.Resize(size)
 		}
 	}
 }
@@ -109,7 +128,7 @@ func refuseShell(ctx context.Context, conn *websocket.Conn, err error) {
 	_ = conn.Close(websocket.StatusTryAgainLater, "cannot open a shell")
 }
 
-func sendOutput(ctx context.Context, conn *websocket.Conn, shell labusecases.Shell) {
+func sendOutput(ctx context.Context, conn *websocket.Conn, shell io.Reader, ended string) {
 	buf := make([]byte, outputChunk)
 	for {
 		n, err := shell.Read(buf)
@@ -118,7 +137,7 @@ func sendOutput(ctx context.Context, conn *websocket.Conn, shell labusecases.She
 		}
 
 		if err != nil {
-			_ = conn.Close(websocket.StatusNormalClosure, "the shell ended")
+			_ = conn.Close(websocket.StatusNormalClosure, ended)
 			return
 		}
 	}

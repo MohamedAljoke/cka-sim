@@ -6,6 +6,8 @@ export const homePath = '#/'
 
 export const examPath = '#/exam'
 
+export const alreadyTidied = 'already tidied'
+
 export function tasksPath(filter: Filter): string {
   const query = filterQuery(filter)
   return query ? `${homePath}?${query}` : homePath

@@ -56,6 +56,10 @@ func serveAssistant() (string, func()) {
 	assistantv1connect.RegisterAssistantServiceHandler(server, fakeAssistant{})
 	mux := http.NewServeMux()
 	connecthttp.Mount(mux, server)
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewUnstartedServer(mux)
+	srv.Config.Protocols = new(http.Protocols)
+	srv.Config.Protocols.SetHTTP1(true)
+	srv.Config.Protocols.SetUnencryptedHTTP2(true)
+	srv.Start()
 	return srv.URL, srv.Close
 }

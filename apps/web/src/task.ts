@@ -1,5 +1,7 @@
 import { getSolution, getTask, type TaskDetail } from './api'
 import { checkTool } from './check'
+import { assistPanel } from './assist'
+import { claudePanel } from './claude'
 import type { LabStatus } from './lab'
 import { homePath } from './routes'
 import { setupPanel } from './setup'
@@ -46,7 +48,7 @@ export async function showTask(pane: HTMLElement, id: string, lab: LabStatus, si
   bar.append(setup.panel, check.button)
   const workspace = el('section', 'task-lab')
   workspace.setAttribute('aria-label', 'Workspace')
-  workspace.append(bar, shell.panel, tutorPanel(task.id, signal))
+  workspace.append(bar, shell.panel, assistPanel(claudePanel(), tutorPanel(task.id, signal)))
 
   const layout = el('div', 'task-layout')
   layout.append(

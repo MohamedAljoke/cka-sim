@@ -17,9 +17,28 @@ type BeginExam struct {
 }
 
 // Setups run in the background; the exam answers at once and its tasks report as each setup lands.
-func (uc *BeginExam) Execute(ctx context.Context, owner string, count, minutes int) (exams.Exam, error) {
+func (uc *BeginExam) Execute(ctx context.Context, owner string, count, minutes int, selection tasks.Filter,
+) (exams.Exam, error) {
 	if err := exams.Validate(count, minutes); err != nil {
 		return exams.Exam{}, err
+	}
+
+	if err := selection.Validate(); err != nil {
+		return exams.Exam{}, err
+	}
+
+	catalog, err := uc.list.Execute(ctx, tasks.Filter{})
+	if err != nil {
+		return exams.Exam{}, err
+	}
+
+	all, err := selection.Select(catalog)
+	if err != nil {
+		return exams.Exam{}, err
+	}
+
+	if len(all) == 0 && !selection.Empty() {
+		return exams.Exam{}, exams.ErrNoneChosen
 	}
 
 	lab, err := uc.lab.Execute(ctx, owner)
@@ -29,11 +48,6 @@ func (uc *BeginExam) Execute(ctx context.Context, owner string, count, minutes i
 
 	if lab.State != labs.Ready {
 		return exams.Exam{}, labs.ErrNotReady
-	}
-
-	all, err := uc.list.Execute(ctx, tasks.Filter{})
-	if err != nil {
-		return exams.Exam{}, err
 	}
 
 	s, err := uc.ss.of(owner)

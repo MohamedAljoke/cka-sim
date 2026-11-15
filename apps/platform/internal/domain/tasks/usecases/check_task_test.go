@@ -3,85 +3,77 @@ package usecases
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strings"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks"
 )
 
-var withCheck = tasks.Task{ID: "wl-scale", Host: "cka-sim-control-plane", Check: "check 2 \"web has 4 replicas\" true\n"}
+var checkedAt = time.Date(2026, 11, 2, 10, 0, 0, 0, time.UTC)
 
-func TestCheckTaskGradesTheCheckItRunsOnTheTasksHost(t *testing.T) {
+func TestAPracticeCheckSavesTheAttemptWithWhatFailed(t *testing.T) {
 	r := &fakeRunner{result: labs.ScriptResult{Output: "PASS 2 web has 4 replicas\nFAIL 1 web is Ready\n"}}
+	attempts := &fakeAttempts{}
 
-	got, err := NewCheckTask(fakeRepository{tasks: []tasks.Task{withCheck}}, r).Execute(context.Background(), owner, "wl-scale")
+	got, err := newCheck(r, attempts).Execute(context.Background(), owner, "wl-scale")
 
-	if err != nil || got.Grade.Earned != 2 || got.Grade.Total != 3 || len(got.Grade.Checks) != 2 {
-		t.Fatalf("Execute = %+v, %v", got, err)
+	if err != nil || got.Grade.Earned != 2 || len(attempts.entries) != 1 {
+		t.Fatalf("Execute = %+v, %v; saved %+v", got, err, attempts.entries)
 	}
-	if r.host != "cka-sim-control-plane" || r.script != withCheck.Check {
-		t.Errorf("ran %q on %q", r.script, r.host)
+	a := attempts.entries[0]
+	if a.Kind != tasks.AttemptEntry || a.TaskID != "wl-scale" || !a.At.Equal(checkedAt) || a.Earned != 2 || a.Total != 3 ||
+		!slices.Equal(a.Failed, []string{"web is Ready"}) {
+		t.Errorf("saved %+v", a)
 	}
 }
 
-func TestACheckThatPrintsNoResultKeepsItsOutput(t *testing.T) {
+func TestEveryCheckAddsAnAttempt(t *testing.T) {
+	r := &fakeRunner{result: labs.ScriptResult{Output: "PASS 1 done\n"}}
+	attempts := &fakeAttempts{}
+	check := newCheck(r, attempts)
+
+	check.Execute(context.Background(), owner, "wl-scale")
+	check.Execute(context.Background(), owner, "wl-scale")
+
+	if len(attempts.entries) != 2 {
+		t.Errorf("saved %+v", attempts.entries)
+	}
+}
+
+func TestACheckThatPrintsNoResultSavesNoAttempt(t *testing.T) {
 	r := &fakeRunner{result: labs.ScriptResult{Output: "bash: jq: command not found\n", ExitCode: 127}}
+	attempts := &fakeAttempts{}
 
-	got, err := NewCheckTask(fakeRepository{tasks: []tasks.Task{withCheck}}, r).Execute(context.Background(), owner, "wl-scale")
+	got, err := newCheck(r, attempts).Execute(context.Background(), owner, "wl-scale")
 
-	if err != nil || len(got.Grade.Checks) != 0 || got.Script.ExitCode != 127 || !strings.Contains(got.Script.Output, "jq") {
+	if err != nil || got.Script.ExitCode != 127 || len(attempts.entries) != 0 {
+		t.Errorf("Execute = %+v, %v; saved %+v", got, err, attempts.entries)
+	}
+}
+
+func TestACheckOnALabThatIsNotReadySavesNoAttempt(t *testing.T) {
+	attempts := &fakeAttempts{}
+
+	_, err := newCheck(&fakeRunner{err: labs.ErrNotReady}, attempts).Execute(context.Background(), owner, "wl-scale")
+
+	if !errors.Is(err, labs.ErrNotReady) || len(attempts.entries) != 0 {
+		t.Errorf("got %v; saved %+v", err, attempts.entries)
+	}
+}
+
+func TestACheckWhoseAttemptCannotBeSavedStillAnswersItsGrade(t *testing.T) {
+	r := &fakeRunner{result: labs.ScriptResult{Output: "PASS 1 done\n"}}
+
+	got, err := newCheck(r, &fakeAttempts{err: errors.New("disk full")}).Execute(context.Background(), owner, "wl-scale")
+
+	if err != nil || got.Grade.Earned != 1 {
 		t.Errorf("Execute = %+v, %v", got, err)
 	}
 }
 
-func TestACheckStopsWithTheRequestAndHasATimeout(t *testing.T) {
-	r := &fakeRunner{}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	NewCheckTask(fakeRepository{tasks: []tasks.Task{withCheck}}, r).Execute(ctx, owner, "wl-scale")
-
-	if r.ctxErr == nil || !r.hasDeadline {
-		t.Errorf("the check ran with ctx error %v, deadline %v", r.ctxErr, r.hasDeadline)
-	}
-}
-
-func TestCheckTaskOfAnUnknownTaskIsNotFound(t *testing.T) {
-	r := &fakeRunner{}
-
-	_, err := NewCheckTask(fakeRepository{tasks: []tasks.Task{withCheck}}, r).Execute(context.Background(), owner, "net-svc")
-
-	if !errors.Is(err, tasks.ErrNotFound) || r.host != "" {
-		t.Errorf("got %v, ran on %q", err, r.host)
-	}
-}
-
-func TestCheckTaskOnALabThatIsNotReadyStaysNotReady(t *testing.T) {
-	r := &fakeRunner{err: fmt.Errorf("%w: the cluster is creating", labs.ErrNotReady)}
-
-	_, err := NewCheckTask(fakeRepository{tasks: []tasks.Task{withCheck}}, r).Execute(context.Background(), owner, "wl-scale")
-
-	if !errors.Is(err, labs.ErrNotReady) || errors.Is(err, labs.ErrUnavailable) {
-		t.Errorf("got %v", err)
-	}
-}
-
-func TestCheckTaskOnALabThatDoesNotAnswerIsUnavailableAndKeepsTheCause(t *testing.T) {
-	r := &fakeRunner{err: errors.New("dial tcp 127.0.0.1:7171: connection refused")}
-
-	_, err := NewCheckTask(fakeRepository{tasks: []tasks.Task{withCheck}}, r).Execute(context.Background(), owner, "wl-scale")
-
-	if !errors.Is(err, labs.ErrUnavailable) || !strings.Contains(err.Error(), "connection refused") {
-		t.Errorf("got %v", err)
-	}
-}
-
-func TestCheckTaskIsUnavailableWhenTheRepositoryFails(t *testing.T) {
-	_, err := NewCheckTask(fakeRepository{err: errors.New("disk gone")}, &fakeRunner{}).Execute(context.Background(), owner, "wl-scale")
-
-	if !errors.Is(err, tasks.ErrUnavailable) {
-		t.Errorf("got %v", err)
-	}
+func newCheck(r ScriptRunner, attempts AttemptRepository) *CheckTask {
+	repo := fakeRepository{tasks: []tasks.Task{withCheck}}
+	return NewCheckTask(NewGradeTask(repo, r), attempts, func() time.Time { return checkedAt })
 }

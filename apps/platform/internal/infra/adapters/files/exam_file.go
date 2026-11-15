@@ -78,6 +78,7 @@ type examRecord struct {
 
 type taskRecord struct {
 	ID         string           `json:"id"`
+	Title      string           `json:"title,omitempty"`
 	Weight     int              `json:"weight"`
 	Last       bool             `json:"last,omitempty"`
 	Setup      exams.SetupState `json:"setup"`
@@ -107,7 +108,7 @@ func newExamRecord(exam exams.Exam) examRecord {
 
 	for i, task := range exam.Tasks {
 		record.Tasks[i] = taskRecord{
-			ID: task.ID, Weight: task.Weight, Last: task.Last, Setup: task.Setup, SetupError: task.SetupError,
+			ID: task.ID, Title: task.Title, Weight: task.Weight, Last: task.Last, Setup: task.Setup, SetupError: task.SetupError,
 			Flagged: task.Flagged, CheckError: task.CheckError,
 		}
 
@@ -134,7 +135,7 @@ func (r examRecord) exam() exams.Exam {
 
 	for i, task := range r.Tasks {
 		exam.Tasks[i] = exams.Task{
-			ID: task.ID, Weight: task.Weight, Last: task.Last, Setup: task.Setup, SetupError: task.SetupError,
+			ID: task.ID, Title: task.Title, Weight: task.Weight, Last: task.Last, Setup: task.Setup, SetupError: task.SetupError,
 			Flagged: task.Flagged, CheckError: task.CheckError,
 		}
 

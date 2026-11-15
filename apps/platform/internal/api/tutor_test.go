@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect/v2"
 	"connectrpc.com/connect/v2/connecthttp"
@@ -181,7 +182,7 @@ func newTutorAPI(r *fakeRunner, students map[string]string) http.Handler {
 }
 
 func newTutorAPIWith(repo usecases.TaskRepository, r *fakeRunner, students map[string]string) http.Handler {
-	taskCases := usecases.New(repo, r)
+	taskCases := usecases.New(repo, r, &fakeAttempts{}, time.Now)
 	labCases := labusecases.New(&fakeLabProvider{lab: labs.Lab{State: labs.Ready}}, r)
 	examCases := examsFor(taskCases, labCases, nil)
 	page := New(taskCases, labCases, examCases, chatusecases.UseCases{}, students)

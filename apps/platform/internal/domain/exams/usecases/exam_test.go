@@ -29,7 +29,7 @@ var (
 func TestBeginSetsUpEveryDrawnTaskThenStartsTheClock(t *testing.T) {
 	f := newFixture(t, nil)
 
-	got, err := f.uc.Begin.Execute(context.Background(), owner, 3, 30)
+	got, err := f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{})
 	if err != nil || len(got.Tasks) != 3 || !got.SettingUp() {
 		t.Fatalf("Begin = %+v, %v", got, err)
 	}
@@ -52,7 +52,7 @@ func TestBeginSetsUpEveryDrawnTaskThenStartsTheClock(t *testing.T) {
 func TestBeginSetsUpTheLastTaskAfterTheOthers(t *testing.T) {
 	f := newFixture(t, nil)
 
-	f.uc.Begin.Execute(context.Background(), owner, 3, 30)
+	f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{})
 	f.wait()
 
 	if ran := f.runner.ran(); len(ran) != 3 || ran[2] != "setup tr-etcd" {
@@ -65,7 +65,7 @@ func TestAFailedSetupMarksItsTaskAndKeepsWhy(t *testing.T) {
 	f.runner.fail("setup nw-svc", labs.ScriptResult{ExitCode: 1, Output: "error: no such CRD\n"})
 	f.runner.err("setup ar-rbac", errors.New("connection refused"))
 
-	f.uc.Begin.Execute(context.Background(), owner, 3, 30)
+	f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{})
 	f.wait()
 
 	e := f.get()
@@ -82,18 +82,33 @@ func TestBeginHealsWhatPracticeBrokeBeforeTheSetups(t *testing.T) {
 	f := newFixture(t, nil)
 	f.tasks.SetUp.Execute(context.Background(), owner, "tr-etcd")
 
-	f.uc.Begin.Execute(context.Background(), owner, 3, 30)
+	f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{})
 	f.wait()
 
-	if ran := f.runner.ran(); len(ran) != 5 || ran[1] != "reset tr-etcd" || ran[4] != "setup tr-etcd" {
+	if ran := f.runner.ran(); len(ran) != 6 || ran[1] != "reset tr-etcd" || ran[5] != "setup tr-etcd" {
 		t.Errorf("ran %v", ran)
+	}
+}
+
+func TestBeginTidiesAndLeavesThePracticeTaskBeforeTheSetups(t *testing.T) {
+	f := newFixture(t, nil)
+	f.tasks.SetUp.Execute(context.Background(), owner, "ar-rbac")
+
+	f.uc.Begin.Execute(context.Background(), owner, 1, 30, tasks.Filter{IDs: []string{"nw-svc"}})
+	f.wait()
+
+	if ran := f.runner.ran(); !slices.Equal(ran, []string{"setup ar-rbac", taskusecases.TidyScript("ar-rbac"), "setup nw-svc"}) {
+		t.Errorf("ran %v", ran)
+	}
+	if current, err := f.tasks.Current.Execute(context.Background(), owner); err != nil || current.Task.ID != "nw-svc" {
+		t.Errorf("current %+v, %v", current, err)
 	}
 }
 
 func TestBeginRefusesBadLimits(t *testing.T) {
 	f := newFixture(t, nil)
 
-	if _, err := f.uc.Begin.Execute(context.Background(), owner, 0, 30); !errors.Is(err, exams.ErrInvalid) {
+	if _, err := f.uc.Begin.Execute(context.Background(), owner, 0, 30, tasks.Filter{}); !errors.Is(err, exams.ErrInvalid) {
 		t.Errorf("got %v", err)
 	}
 }
@@ -102,7 +117,7 @@ func TestBeginNeedsAReadyLab(t *testing.T) {
 	f := newFixture(t, nil)
 	f.lab.lab = labs.Lab{State: labs.Starting}
 
-	if _, err := f.uc.Begin.Execute(context.Background(), owner, 3, 30); !errors.Is(err, labs.ErrNotReady) || f.repo.saved() != nil {
+	if _, err := f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{}); !errors.Is(err, labs.ErrNotReady) || f.repo.saved() != nil {
 		t.Errorf("got %v", err)
 	}
 }
@@ -111,7 +126,7 @@ func TestBeginIsUnavailableWhenTheLabDoesNotAnswer(t *testing.T) {
 	f := newFixture(t, nil)
 	f.lab.err = errors.New("dial tcp: connection refused")
 
-	if _, err := f.uc.Begin.Execute(context.Background(), owner, 3, 30); !errors.Is(err, labs.ErrUnavailable) {
+	if _, err := f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{}); !errors.Is(err, labs.ErrUnavailable) {
 		t.Errorf("got %v", err)
 	}
 }
@@ -120,7 +135,7 @@ func TestBeginIsUnavailableWhenTheExamCannotBeSaved(t *testing.T) {
 	f := newFixture(t, nil)
 	f.repo.saveErr = errors.New("disk full")
 
-	_, err := f.uc.Begin.Execute(context.Background(), owner, 3, 30)
+	_, err := f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{})
 
 	if !errors.Is(err, exams.ErrUnavailable) || len(f.runner.ran()) != 0 {
 		t.Errorf("got %v, ran %v", err, f.runner.ran())
@@ -132,10 +147,10 @@ func TestBeginIsUnavailableWhenTheExamCannotBeSaved(t *testing.T) {
 
 func TestOnlyOneExamRunsAtATime(t *testing.T) {
 	f := newFixture(t, nil)
-	f.uc.Begin.Execute(context.Background(), owner, 3, 30)
+	f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{})
 	f.wait()
 
-	if _, err := f.uc.Begin.Execute(context.Background(), owner, 3, 30); !errors.Is(err, exams.ErrRunning) {
+	if _, err := f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{}); !errors.Is(err, exams.ErrRunning) {
 		t.Errorf("got %v", err)
 	}
 }
@@ -144,7 +159,7 @@ func TestEndGradesEveryPlayableTaskThenScoresTheExam(t *testing.T) {
 	f := newFixture(t, nil)
 	f.runner.fail("setup nw-svc", labs.ScriptResult{ExitCode: 1})
 	f.runner.fail("check ar-rbac", labs.ScriptResult{Output: "PASS 2 role\nFAIL 2 binding\n"})
-	f.uc.Begin.Execute(context.Background(), owner, 3, 30)
+	f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{})
 	f.wait()
 	f.clock = t0.Add(10 * time.Minute)
 
@@ -164,10 +179,23 @@ func TestEndGradesEveryPlayableTaskThenScoresTheExam(t *testing.T) {
 	}
 }
 
+func TestAnExamsChecksLeaveNoAttempts(t *testing.T) {
+	f := newFixture(t, nil)
+	f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{})
+	f.wait()
+
+	f.uc.End.Execute(context.Background(), owner)
+	f.wait()
+
+	if e := f.get(); e.Scoring() || e.Tasks[0].Grade == nil || len(f.attempts.appended) != 0 {
+		t.Errorf("graded %+v, attempts %+v", e.Tasks, f.attempts.appended)
+	}
+}
+
 func TestAScoredExamTidiesEveryTask(t *testing.T) {
 	f := newFixture(t, nil)
 	f.runner.fail("setup nw-svc", labs.ScriptResult{ExitCode: 1})
-	f.uc.Begin.Execute(context.Background(), owner, 3, 30)
+	f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{})
 	f.wait()
 
 	f.uc.End.Execute(context.Background(), owner)
@@ -184,7 +212,7 @@ func TestABrokenCheckScoresZeroAndSaysWhy(t *testing.T) {
 	f := newFixture(t, nil)
 	f.runner.fail("check ar-rbac", labs.ScriptResult{ExitCode: 127, Output: "kubectl: not found\n"})
 	f.runner.err("check nw-svc", errors.New("connection refused"))
-	f.uc.Begin.Execute(context.Background(), owner, 3, 30)
+	f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{})
 	f.wait()
 
 	f.uc.End.Execute(context.Background(), owner)
@@ -215,7 +243,7 @@ func TestAnExamCannotEndWhileSettingUpOrTwice(t *testing.T) {
 
 func TestReadingAnExamPastItsDeadlineEndsItAtTheDeadline(t *testing.T) {
 	f := newFixture(t, nil)
-	f.uc.Begin.Execute(context.Background(), owner, 3, 30)
+	f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{})
 	f.wait()
 	f.clock = t0.Add(45 * time.Minute)
 
@@ -232,7 +260,7 @@ func TestReadingAnExamPastItsDeadlineEndsItAtTheDeadline(t *testing.T) {
 
 func TestFlagMarksATaskAndSavesIt(t *testing.T) {
 	f := newFixture(t, nil)
-	f.uc.Begin.Execute(context.Background(), owner, 3, 30)
+	f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{})
 	f.wait()
 
 	if err := f.uc.Flag.Execute(context.Background(), owner, "nw-svc", true); err != nil {
@@ -330,20 +358,118 @@ func TestAnUnreadableSavedExamIsUnavailable(t *testing.T) {
 	}
 }
 
+func TestBeginDrawsOnlyFromTheSelection(t *testing.T) {
+	for name, selection := range map[string]tasks.Filter{
+		"domains": {Domains: []tasks.Domain{tasks.Architecture, tasks.Networking}},
+		"ids":     {IDs: []string{"ar-rbac", "nw-svc"}},
+	} {
+		f := newFixture(t, nil)
+
+		got, err := f.uc.Begin.Execute(context.Background(), owner, 5, 30, selection)
+
+		if err != nil || len(got.Tasks) != 2 || got.Index("tr-etcd") >= 0 {
+			t.Errorf("%s: Begin = %+v, %v", name, got, err)
+		}
+		f.wait()
+	}
+}
+
+func TestAnEmptySelectionDrawsFromTheWholeCatalog(t *testing.T) {
+	f := newFixture(t, nil)
+
+	got, err := f.uc.Begin.Execute(context.Background(), owner, 5, 30, tasks.Filter{})
+
+	if err != nil || len(got.Tasks) != len(catalog) {
+		t.Errorf("Begin = %+v, %v", got, err)
+	}
+	f.wait()
+}
+
+func TestASelectionMatchingNoTaskIsRefused(t *testing.T) {
+	f := newFixture(t, nil)
+
+	_, err := f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{Topics: []string{"no-such-topic"}})
+
+	if !errors.Is(err, exams.ErrNoneChosen) || f.repo.saved() != nil || len(f.runner.ran()) != 0 {
+		t.Errorf("got %v, saved %+v", err, f.repo.saved())
+	}
+}
+
+func TestASelectionNamingAnUnknownTaskIsRefused(t *testing.T) {
+	f := newFixture(t, nil)
+
+	_, err := f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{IDs: []string{"ar-rbac", "no-such-task"}})
+
+	if !errors.Is(err, tasks.ErrNotFound) || !strings.Contains(err.Error(), `"no-such-task"`) || f.repo.saved() != nil {
+		t.Errorf("got %v, saved %+v", err, f.repo.saved())
+	}
+}
+
+func TestAMalformedSelectionIsRefusedBeforeTheLabIsAsked(t *testing.T) {
+	f := newFixture(t, nil)
+	f.lab.err = errors.New("dial tcp: connection refused")
+
+	_, err := f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{Domains: []tasks.Domain{"security"}})
+
+	if !errors.Is(err, tasks.ErrUnknownDomain) {
+		t.Errorf("got %v", err)
+	}
+}
+
+func TestOnlyAGradedExamHasAResult(t *testing.T) {
+	f := newFixture(t, nil)
+	if _, err := f.uc.Result.Execute(context.Background(), owner); !errors.Is(err, exams.ErrNoExam) {
+		t.Errorf("no exam: got %v", err)
+	}
+
+	f = newFixture(t, &exams.Exam{Minutes: 30, Tasks: []exams.Task{{ID: "nw-svc", Setup: exams.Preparing}}})
+	if _, err := f.uc.Result.Execute(context.Background(), owner); !errors.Is(err, exams.ErrRunning) {
+		t.Errorf("setting up: got %v", err)
+	}
+
+	f = newFixture(t, &exams.Exam{Started: t0, Deadline: t0.Add(time.Hour)})
+	if _, err := f.uc.Result.Execute(context.Background(), owner); !errors.Is(err, exams.ErrRunning) {
+		t.Errorf("running: got %v", err)
+	}
+
+	f = newFixture(t, &exams.Exam{Started: t0, Deadline: t0.Add(time.Hour), Ended: t0})
+	if _, err := f.uc.Result.Execute(context.Background(), owner); !errors.Is(err, exams.ErrScoring) {
+		t.Errorf("grading: got %v", err)
+	}
+}
+
+func TestTheResultIsTheGradedExam(t *testing.T) {
+	f := newFixture(t, nil)
+	f.runner.fail("check ar-rbac", labs.ScriptResult{Output: "PASS 2 role\nFAIL 2 binding\n"})
+	f.uc.Begin.Execute(context.Background(), owner, 3, 30, tasks.Filter{})
+	f.wait()
+	f.uc.End.Execute(context.Background(), owner)
+	f.wait()
+
+	got, err := f.uc.Result.Execute(context.Background(), owner)
+
+	rbac := got.Tasks[got.Index("ar-rbac")]
+	if err != nil || got.Scoring() || rbac.Grade == nil || !slices.Equal(rbac.Grade.Failed(), []string{"binding"}) {
+		t.Errorf("Result = %+v, %v", got, err)
+	}
+}
+
 type fixture struct {
-	t      *testing.T
-	uc     UseCases
-	tasks  taskusecases.UseCases
-	repo   *fakeExamRepository
-	runner *fakeRunner
-	lab    *fakeLab
-	clock  time.Time
+	t        *testing.T
+	uc       UseCases
+	tasks    taskusecases.UseCases
+	repo     *fakeExamRepository
+	runner   *fakeRunner
+	lab      *fakeLab
+	attempts *fakeAttempts
+	clock    time.Time
 }
 
 func newFixture(t *testing.T, saved *exams.Exam) *fixture {
 	t.Helper()
-	f := &fixture{t: t, repo: &fakeExamRepository{exam: saved}, runner: newFakeRunner(), lab: &fakeLab{lab: labs.Lab{State: labs.Ready}}, clock: t0}
-	f.tasks = taskusecases.New(fakeTaskRepository{}, f.runner)
+	f := &fixture{t: t, repo: &fakeExamRepository{exam: saved}, runner: newFakeRunner(), lab: &fakeLab{lab: labs.Lab{State: labs.Ready}},
+		attempts: &fakeAttempts{}, clock: t0}
+	f.tasks = taskusecases.New(fakeTaskRepository{}, f.runner, f.attempts, func() time.Time { return f.clock })
 	f.uc = New(f.repo, f.tasks, labusecases.New(f.lab, nil).Get, func() time.Time { return f.clock }, rand.New(rand.NewPCG(1, 2)))
 	return f
 }
@@ -386,6 +512,20 @@ func (fakeTaskRepository) Get(_ context.Context, id string) (tasks.Task, error) 
 	}
 	return catalog[i], nil
 }
+
+type fakeAttempts struct {
+	mu       sync.Mutex
+	appended []tasks.Entry
+}
+
+func (a *fakeAttempts) Append(_ context.Context, _ string, entry tasks.Entry) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.appended = append(a.appended, entry)
+	return nil
+}
+
+func (a *fakeAttempts) List(context.Context, string) ([]tasks.Entry, error) { return nil, nil }
 
 type fakeRunner struct {
 	mu      sync.Mutex

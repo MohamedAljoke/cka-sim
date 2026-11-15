@@ -67,6 +67,16 @@ func TestListTasksKeepsOnlyWhatTheFilterMatches(t *testing.T) {
 	}
 }
 
+func TestListTasksKeepsOnlyTheIDsAsked(t *testing.T) {
+	uc := NewListTasks(fakeRepository{tasks: []tasks.Task{{ID: "nw-netpol"}, {ID: "nw-dns"}, {ID: "st-pvc"}}})
+
+	got, err := uc.Execute(context.Background(), tasks.Filter{IDs: []string{"st-pvc", "nw-dns", "no-such-task"}})
+
+	if err != nil || !slices.Equal(ids(got), []string{"nw-dns", "st-pvc"}) {
+		t.Errorf("ids = %q, %v", ids(got), err)
+	}
+}
+
 func TestListTasksMatchingNothingIsEmptyNotNil(t *testing.T) {
 	got, err := NewListTasks(fakeRepository{tasks: []tasks.Task{{ID: "wl-scale", Domain: tasks.Workloads}}}).
 		Execute(context.Background(), tasks.Filter{Domains: []tasks.Domain{tasks.Storage}})

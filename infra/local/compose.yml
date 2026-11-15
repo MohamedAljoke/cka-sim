@@ -106,6 +106,8 @@ services:
       - secrets:/secrets:ro
       # Your gcloud login, for Vertex AI. Without one this mounts a file that is always there and nothing reads it.
       - ${CKA_SIM_GOOGLE_ADC:-./compose.yml}:/run/cka-sim/adc.json:ro
+      # Each student's Claude Code login, made in the page's Claude Code terminal, across restarts and updates.
+      - assistant-state:/var/lib/cka-sim-assistant
     entrypoint:
       - sh
       - -c
@@ -117,3 +119,4 @@ volumes:
   secrets:
   lab-docker:
   app-state:
+  assistant-state:

@@ -26,6 +26,10 @@ export async function showExam(pane: HTMLElement, lab: LabStatus, signal: AbortS
   if (!signal.aborted) render(pane, exam, catalog, lab, signal)
 }
 
+export function examRunning(exam: Exam | null): boolean {
+  return exam !== null && !exam.ended
+}
+
 function render(pane: HTMLElement, exam: Exam | null, catalog: Catalog, lab: LabStatus, signal: AbortSignal) {
   if (!exam) return showForm(pane, catalog, lab, signal)
   if (!exam.started) return showSetup(pane, exam, catalog, lab, signal)

@@ -128,7 +128,7 @@ func newExamAPI(r *fakeRunner, lab *fakeLabProvider) http.Handler {
 	if lab == nil {
 		lab = &fakeLabProvider{lab: labs.Lab{State: labs.Ready}}
 	}
-	taskCases := usecases.New(fakeRepository{tasks: []tasks.Task{wlScale}}, r)
+	taskCases := usecases.New(fakeRepository{tasks: []tasks.Task{wlScale}}, r, &fakeAttempts{}, time.Now)
 	labCases := labusecases.New(lab, nil)
 	return New(taskCases, labCases, examsFor(taskCases, labCases, nil), chatusecases.UseCases{}, nil)
 }

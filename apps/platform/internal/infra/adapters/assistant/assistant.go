@@ -22,18 +22,23 @@ var roles = map[chats.Role]assistantv1.Role{
 	chats.Tutor:   assistantv1.Role_ROLE_TUTOR,
 }
 
-// Client calls the assistant's chat. It has no timeout of its own: an answer streams for as long as the
-// caller's context allows.
+// Client calls the assistant's chat and Claude Code. It has no timeout of its own: an answer streams for as long
+// as the caller's context allows, and Claude Code's bidi stream needs HTTP/2.
 type Client struct {
-	calls assistantv1connect.AssistantServiceClient
+	calls   assistantv1connect.AssistantServiceClient
+	streams assistantv1connect.AssistantServiceClient
 }
 
 func New(url, token string) *Client {
 	transport := connecthttp.NewTransport(http.DefaultClient, url)
+	protocols := new(http.Protocols)
+	protocols.SetUnencryptedHTTP2(true)
+	streams := connecthttp.NewTransport(&http.Client{Transport: &http.Transport{Protocols: protocols}}, url)
 
-	client := connect.NewClient(transport, rpcauth.Bearer(token))
-
-	return &Client{calls: assistantv1connect.NewAssistantServiceClient(client)}
+	return &Client{
+		calls:   assistantv1connect.NewAssistantServiceClient(connect.NewClient(transport, rpcauth.Bearer(token))),
+		streams: assistantv1connect.NewAssistantServiceClient(connect.NewClient(streams, rpcauth.Bearer(token))),
+	}
 }
 
 func (c *Client) Chat(ctx context.Context, student, taskID string, messages []chats.Message,

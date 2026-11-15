@@ -1172,3 +1172,128 @@ body[data-page='exam'][data-phase='running'] main {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+.assist-panel[data-open='true'] {
+  height: var(--assist-height, 50%);
+  min-height: 200px;
+}
+
+.assist-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 0 10px 8px 0;
+}
+
+.assist-toggle {
+  width: auto;
+}
+
+.assist-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.assist-tab {
+  padding: 5px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.assist-tab[aria-selected='true'] {
+  border-color: var(--accent);
+  color: inherit;
+  font-weight: 600;
+}
+
+.assist-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.assist-bodies {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.assist-bodies[hidden],
+.assist-panel[data-open='false'] .resizer-y {
+  display: none;
+}
+
+.claude-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.claude-status[hidden],
+.claude-screen[hidden],
+.claude-status .action[hidden] {
+  display: none;
+}
+
+.claude-hint {
+  flex: 1 1 260px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.claude-screen {
+  flex: 1;
+  min-height: 160px;
+  padding: 8px;
+  border-radius: var(--radius);
+  background: #0d1219;
+  overflow: hidden;
+}
+
+.claude-screen .xterm-viewport {
+  background-color: #0d1219;
+}
+
+@media (max-width: 900px) {
+  .assist-panel[data-open='true'] {
+    height: auto;
+  }
+
+  .assist-tabs {
+    padding-left: 14px;
+  }
+
+  .claude-screen {
+    flex: none;
+    height: 420px;
+  }
+}
+
+.follow-note {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 20;
+  max-width: min(560px, calc(100vw - 32px));
+  margin: 0;
+  padding: 10px 16px;
+  transform: translateX(-50%);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 6px 24px oklch(0% 0 0 / 0.18);
+  font-size: 14px;
+}
+
+.follow-note[hidden] {
+  display: none;
+}

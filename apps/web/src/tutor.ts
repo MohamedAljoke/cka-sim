@@ -1,5 +1,5 @@
 import { chat, type ChatMessage } from './api'
-import { el, message, resizer, untrustedMarkdown } from './ui'
+import { el, message, untrustedMarkdown } from './ui'
 
 const toolLabels: Record<string, string> = {
   current_task: 'Read your task',
@@ -8,7 +8,7 @@ const toolLabels: Record<string, string> = {
   explain: 'Read the solution',
 }
 
-export function tutorPanel(taskId: string, signal: AbortSignal): HTMLElement {
+export function tutorPanel(taskId: string, signal: AbortSignal): { body: HTMLElement; focus: () => void } {
   const log = el('div', 'tutor-log')
   log.setAttribute('role', 'log')
   log.setAttribute('aria-live', 'polite')
@@ -23,41 +23,8 @@ export function tutorPanel(taskId: string, signal: AbortSignal): HTMLElement {
   const form = el('form', 'tutor-form')
   form.append(input, ask)
 
-  const toggle = el('button', 'tutor-summary')
-  toggle.type = 'button'
-  toggle.append(
-    el('span', 'tutor-title', 'Ask the tutor'),
-    el('span', 'muted tutor-intro', 'It reads your task and cluster, then helps you find the answer yourself'),
-  )
   const body = el('div', 'tutor-body')
-  body.id = `tutor-${taskId}`
   body.append(log, form)
-  toggle.setAttribute('aria-controls', body.id)
-  const panel = el('section', 'tutor-panel')
-  panel.append(
-    toggle,
-    body,
-    resizer({
-      label: 'Resize the tutor',
-      axis: 'y',
-      grow: -1,
-      key: 'cka-sim.tutor-height',
-      size: () => panel.offsetHeight,
-      limits: () => [140, (panel.parentElement?.clientHeight ?? 0) - 260],
-      apply: (px) => panel.style.setProperty('--tutor-height', `${px}px`),
-    }),
-  )
-  const show = (open: boolean) => {
-    panel.dataset.open = String(open)
-    body.hidden = !open
-    toggle.setAttribute('aria-expanded', String(open))
-  }
-  show(false)
-  toggle.onclick = () => {
-    const open = panel.dataset.open !== 'true'
-    show(open)
-    if (open) input.focus()
-  }
 
   const history: ChatMessage[] = []
   let busy = false
@@ -114,5 +81,5 @@ export function tutorPanel(taskId: string, signal: AbortSignal): HTMLElement {
     }
   }
 
-  return panel
+  return { body, focus: () => input.focus() }
 }

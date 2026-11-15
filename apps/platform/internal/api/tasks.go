@@ -29,6 +29,12 @@ type taskDetailView struct {
 	Question string `json:"question"`
 }
 
+type currentTaskView struct {
+	ID    string           `json:"id"`
+	Title string           `json:"title"`
+	Setup tasks.SetupState `json:"setup"`
+}
+
 type solutionView struct {
 	Solution string `json:"solution"`
 }
@@ -57,6 +63,7 @@ type checkView struct {
 
 func (a *api) taskRoutes(handle handleFunc) {
 	handle("GET /api/tasks", a.getTasks)
+	handle("GET /api/tasks/current", a.getCurrentTask)
 	handle("GET /api/tasks/{id}", a.getTaskByID)
 	handle("GET /api/tasks/{id}/solution", a.getTaskSolution)
 	handle("POST /api/tasks/{id}/start", a.startTask)
@@ -96,6 +103,26 @@ func (a *api) getTaskByID(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return httpx.WriteJSON(w, http.StatusOK, taskDetailView{taskView: newTaskView(task), Question: task.Question})
+}
+
+func (a *api) getCurrentTask(w http.ResponseWriter, r *http.Request) error {
+	if err := a.outsideAnExam(r); err != nil {
+		return err
+	}
+
+	current, err := a.tasks.Current.Execute(r.Context(), studentOf(r))
+	switch {
+	case errors.Is(err, tasks.ErrNoCurrentTask), errors.Is(err, tasks.ErrNotFound):
+		return httpx.NotFound(err)
+	case errors.Is(err, tasks.ErrUnavailable):
+		return httpx.Unavailable(err)
+	case err != nil:
+		return err
+	}
+
+	view := currentTaskView{ID: current.Task.ID, Title: current.Task.Title, Setup: current.Setup}
+
+	return httpx.WriteJSON(w, http.StatusOK, view)
 }
 
 func (a *api) getTaskSolution(w http.ResponseWriter, r *http.Request) error {

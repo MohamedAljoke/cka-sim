@@ -60,3 +60,14 @@ func TestReadGradeOfNoOutputIsEmpty(t *testing.T) {
 		t.Errorf("got %+v, want 0/0 with empty checks", got)
 	}
 }
+
+func TestFailedNamesTheChecksThatFailed(t *testing.T) {
+	got := ReadGrade("PASS 1 scaled\nFAIL 2 labelled\nFAIL 1 exposed\n").Failed()
+
+	if !reflect.DeepEqual(got, []string{"labelled", "exposed"}) {
+		t.Errorf("got %q", got)
+	}
+	if got := ReadGrade("").Failed(); got == nil || len(got) != 0 {
+		t.Errorf("nothing failed: got %#v, want an empty list", got)
+	}
+}

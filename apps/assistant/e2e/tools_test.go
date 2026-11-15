@@ -20,7 +20,7 @@ func TestAnAICLIFindsTheToolsAndTheInstructions(t *testing.T) {
 
 	res, err := session.ListTools(context.Background(), nil)
 
-	if err != nil || len(res.Tools) != 4 {
+	if err != nil || len(res.Tools) != 11 {
 		t.Fatalf("got %v, %v", res, err)
 	}
 	if !strings.Contains(session.InitializeResult().Instructions, "not to solve it for them") {

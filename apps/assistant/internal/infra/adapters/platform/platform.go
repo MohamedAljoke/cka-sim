@@ -12,6 +12,7 @@ import (
 
 	tutorv1 "github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/tutor/v1"
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/tutor/v1/tutorv1connect"
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/domainerr"
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/rpcauth"
 
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor"
@@ -90,9 +91,13 @@ func (c *Client) Solution(ctx context.Context, student, taskID string) (string, 
 	return res.GetSolution(), nil
 }
 
-// refusal keeps the platform's reason for a refusal, which it wrote for the AI to read. Anything else stays an
-// error the assistant logs and doesn't show.
 func refusal(err error) error {
+	return refusalAs(err, tutor.ErrRefused, tutor.ErrUnavailable)
+}
+
+// refusalAs keeps the platform's reason for a refusal, which it wrote for the AI to read. Anything else stays an
+// error the assistant logs and doesn't show.
+func refusalAs(err error, refused, unavailable *domainerr.Error) error {
 	var answer *connect.Error
 	if !errors.As(err, &answer) {
 		return err
@@ -100,9 +105,9 @@ func refusal(err error) error {
 
 	switch answer.Code() {
 	case connect.CodeNotFound, connect.CodeInvalidArgument, connect.CodeFailedPrecondition:
-		return fmt.Errorf("%w: %s", tutor.ErrRefused, answer.Message())
+		return fmt.Errorf("%w: %s", refused, answer.Message())
 	case connect.CodeUnavailable:
-		return fmt.Errorf("%w: %w", tutor.ErrUnavailable, err)
+		return fmt.Errorf("%w: %w", unavailable, err)
 	default:
 		return err
 	}

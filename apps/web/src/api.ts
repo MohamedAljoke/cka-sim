@@ -58,6 +58,19 @@ export function tidyTask(id: string): void {
   fetch(`/api/tasks/${encodeURIComponent(id)}/tidy`, { method: 'POST', keepalive: true }).catch(() => {})
 }
 
+export type CurrentTask = {
+  id: string
+  title: string
+  setup: SetupState
+}
+
+export async function getCurrentTask(signal?: AbortSignal): Promise<CurrentTask | null> {
+  const res = await fetch('/api/tasks/current', { signal })
+  if (res.status === 404) return null
+  if (!res.ok) throw await failure(res, 'GET', '/api/tasks/current')
+  return res.json()
+}
+
 export type Grade = {
   earned: number
   total: number

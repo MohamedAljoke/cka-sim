@@ -26,6 +26,9 @@ const (
 const (
 	// AssistantServiceChatProcedure is the procedure name of the AssistantService's Chat RPC.
 	AssistantServiceChatProcedure = "/assistant.v1.AssistantService/Chat"
+	// AssistantServiceOpenClaudeProcedure is the procedure name of the AssistantService's OpenClaude
+	// RPC.
+	AssistantServiceOpenClaudeProcedure = "/assistant.v1.AssistantService/OpenClaude"
 )
 
 var (
@@ -36,6 +39,13 @@ var (
 			Procedure:  AssistantServiceChatProcedure,
 		}
 	})
+	assistantServiceOpenClaudeSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeBidi,
+			Schema:     v1.File_assistant_v1_assistant_proto.Services().ByName("AssistantService").Methods().ByName("OpenClaude"),
+			Procedure:  AssistantServiceOpenClaudeProcedure,
+		}
+	})
 )
 
 // AssistantServiceClient is a client for the assistant.v1.AssistantService service.
@@ -44,6 +54,12 @@ type AssistantServiceClient interface {
 	// uses them, and its answer in pieces. The stream ends when the answer is complete. INVALID_ARGUMENT for a
 	// conversation that doesn't end with the student's message.
 	Chat(context.Context, *v1.ChatRequest) (AssistantServiceChatClientStream, error)
+	// OpenClaude runs Claude Code in a terminal for a student, where the assistant runs and on its login, with no
+	// tools but the tutor's MCP tools for that student. The first request names the student and the terminal's
+	// size; after it, requests carry keystrokes or a new size and responses carry the terminal's output. The
+	// stream ends when Claude Code exits. INVALID_ARGUMENT when the first request isn't a start with a student and
+	// a size, FAILED_PRECONDITION when Claude Code isn't installed where the assistant runs.
+	OpenClaude(context.Context) (AssistantServiceOpenClaudeClientStream, error)
 }
 
 // NewAssistantServiceClient constructs a client for the assistant.v1.AssistantService service.
@@ -72,12 +88,55 @@ func (s AssistantServiceChatClientStream) Close() error {
 	return s.stream.Close()
 }
 
+// AssistantServiceOpenClaudeClientStream is the client stream for the AssistantService's OpenClaude
+// RPC.
+type AssistantServiceOpenClaudeClientStream struct {
+	stream connect.ClientStream
+}
+
+// SendHeaders opens the stream and flushes the request headers without a message. The first Send or
+// Receive does this implicitly.
+func (s AssistantServiceOpenClaudeClientStream) SendHeaders() error {
+	return s.stream.SendHeaders()
+}
+
+// Send sends a request message to the server.
+func (s AssistantServiceOpenClaudeClientStream) Send(req *v1.OpenClaudeRequest) error {
+	return s.stream.Send(req)
+}
+
+// CloseSend closes the request side of the stream.
+func (s AssistantServiceOpenClaudeClientStream) CloseSend() error {
+	return s.stream.CloseSend()
+}
+
+// Receive returns the next response message from the server.
+func (s AssistantServiceOpenClaudeClientStream) Receive() (*v1.OpenClaudeResponse, error) {
+	var res v1.OpenClaudeResponse
+	if err := s.stream.Receive(&res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// Close releases the stream's resources. It is idempotent and is typically deferred to clean up a
+// stream abandoned before io.EOF.
+func (s AssistantServiceOpenClaudeClientStream) Close() error {
+	return s.stream.Close()
+}
+
 // AssistantServiceHandler is an implementation of the assistant.v1.AssistantService service.
 type AssistantServiceHandler interface {
 	// Chat answers the last message of a conversation as a stream of events: the tools the tutor uses as it
 	// uses them, and its answer in pieces. The stream ends when the answer is complete. INVALID_ARGUMENT for a
 	// conversation that doesn't end with the student's message.
 	Chat(context.Context, *v1.ChatRequest, AssistantServiceChatServerStream) error
+	// OpenClaude runs Claude Code in a terminal for a student, where the assistant runs and on its login, with no
+	// tools but the tutor's MCP tools for that student. The first request names the student and the terminal's
+	// size; after it, requests carry keystrokes or a new size and responses carry the terminal's output. The
+	// stream ends when Claude Code exits. INVALID_ARGUMENT when the first request isn't a start with a student and
+	// a size, FAILED_PRECONDITION when Claude Code isn't installed where the assistant runs.
+	OpenClaude(context.Context, AssistantServiceOpenClaudeServerStream) error
 }
 
 // RegisterAssistantServiceHandler registers svc as the assistant.v1.AssistantService implementation
@@ -86,6 +145,7 @@ func RegisterAssistantServiceHandler(server *connect.Server, svc AssistantServic
 	adapter := assistantServiceHandler{svc: svc}
 	server.Register(
 		connect.Method{Spec: assistantServiceChatSpec(), Handler: adapter.chat},
+		connect.Method{Spec: assistantServiceOpenClaudeSpec(), Handler: adapter.openClaude},
 	)
 }
 
@@ -104,11 +164,40 @@ func (s AssistantServiceChatServerStream) Send(res *v1.ChatResponse) error {
 	return s.stream.Send(res)
 }
 
+// AssistantServiceOpenClaudeServerStream is the server stream for the AssistantService's OpenClaude
+// RPC.
+type AssistantServiceOpenClaudeServerStream struct {
+	stream connect.ServerStream
+}
+
+// Receive returns the next request message from the client.
+func (s AssistantServiceOpenClaudeServerStream) Receive() (*v1.OpenClaudeRequest, error) {
+	var req v1.OpenClaudeRequest
+	if err := s.stream.Receive(&req); err != nil {
+		return nil, err
+	}
+	return &req, nil
+}
+
+// SendHeaders flushes the response headers without a message. The first Send does this implicitly.
+func (s AssistantServiceOpenClaudeServerStream) SendHeaders() error {
+	return s.stream.SendHeaders()
+}
+
+// Send sends a response message to the client.
+func (s AssistantServiceOpenClaudeServerStream) Send(res *v1.OpenClaudeResponse) error {
+	return s.stream.Send(res)
+}
+
 // UnimplementedAssistantServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedAssistantServiceHandler struct{}
 
 func (UnimplementedAssistantServiceHandler) Chat(context.Context, *v1.ChatRequest, AssistantServiceChatServerStream) error {
 	return connect.NewError(connect.CodeUnimplemented, "assistant.v1.AssistantService.Chat is not implemented")
+}
+
+func (UnimplementedAssistantServiceHandler) OpenClaude(context.Context, AssistantServiceOpenClaudeServerStream) error {
+	return connect.NewError(connect.CodeUnimplemented, "assistant.v1.AssistantService.OpenClaude is not implemented")
 }
 
 type assistantServiceClient struct {
@@ -123,6 +212,14 @@ func (c *assistantServiceClient) Chat(ctx context.Context, req *v1.ChatRequest) 
 	return AssistantServiceChatClientStream{stream: stream}, nil
 }
 
+func (c *assistantServiceClient) OpenClaude(ctx context.Context) (AssistantServiceOpenClaudeClientStream, error) {
+	stream, err := c.client.CallClientStream(ctx, assistantServiceOpenClaudeSpec())
+	if err != nil {
+		return AssistantServiceOpenClaudeClientStream{}, err
+	}
+	return AssistantServiceOpenClaudeClientStream{stream: stream}, nil
+}
+
 type assistantServiceHandler struct{ svc AssistantServiceHandler }
 
 func (h assistantServiceHandler) chat(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
@@ -131,4 +228,8 @@ func (h assistantServiceHandler) chat(ctx context.Context, _ connect.Spec, strea
 		return err
 	}
 	return h.svc.Chat(ctx, &req, AssistantServiceChatServerStream{stream: stream})
+}
+
+func (h assistantServiceHandler) openClaude(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	return h.svc.OpenClaude(ctx, AssistantServiceOpenClaudeServerStream{stream: stream})
 }

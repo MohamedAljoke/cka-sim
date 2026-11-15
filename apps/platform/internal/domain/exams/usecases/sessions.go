@@ -35,7 +35,8 @@ func (ss *sessions) of(owner string) (*session, error) {
 
 	s := &session{
 		owner: owner, exam: saved, repo: ss.repo, now: ss.now,
-		heal: ss.tasks.Heal, setUpTask: ss.tasks.SetUp, check: ss.tasks.Check, tidy: ss.tasks.Tidy,
+		heal: ss.tasks.Heal, setUpTask: ss.tasks.SetUp, grader: ss.tasks.Grade, tidy: ss.tasks.Tidy,
+		leave: ss.tasks.TidyCurrent,
 		// A rand.Rand isn't safe to share, and each session draws under its own lock.
 		rng: rand.New(rand.NewPCG(ss.rng.Uint64(), ss.rng.Uint64())), //nolint:gosec // drawing tasks, not secrets
 	}

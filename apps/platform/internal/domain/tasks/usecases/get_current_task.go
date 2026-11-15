@@ -18,20 +18,20 @@ func NewGetCurrentTask(repo TaskRepository, clusters *clusters) *GetCurrentTask 
 }
 
 // Execute answers the task the owner set up last and hasn't left. A restarted server has forgotten it.
-func (uc *GetCurrentTask) Execute(ctx context.Context, owner string) (tasks.Task, error) {
-	id := uc.clusters.of(owner).currentTask()
+func (uc *GetCurrentTask) Execute(ctx context.Context, owner string) (tasks.Current, error) {
+	id, setup := uc.clusters.of(owner).currentSetup()
 	if id == "" {
-		return tasks.Task{}, tasks.ErrNoCurrentTask
+		return tasks.Current{}, tasks.ErrNoCurrentTask
 	}
 
 	task, err := uc.repo.Get(ctx, id)
 	if errors.Is(err, tasks.ErrNotFound) {
-		return tasks.Task{}, err
+		return tasks.Current{}, err
 	}
 
 	if err != nil {
-		return tasks.Task{}, fmt.Errorf("%w: %w", tasks.ErrUnavailable, err)
+		return tasks.Current{}, fmt.Errorf("%w: %w", tasks.ErrUnavailable, err)
 	}
 
-	return task, nil
+	return tasks.Current{Task: task, Setup: setup}, nil
 }

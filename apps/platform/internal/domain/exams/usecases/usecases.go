@@ -15,6 +15,7 @@ type UseCases struct {
 	End     *EndExam
 	Discard *DiscardExam
 	Resume  *ResumeExam
+	Result  *GetExamResult
 }
 
 func New(
@@ -29,5 +30,6 @@ func New(
 		End:     &EndExam{ss: perOwner},
 		Discard: &DiscardExam{ss: perOwner},
 		Resume:  &ResumeExam{ss: perOwner},
+		Result:  &GetExamResult{ss: perOwner},
 	}
 }

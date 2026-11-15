@@ -45,6 +45,12 @@ func (uc *SetUpTask) Execute(ctx context.Context, owner, id string) (labs.Script
 	cluster.enter(id)
 
 	result, err := uc.runner.RunScript(ctx, owner, task.Host, task.Setup)
+	if err == nil && result.Passed() {
+		cluster.settle(id, tasks.SetupReady)
+	} else {
+		cluster.settle(id, tasks.SetupFailed)
+	}
+
 	switch {
 	case errors.Is(err, labs.ErrNotReady):
 		return labs.ScriptResult{}, err

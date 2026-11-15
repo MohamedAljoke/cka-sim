@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package study.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/study/v1;studyv1";
+
+// StudyService is served by the platform and called by the assistant: what a study session needs beyond the
+// tutor's look, including what changes something (setting a task up, saving a note). Every call needs
+// "Authorization: Bearer <token>" (UNAUTHENTICATED otherwise) and names its student: NOT_FOUND for a student the
+// platform doesn't know, FAILED_PRECONDITION while that student has an exam running.
+service StudyService {
+  // ListTasks answers the catalog's tasks that match every filter given, without their questions.
+  // INVALID_ARGUMENT for an unknown domain or a topic that isn't lowercase-kebab.
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  // StartTask tidies the student's current task if it's another one, then heals the cluster and sets the task
+  // up. NOT_FOUND for an unknown task, FAILED_PRECONDITION unless the lab is ready.
+  rpc StartTask(StartTaskRequest) returns (StartTaskResponse);
+  // GetHistory answers the student's attempts and notes, newest first, at most 200.
+  rpc GetHistory(GetHistoryRequest) returns (GetHistoryResponse);
+  // SaveNote keeps a note on a task. NOT_FOUND for an unknown task, INVALID_ARGUMENT for an empty note or one
+  // over 500 characters.
+  rpc SaveNote(SaveNoteRequest) returns (SaveNoteResponse);
+}
+
+message TaskSummary {
+  string id = 1;
+  string title = 2;
+  // troubleshooting, architecture, networking, workloads or storage.
+  string domain = 3;
+  repeated string topics = 4;
+  int32 weight = 5;
+}
+
+message ListTasksRequest {
+  string student = 1;
+  repeated string domains = 2;
+  // A task matches when it has any of them.
+  repeated string topics = 3;
+  // Words that must all be in the task's id or title.
+  string search = 4;
+}
+
+message ListTasksResponse {
+  repeated TaskSummary tasks = 1;
+}
+
+message Task {
+  string id = 1;
+  string title = 2;
+  string domain = 3;
+  // The node the task is solved from, like "cka-sim-control-plane".
+  string host = 4;
+  string question = 5;
+}
+
+message StartTaskRequest {
+  string student = 1;
+  string task_id = 2;
+}
+
+message StartTaskResponse {
+  Task task = 1;
+  bool ready = 2;
+  // Only when the task isn't ready: the exit code and the end of the output of the script that failed.
+  int32 exit_code = 3;
+  string output = 4;
+}
+
+message Attempt {
+  string task_id = 1;
+  google.protobuf.Timestamp at = 2;
+  int32 earned = 3;
+  int32 total = 4;
+  // The descriptions of the checks that failed.
+  repeated string failed = 5;
+}
+
+message Note {
+  string task_id = 1;
+  google.protobuf.Timestamp at = 2;
+  string text = 3;
+}
+
+message Entry {
+  oneof kind {
+    Attempt attempt = 1;
+    Note note = 2;
+  }
+}
+
+message GetHistoryRequest {
+  string student = 1;
+  // Only these tasks' attempts and notes; all of them when empty.
+  repeated string task_ids = 2;
+}
+
+message GetHistoryResponse {
+  repeated Entry entries = 1;
+}
+
+message SaveNoteRequest {
+  string student = 1;
+  string task_id = 2;
+  string text = 3;
+}
+
+message SaveNoteResponse {}

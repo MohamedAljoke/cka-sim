@@ -20,8 +20,8 @@ const (
 )
 
 var (
-	serverBin string
-	baseURL   string
+	serverBin    string
+	baseURL      string
 	agentURL     string
 	agent        = newFakeAgent()
 	assistantURL string
@@ -67,11 +67,12 @@ func run(m *testing.M) int {
 
 var listening = regexp.MustCompile(`http://[0-9.]+:[0-9]+`)
 
-func start(labURL, stateDir string) (*exec.Cmd, string, error) {
+func start(labURL, stateDir string, env ...string) (*exec.Cmd, string, error) {
 	server := exec.Command(serverBin)
 	server.Env = append(os.Environ(), "CKA_SIM_PLATFORM_ADDR=127.0.0.1:0", "CKA_SIM_LAB_URL="+labURL,
 		"CKA_SIM_AGENT_TOKEN="+agentToken, "CKA_SIM_STATE_DIR="+stateDir, "CKA_SIM_ASSISTANT_TOKEN="+assistantToken,
 		"CKA_SIM_ASSISTANT_URL="+assistantURL)
+	server.Env = append(server.Env, env...)
 	server.Stderr = os.Stderr
 	stdout, err := server.StdoutPipe()
 	if err != nil {

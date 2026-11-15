@@ -31,15 +31,15 @@ func (uc *Chat) Execute(ctx context.Context, student, taskID string, messages []
 		return chats.ErrOff
 	}
 
-	if err := uc.outsideAnExam(ctx, student); err != nil {
+	if err := outsideAnExam(ctx, uc.exam, student); err != nil {
 		return err
 	}
 
 	return uc.tutor.Chat(ctx, student, taskID, messages, emit)
 }
 
-func (uc *Chat) outsideAnExam(ctx context.Context, student string) error {
-	exam, err := uc.exam.Execute(ctx, student)
+func outsideAnExam(ctx context.Context, get *examusecases.GetExam, student string) error {
+	exam, err := get.Execute(ctx, student)
 
 	switch {
 	case errors.Is(err, exams.ErrNoExam):

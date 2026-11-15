@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/chats"
 	chatusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/chats/usecases"
@@ -129,12 +130,12 @@ func (f *fakeTutor) Chat(_ context.Context, student, taskID string, messages []c
 
 // A nil tutor is an assistant that isn't set up.
 func newChatAPI(tutor *fakeTutor) http.Handler {
-	taskCases := usecases.New(fakeRepository{tasks: []tasks.Task{wlScale}}, &fakeRunner{})
+	taskCases := usecases.New(fakeRepository{tasks: []tasks.Task{wlScale}}, &fakeRunner{}, &fakeAttempts{}, time.Now)
 	labCases := labusecases.New(&fakeLabProvider{lab: labs.Lab{State: labs.Ready}}, &fakeRunner{})
 	examCases := examsFor(taskCases, labCases, nil)
 	var asked chatusecases.Tutor
 	if tutor != nil {
 		asked = tutor
 	}
-	return New(taskCases, labCases, examCases, chatusecases.New(asked, examCases.Get), nil)
+	return New(taskCases, labCases, examCases, chatusecases.New(asked, nil, examCases.Get), nil)
 }

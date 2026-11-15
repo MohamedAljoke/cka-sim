@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -33,6 +34,9 @@ func TestFilterMatches(t *testing.T) {
 		{"a search drops a task it does not find", Filter{Search: "egress"}, pvc, false},
 		{"search and domain both match", Filter{Domains: []Domain{Networking}, Search: "lock"}, netpol, true},
 		{"the search matches and the domain does not", Filter{Domains: []Domain{Storage}, Search: "lock"}, netpol, false},
+		{"one of the ids", Filter{IDs: []string{"st-pvc", "nw-netpol"}}, netpol, true},
+		{"none of the ids", Filter{IDs: []string{"st-pvc"}}, netpol, false},
+		{"the id matches and the domain does not", Filter{Domains: []Domain{Storage}, IDs: []string{"nw-netpol"}}, netpol, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -40,6 +44,35 @@ func TestFilterMatches(t *testing.T) {
 				t.Errorf("Matches = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestAFilterIsEmptyOnlyWhenItSelectsNothing(t *testing.T) {
+	for _, f := range []Filter{{Domains: []Domain{Storage}}, {Topics: []string{"pvc"}}, {Search: "pvc"}, {IDs: []string{"st-pvc"}}} {
+		if f.Empty() {
+			t.Errorf("%+v is empty", f)
+		}
+	}
+	if !(Filter{Search: "  "}).Empty() {
+		t.Error("a blank search selects nothing")
+	}
+}
+
+func TestSelectKeepsWhatTheFilterMatches(t *testing.T) {
+	all := []Task{{ID: "nw-netpol", Domain: Networking}, {ID: "st-pvc", Domain: Storage}, {ID: "nw-dns", Domain: Networking}}
+
+	got, err := Filter{Domains: []Domain{Networking}, IDs: []string{"nw-dns", "st-pvc"}}.Select(all)
+
+	if err != nil || len(got) != 1 || got[0].ID != "nw-dns" {
+		t.Errorf("got %+v, %v", got, err)
+	}
+}
+
+func TestSelectRefusesAnIDThatNamesNoTask(t *testing.T) {
+	_, err := Filter{IDs: []string{"st-pvc", "no-such-task"}}.Select([]Task{{ID: "st-pvc"}})
+
+	if !errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), `"no-such-task"`) {
+		t.Errorf("got %v", err)
 	}
 }
 

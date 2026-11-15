@@ -17,4 +17,5 @@ var (
 	ErrNoAnswer = domainerr.New("tutor_no_answer", "the tutor's AI didn't answer; ask again")
 	ErrTooLong  = domainerr.New("tutor_too_long",
 		"the tutor took too many steps without answering; ask again, more narrowly")
+	ErrNoClaude = domainerr.New("claude_not_installed", "Claude Code isn't installed where the assistant runs")
 )

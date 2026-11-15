@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks/usecases"
@@ -36,7 +37,7 @@ func TestSelftest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	uc := usecases.New(repo, lab)
+	uc := usecases.New(repo, lab, files.NewHistoryFiles(t.TempDir()), time.Now)
 	all, _ := repo.List(context.Background())
 
 	for _, task := range all {

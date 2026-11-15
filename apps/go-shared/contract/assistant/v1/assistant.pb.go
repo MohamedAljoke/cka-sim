@@ -268,6 +268,252 @@ func (*ChatResponse_Text) isChatResponse_Event() {}
 
 func (*ChatResponse_Tool) isChatResponse_Event() {}
 
+type OpenClaudeRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Input:
+	//
+	//	*OpenClaudeRequest_Start
+	//	*OpenClaudeRequest_Size
+	//	*OpenClaudeRequest_Keys
+	Input         isOpenClaudeRequest_Input `protobuf_oneof:"input"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpenClaudeRequest) Reset() {
+	*x = OpenClaudeRequest{}
+	mi := &file_assistant_v1_assistant_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenClaudeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenClaudeRequest) ProtoMessage() {}
+
+func (x *OpenClaudeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_assistant_v1_assistant_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenClaudeRequest.ProtoReflect.Descriptor instead.
+func (*OpenClaudeRequest) Descriptor() ([]byte, []int) {
+	return file_assistant_v1_assistant_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *OpenClaudeRequest) GetInput() isOpenClaudeRequest_Input {
+	if x != nil {
+		return x.Input
+	}
+	return nil
+}
+
+func (x *OpenClaudeRequest) GetStart() *ClaudeStart {
+	if x != nil {
+		if x, ok := x.Input.(*OpenClaudeRequest_Start); ok {
+			return x.Start
+		}
+	}
+	return nil
+}
+
+func (x *OpenClaudeRequest) GetSize() *TerminalSize {
+	if x != nil {
+		if x, ok := x.Input.(*OpenClaudeRequest_Size); ok {
+			return x.Size
+		}
+	}
+	return nil
+}
+
+func (x *OpenClaudeRequest) GetKeys() []byte {
+	if x != nil {
+		if x, ok := x.Input.(*OpenClaudeRequest_Keys); ok {
+			return x.Keys
+		}
+	}
+	return nil
+}
+
+type isOpenClaudeRequest_Input interface {
+	isOpenClaudeRequest_Input()
+}
+
+type OpenClaudeRequest_Start struct {
+	Start *ClaudeStart `protobuf:"bytes,1,opt,name=start,proto3,oneof"`
+}
+
+type OpenClaudeRequest_Size struct {
+	Size *TerminalSize `protobuf:"bytes,2,opt,name=size,proto3,oneof"`
+}
+
+type OpenClaudeRequest_Keys struct {
+	Keys []byte `protobuf:"bytes,3,opt,name=keys,proto3,oneof"`
+}
+
+func (*OpenClaudeRequest_Start) isOpenClaudeRequest_Input() {}
+
+func (*OpenClaudeRequest_Size) isOpenClaudeRequest_Input() {}
+
+func (*OpenClaudeRequest_Keys) isOpenClaudeRequest_Input() {}
+
+type ClaudeStart struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Student       string                 `protobuf:"bytes,1,opt,name=student,proto3" json:"student,omitempty"`
+	Size          *TerminalSize          `protobuf:"bytes,2,opt,name=size,proto3" json:"size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClaudeStart) Reset() {
+	*x = ClaudeStart{}
+	mi := &file_assistant_v1_assistant_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaudeStart) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaudeStart) ProtoMessage() {}
+
+func (x *ClaudeStart) ProtoReflect() protoreflect.Message {
+	mi := &file_assistant_v1_assistant_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaudeStart.ProtoReflect.Descriptor instead.
+func (*ClaudeStart) Descriptor() ([]byte, []int) {
+	return file_assistant_v1_assistant_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ClaudeStart) GetStudent() string {
+	if x != nil {
+		return x.Student
+	}
+	return ""
+}
+
+func (x *ClaudeStart) GetSize() *TerminalSize {
+	if x != nil {
+		return x.Size
+	}
+	return nil
+}
+
+type TerminalSize struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cols          uint32                 `protobuf:"varint,1,opt,name=cols,proto3" json:"cols,omitempty"`
+	Rows          uint32                 `protobuf:"varint,2,opt,name=rows,proto3" json:"rows,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TerminalSize) Reset() {
+	*x = TerminalSize{}
+	mi := &file_assistant_v1_assistant_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TerminalSize) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TerminalSize) ProtoMessage() {}
+
+func (x *TerminalSize) ProtoReflect() protoreflect.Message {
+	mi := &file_assistant_v1_assistant_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TerminalSize.ProtoReflect.Descriptor instead.
+func (*TerminalSize) Descriptor() ([]byte, []int) {
+	return file_assistant_v1_assistant_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *TerminalSize) GetCols() uint32 {
+	if x != nil {
+		return x.Cols
+	}
+	return 0
+}
+
+func (x *TerminalSize) GetRows() uint32 {
+	if x != nil {
+		return x.Rows
+	}
+	return 0
+}
+
+type OpenClaudeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Output        []byte                 `protobuf:"bytes,1,opt,name=output,proto3" json:"output,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpenClaudeResponse) Reset() {
+	*x = OpenClaudeResponse{}
+	mi := &file_assistant_v1_assistant_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenClaudeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenClaudeResponse) ProtoMessage() {}
+
+func (x *OpenClaudeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_assistant_v1_assistant_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenClaudeResponse.ProtoReflect.Descriptor instead.
+func (*OpenClaudeResponse) Descriptor() ([]byte, []int) {
+	return file_assistant_v1_assistant_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *OpenClaudeResponse) GetOutput() []byte {
+	if x != nil {
+		return x.Output
+	}
+	return nil
+}
+
 var File_assistant_v1_assistant_proto protoreflect.FileDescriptor
 
 const file_assistant_v1_assistant_proto_rawDesc = "" +
@@ -283,14 +529,29 @@ const file_assistant_v1_assistant_proto_rawDesc = "" +
 	"\fChatResponse\x12\x14\n" +
 	"\x04text\x18\x01 \x01(\tH\x00R\x04text\x12\x14\n" +
 	"\x04tool\x18\x02 \x01(\tH\x00R\x04toolB\a\n" +
-	"\x05event*>\n" +
+	"\x05event\"\x97\x01\n" +
+	"\x11OpenClaudeRequest\x121\n" +
+	"\x05start\x18\x01 \x01(\v2\x19.assistant.v1.ClaudeStartH\x00R\x05start\x120\n" +
+	"\x04size\x18\x02 \x01(\v2\x1a.assistant.v1.TerminalSizeH\x00R\x04size\x12\x14\n" +
+	"\x04keys\x18\x03 \x01(\fH\x00R\x04keysB\a\n" +
+	"\x05input\"W\n" +
+	"\vClaudeStart\x12\x18\n" +
+	"\astudent\x18\x01 \x01(\tR\astudent\x12.\n" +
+	"\x04size\x18\x02 \x01(\v2\x1a.assistant.v1.TerminalSizeR\x04size\"6\n" +
+	"\fTerminalSize\x12\x12\n" +
+	"\x04cols\x18\x01 \x01(\rR\x04cols\x12\x12\n" +
+	"\x04rows\x18\x02 \x01(\rR\x04rows\",\n" +
+	"\x12OpenClaudeResponse\x12\x16\n" +
+	"\x06output\x18\x01 \x01(\fR\x06output*>\n" +
 	"\x04Role\x12\x14\n" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fROLE_STUDENT\x10\x01\x12\x0e\n" +
 	"\n" +
-	"ROLE_TUTOR\x10\x022S\n" +
+	"ROLE_TUTOR\x10\x022\xa8\x01\n" +
 	"\x10AssistantService\x12?\n" +
-	"\x04Chat\x12\x19.assistant.v1.ChatRequest\x1a\x1a.assistant.v1.ChatResponse0\x01BSZQgithub.com/MohamedAljoke/cka-sim/apps/go-shared/contract/assistant/v1;assistantv1b\x06proto3"
+	"\x04Chat\x12\x19.assistant.v1.ChatRequest\x1a\x1a.assistant.v1.ChatResponse0\x01\x12S\n" +
+	"\n" +
+	"OpenClaude\x12\x1f.assistant.v1.OpenClaudeRequest\x1a .assistant.v1.OpenClaudeResponse(\x010\x01BSZQgithub.com/MohamedAljoke/cka-sim/apps/go-shared/contract/assistant/v1;assistantv1b\x06proto3"
 
 var (
 	file_assistant_v1_assistant_proto_rawDescOnce sync.Once
@@ -305,23 +566,32 @@ func file_assistant_v1_assistant_proto_rawDescGZIP() []byte {
 }
 
 var file_assistant_v1_assistant_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_assistant_v1_assistant_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_assistant_v1_assistant_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_assistant_v1_assistant_proto_goTypes = []any{
-	(Role)(0),            // 0: assistant.v1.Role
-	(*Message)(nil),      // 1: assistant.v1.Message
-	(*ChatRequest)(nil),  // 2: assistant.v1.ChatRequest
-	(*ChatResponse)(nil), // 3: assistant.v1.ChatResponse
+	(Role)(0),                  // 0: assistant.v1.Role
+	(*Message)(nil),            // 1: assistant.v1.Message
+	(*ChatRequest)(nil),        // 2: assistant.v1.ChatRequest
+	(*ChatResponse)(nil),       // 3: assistant.v1.ChatResponse
+	(*OpenClaudeRequest)(nil),  // 4: assistant.v1.OpenClaudeRequest
+	(*ClaudeStart)(nil),        // 5: assistant.v1.ClaudeStart
+	(*TerminalSize)(nil),       // 6: assistant.v1.TerminalSize
+	(*OpenClaudeResponse)(nil), // 7: assistant.v1.OpenClaudeResponse
 }
 var file_assistant_v1_assistant_proto_depIdxs = []int32{
 	0, // 0: assistant.v1.Message.role:type_name -> assistant.v1.Role
 	1, // 1: assistant.v1.ChatRequest.messages:type_name -> assistant.v1.Message
-	2, // 2: assistant.v1.AssistantService.Chat:input_type -> assistant.v1.ChatRequest
-	3, // 3: assistant.v1.AssistantService.Chat:output_type -> assistant.v1.ChatResponse
-	3, // [3:4] is the sub-list for method output_type
-	2, // [2:3] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	5, // 2: assistant.v1.OpenClaudeRequest.start:type_name -> assistant.v1.ClaudeStart
+	6, // 3: assistant.v1.OpenClaudeRequest.size:type_name -> assistant.v1.TerminalSize
+	6, // 4: assistant.v1.ClaudeStart.size:type_name -> assistant.v1.TerminalSize
+	2, // 5: assistant.v1.AssistantService.Chat:input_type -> assistant.v1.ChatRequest
+	4, // 6: assistant.v1.AssistantService.OpenClaude:input_type -> assistant.v1.OpenClaudeRequest
+	3, // 7: assistant.v1.AssistantService.Chat:output_type -> assistant.v1.ChatResponse
+	7, // 8: assistant.v1.AssistantService.OpenClaude:output_type -> assistant.v1.OpenClaudeResponse
+	7, // [7:9] is the sub-list for method output_type
+	5, // [5:7] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_assistant_v1_assistant_proto_init() }
@@ -333,13 +603,18 @@ func file_assistant_v1_assistant_proto_init() {
 		(*ChatResponse_Text)(nil),
 		(*ChatResponse_Tool)(nil),
 	}
+	file_assistant_v1_assistant_proto_msgTypes[3].OneofWrappers = []any{
+		(*OpenClaudeRequest_Start)(nil),
+		(*OpenClaudeRequest_Size)(nil),
+		(*OpenClaudeRequest_Keys)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_assistant_v1_assistant_proto_rawDesc), len(file_assistant_v1_assistant_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   3,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

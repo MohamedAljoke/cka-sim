@@ -38,6 +38,18 @@ func ReadGrade(output string) Grade {
 	return grade
 }
 
+func (g Grade) Failed() []string {
+	failed := []string{}
+
+	for _, c := range g.Checks {
+		if !c.Passed {
+			failed = append(failed, c.Description)
+		}
+	}
+
+	return failed
+}
+
 func readCheck(line string) (Check, bool) {
 	fields := strings.SplitN(line, " ", 3)
 	if len(fields) != 3 || (fields[0] != "PASS" && fields[0] != "FAIL") {

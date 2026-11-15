@@ -1,9 +1,11 @@
-import { startTask, tidyTask, type Lab } from './api'
+import { getCurrentTask, startTask, tidyTask, type Lab } from './api'
+import { alreadyTidied } from './routes'
 import { el, message } from './ui'
 
 type SetupState = 'waiting' | 'running' | 'done' | 'failed'
 
 const waiting = 'Start the lab, and the task is set up once it is ready.'
+const recheckEvery = 2000
 
 export function setupPanel(id: string, signal: AbortSignal): { panel: HTMLElement; follow: (lab: Lab) => void } {
   const dot = el('span', 'lab-dot')
@@ -30,7 +32,7 @@ export function setupPanel(id: string, signal: AbortSignal): { panel: HTMLElemen
 
   let setUp = false
   signal.addEventListener('abort', () => {
-    if (setUp) tidyTask(id)
+    if (setUp && signal.reason !== alreadyTidied) tidyTask(id)
   })
 
   const setUpTask = async () => {
@@ -48,12 +50,45 @@ export function setupPanel(id: string, signal: AbortSignal): { panel: HTMLElemen
   }
   action.onclick = setUpTask
 
-  // A lab that comes back after a stop is a new cluster, so the task is set up again.
   let ready = false
+  let recheck: ReturnType<typeof setTimeout> | undefined
+  signal.addEventListener('abort', () => clearTimeout(recheck))
+
+  // A task the study session already set up isn't set up twice; one it is still setting up is waited for.
+  const setUpOnce = async (first: boolean) => {
+    const current = await getCurrentTask(signal).catch(() => null)
+    if (signal.aborted || !ready) return
+    const ours = current?.id === id
+    if (first && (!ours || current.setup === 'failed')) return setUpTask()
+    if (!ours) return show('failed', 'The task is no longer set up on your lab.', 'Set up task')
+    setUp = true
+    if (current.setup === 'ready') {
+      show('done', 'Task already set up on your lab. Setting it up again starts it over.', 'Set up again')
+      return
+    }
+    if (current.setup === 'failed') {
+      show('failed', 'The setup failed.', 'Try again')
+      return
+    }
+    show('running', 'The task is being set up on the cluster…')
+    recheck = setTimeout(() => setUpOnce(false), recheckEvery)
+  }
+
+  // A lab that becomes ready while the page watches is a new cluster, so the task is set up again, whatever the
+  // platform remembers from the cluster before.
+  let sawDown = false
   const follow = (lab: Lab) => {
-    if (lab.state === 'ready' && !ready) setUpTask()
-    if (lab.state !== 'ready') show('waiting', waiting)
+    const wasReady = ready
     ready = lab.state === 'ready'
+    if (ready && !wasReady) {
+      if (sawDown) setUpTask()
+      else setUpOnce(true)
+    }
+    if (!ready) {
+      sawDown = true
+      clearTimeout(recheck)
+      show('waiting', waiting)
+    }
   }
 
   show('waiting', waiting)

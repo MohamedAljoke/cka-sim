@@ -12,6 +12,12 @@ service AssistantService {
   // uses them, and its answer in pieces. The stream ends when the answer is complete. INVALID_ARGUMENT for a
   // conversation that doesn't end with the student's message.
   rpc Chat(ChatRequest) returns (stream ChatResponse);
+  // OpenClaude runs Claude Code in a terminal for a student, where the assistant runs and on its login, with no
+  // tools but the tutor's MCP tools for that student. The first request names the student and the terminal's
+  // size; after it, requests carry keystrokes or a new size and responses carry the terminal's output. The
+  // stream ends when Claude Code exits. INVALID_ARGUMENT when the first request isn't a start with a student and
+  // a size, FAILED_PRECONDITION when Claude Code isn't installed where the assistant runs.
+  rpc OpenClaude(stream OpenClaudeRequest) returns (stream OpenClaudeResponse);
 }
 
 enum Role {
@@ -40,4 +46,26 @@ message ChatResponse {
     // The tool the tutor is using, like "inspect_cluster".
     string tool = 2;
   }
+}
+
+message OpenClaudeRequest {
+  oneof input {
+    ClaudeStart start = 1;
+    TerminalSize size = 2;
+    bytes keys = 3;
+  }
+}
+
+message ClaudeStart {
+  string student = 1;
+  TerminalSize size = 2;
+}
+
+message TerminalSize {
+  uint32 cols = 1;
+  uint32 rows = 2;
+}
+
+message OpenClaudeResponse {
+  bytes output = 1;
 }

@@ -19,6 +19,8 @@ import (
 
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/chat"
 	chatusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/chat/usecases"
+	examusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/exam/usecases"
+	studyusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/study/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/mcptools"
@@ -107,7 +109,7 @@ func chatWith(t *testing.T, p *fakePlatform, model *scriptedModel, withToken str
 	if model != nil {
 		m = model
 	}
-	srv := httptest.NewServer(New(tutorCases, nil, chatusecases.New(m, toolbox), "alice", token))
+	srv := httptest.NewServer(New(tutorCases, nil, studyusecases.New(&fakeStudyPlatform{}), examusecases.UseCases{}, chatusecases.New(m, toolbox), "alice", token))
 	t.Cleanup(srv.Close)
 	client := assistantv1connect.NewAssistantServiceClient(
 		connect.NewClient(connecthttp.NewTransport(srv.Client(), srv.URL), rpcauth.Bearer(withToken)))

@@ -15,13 +15,15 @@ import (
 	chatusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/chat/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/docs"
 	docsusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/docs/usecases"
+	examusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/exam/usecases"
+	studyusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/study/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor/usecases"
 )
 
 const token = "unit-assistant-token-0123456789abcdef"
 
-func TestTheServerOffersTheFourToolsAndTheReviewersInstructions(t *testing.T) {
+func TestTheServerOffersTheToolsAndTheReviewersInstructions(t *testing.T) {
 	session := mcpSession(t, &fakePlatform{})
 
 	res, err := session.ListTools(context.Background(), nil)
@@ -34,7 +36,7 @@ func TestTheServerOffersTheFourToolsAndTheReviewersInstructions(t *testing.T) {
 		names = append(names, tool.Name)
 	}
 	slices.Sort(names)
-	if strings.Join(names, " ") != "current_task explain inspect_cluster run_check" {
+	if strings.Join(names, " ") != "current_task exam_result explain get_history inspect_cluster list_tasks list_topics run_check save_note start_exam start_task" {
 		t.Errorf("tools %q", names)
 	}
 	if !strings.Contains(session.InitializeResult().Instructions, "help them learn") {
@@ -226,7 +228,7 @@ func mcpSession(t *testing.T, p *fakePlatform) *mcp.ClientSession {
 
 func mcpSessionWith(t *testing.T, p *fakePlatform, search *docsusecases.SearchDocs) *mcp.ClientSession {
 	t.Helper()
-	srv := httptest.NewServer(New(usecases.New(p), search, chatusecases.UseCases{}, "alice", token))
+	srv := httptest.NewServer(New(usecases.New(p), search, studyusecases.New(&fakeStudyPlatform{}), examusecases.UseCases{}, chatusecases.UseCases{}, "alice", token))
 	t.Cleanup(srv.Close)
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil).
 		Connect(context.Background(), &mcp.StreamableClientTransport{Endpoint: srv.URL + "/mcp"}, nil)

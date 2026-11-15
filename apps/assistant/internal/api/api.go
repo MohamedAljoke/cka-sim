@@ -18,6 +18,8 @@ import (
 	chatusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/chat/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/docs"
 	docsusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/docs/usecases"
+	examusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/exam/usecases"
+	studyusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/study/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor/usecases"
 )
@@ -35,18 +37,37 @@ type tools struct {
 
 // New serves the tutor's tools over MCP for one student at /mcp, for an AI CLI on this machine, and the chat
 // over Connect to the platform, which names the student in each call.
-func New(cases usecases.UseCases, search *docsusecases.SearchDocs, chats chatusecases.UseCases, student, token string,
+func New(cases usecases.UseCases, search *docsusecases.SearchDocs, studies studyusecases.UseCases,
+	exams examusecases.UseCases, chats chatusecases.UseCases, student, token string, opts ...Option,
 ) http.Handler {
-	server := NewMCPServer(cases, search, student)
+	var with options
+	for _, opt := range opts {
+		opt(&with)
+	}
+
+	server := NewCLIServer(cases, search, studies, exams, student)
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{SessionTimeout: time.Hour}))
+	with.mount(mux)
 
 	rpc := connect.NewServer(rpcauth.RequireBearer(token))
-	assistantv1connect.RegisterAssistantServiceHandler(rpc, &chatService{cases: chats})
+	assistantv1connect.RegisterAssistantServiceHandler(rpc, with.service(&chatService{cases: chats}))
 	connecthttp.Mount(mux, rpc)
 
 	return mux
+}
+
+// NewCLIServer is what an AI CLI the student drives gets: the tutor's tools, study mode, which sets tasks up, and
+// practice exams.
+func NewCLIServer(cases usecases.UseCases, search *docsusecases.SearchDocs, studies studyusecases.UseCases,
+	exams examusecases.UseCases, student string,
+) *mcp.Server {
+	server := NewMCPServer(cases, search, student)
+	addStudy(server, studies, student)
+	addExam(server, exams, student)
+
+	return server
 }
 
 // NewMCPServer is the tutor's tools and instructions for one student, for an AI CLI and for the tutor's own chat.

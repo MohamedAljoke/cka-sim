@@ -24,8 +24,9 @@ type session struct {
 	repo      ExamRepository
 	heal      *taskusecases.HealCluster
 	setUpTask *taskusecases.SetUpTask
-	check     *taskusecases.CheckTask
+	grader    *taskusecases.GradeTask
 	tidy      *taskusecases.TidyTask
+	leave     *taskusecases.TidyCurrentTask
 	now       func() time.Time
 	rng       *rand.Rand
 	work      sync.WaitGroup
@@ -59,8 +60,9 @@ func (s *session) endIfExpired(ctx context.Context) {
 	s.grade(ctx)
 }
 
-// Setups and checks outlive the request that started them, as a practice setup does. What earlier tasks broke is
-// healed first; a heal that fails doesn't stop the exam, and the setups say if the cluster is broken.
+// Setups and checks outlive the request that started them, as a practice setup does. The practice task the student
+// was on is tidied and what earlier tasks broke is healed first; neither stops the exam when it fails, and the
+// setups say if the cluster is broken.
 func (s *session) setUp(ctx context.Context) {
 	ctx = context.WithoutCancel(ctx)
 
@@ -78,6 +80,10 @@ func (s *session) setUp(ctx context.Context) {
 
 	s.work.Go(func() {
 		s.tidying.Wait()
+
+		if err := s.leave.Execute(ctx, s.owner); err != nil {
+			slog.Warn("tidy the practice task before the exam", "err", err)
+		}
 
 		if healed, err := s.heal.Execute(ctx, s.owner); err != nil || !healed.Passed() {
 			slog.Warn("heal the cluster before the exam", "err", err, "output", tail(healed.Output))
@@ -167,7 +173,7 @@ func (s *session) scored() {
 
 // A check that breaks scores 0 and keeps why, so the results can say so.
 func (s *session) checkTask(ctx context.Context, id string) {
-	checked, err := s.check.Execute(ctx, s.owner, id)
+	checked, err := s.grader.Execute(ctx, s.owner, id)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

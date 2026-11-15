@@ -102,7 +102,8 @@ func run() error {
 		return err
 	}
 
-	taskCases, labCases := usecases.New(taskRepo, fleet), labusecases.New(fleet, fleet)
+	history := files.NewHistoryFiles(filepath.Join(stateDir, "history"))
+	taskCases, labCases := usecases.New(taskRepo, fleet, history, time.Now), labusecases.New(fleet, fleet)
 	rng := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	examCases := examusecases.New(files.NewExamFiles(examDir), taskCases, labCases.Get, time.Now, rng)
 
@@ -110,7 +111,9 @@ func run() error {
 		return err
 	}
 
-	handler := api.New(taskCases, labCases, examCases, chatusecases.New(tutorOf(cfg), examCases.Get), students)
+	tutor, claude := assistantOf(cfg)
+	handler := api.New(taskCases, labCases, examCases, chatusecases.New(tutor, claude, examCases.Get), students)
+
 	if cfg.AssistantToken != "" {
 		handler = api.WithTutor(handler, cfg.AssistantToken, taskCases, labCases, examCases, students)
 	}
@@ -139,13 +142,16 @@ func run() error {
 	return nil
 }
 
-// tutorOf is nil, which turns the page's assistant off, unless both its address and its token are set.
-func tutorOf(cfg settings) chatusecases.Tutor {
+// assistantOf is nil, which turns the page's tutor and Claude Code off, unless both its address and its token are
+// set. Nil interfaces, not a nil *assistant.Client, so the use cases see them as off.
+func assistantOf(cfg settings) (chatusecases.Tutor, chatusecases.Claude) {
 	if cfg.AssistantURL == "" || cfg.AssistantToken == "" {
-		return nil
+		return nil, nil
 	}
 
-	return assistant.New(cfg.AssistantURL, cfg.AssistantToken)
+	client := assistant.New(cfg.AssistantURL, cfg.AssistantToken)
+
+	return client, client
 }
 
 // fleetOf gives each student a lab: their own pod on Kubernetes, or the one lab container on this machine.

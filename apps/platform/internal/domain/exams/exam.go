@@ -17,9 +17,11 @@ const (
 
 const MaxMinutes = 240
 
-// Weight and Last are copied from the catalog, so an exam is scored and resumed from what it was drawn with.
+// Title, Weight and Last are copied from the catalog, so an exam is shown, scored and resumed from what it was
+// drawn with.
 type Task struct {
 	ID         string
+	Title      string
 	Weight     int
 	Last       bool
 	Setup      SetupState
@@ -42,7 +44,7 @@ type Exam struct {
 func New(drawn []tasks.Task, minutes int) Exam {
 	exam := Exam{Minutes: minutes, Tasks: make([]Task, len(drawn))}
 	for i, t := range drawn {
-		exam.Tasks[i] = Task{ID: t.ID, Weight: t.Weight, Last: t.Order == tasks.Last, Setup: Preparing}
+		exam.Tasks[i] = Task{ID: t.ID, Title: t.Title, Weight: t.Weight, Last: t.Order == tasks.Last, Setup: Preparing}
 	}
 
 	return exam

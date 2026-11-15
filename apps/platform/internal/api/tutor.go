@@ -9,12 +9,13 @@ import (
 	"connectrpc.com/connect/v2"
 	"connectrpc.com/connect/v2/connecthttp"
 
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/exam/v1/examv1connect"
+	"github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/study/v1/studyv1connect"
 	tutorv1 "github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/tutor/v1"
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/tutor/v1/tutorv1connect"
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/domainerr"
 	"github.com/MohamedAljoke/cka-sim/apps/go-shared/rpcauth"
 
-	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/exams"
 	examusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/exams/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
 	labusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs/usecases"
@@ -26,20 +27,20 @@ var errUnknownStudent = domainerr.New("unknown_student", "no student has that na
 
 type tutor struct {
 	tutorv1connect.UnimplementedTutorServiceHandler
+	gate
 	tasks usecases.UseCases
 	labs  labusecases.UseCases
-	exams examusecases.UseCases
-	// token → student name
-	students map[string]string
 }
 
-// WithTutor serves TutorService to whoever holds the token, beside the page's API.
+// WithTutor serves TutorService, StudyService and ExamService to whoever holds the token, beside the page's API.
 func WithTutor(page http.Handler, token string, tasks usecases.UseCases, labs labusecases.UseCases,
 	exams examusecases.UseCases, students map[string]string,
 ) http.Handler {
 	server := connect.NewServer(hideFailures, rpcauth.RequireBearer(token))
-	tutorv1connect.RegisterTutorServiceHandler(server,
-		&tutor{tasks: tasks, labs: labs, exams: exams, students: students})
+	known := gate{exams: exams, students: students}
+	tutorv1connect.RegisterTutorServiceHandler(server, &tutor{gate: known, tasks: tasks, labs: labs})
+	studyv1connect.RegisterStudyServiceHandler(server, &study{gate: known, tasks: tasks})
+	examv1connect.RegisterExamServiceHandler(server, &examService{gate: known})
 	mux := http.NewServeMux()
 	mux.Handle("/", page)
 	connecthttp.Mount(mux, server)
@@ -53,7 +54,7 @@ func (t *tutor) GetCurrentTask(ctx context.Context, req *tutorv1.GetCurrentTaskR
 		return nil, err
 	}
 
-	task, err := t.tasks.Current.Execute(ctx, req.GetStudent())
+	current, err := t.tasks.Current.Execute(ctx, req.GetStudent())
 	switch {
 	case errors.Is(err, tasks.ErrNoCurrentTask):
 		return nil, refuse(connect.CodeNotFound, tasks.ErrNoCurrentTask, err)
@@ -64,6 +65,8 @@ func (t *tutor) GetCurrentTask(ctx context.Context, req *tutorv1.GetCurrentTaskR
 	case err != nil:
 		return nil, err
 	}
+
+	task := current.Task
 
 	return &tutorv1.GetCurrentTaskResponse{Task: &tutorv1.Task{
 		Id:       task.ID,
@@ -135,44 +138,6 @@ func (t *tutor) GetSolution(ctx context.Context, req *tutorv1.GetSolutionRequest
 	}
 
 	return &tutorv1.GetSolutionResponse{Solution: solution}, nil
-}
-
-// outsideAnExam lets a call through only for a known student who has no exam running.
-func (t *tutor) outsideAnExam(ctx context.Context, student string) error {
-	if !t.knows(student) {
-		return refuse(connect.CodeNotFound, errUnknownStudent, nil)
-	}
-
-	exam, err := t.exams.Get.Execute(ctx, student)
-	switch {
-	case errors.Is(err, exams.ErrNoExam):
-		return nil
-	case errors.Is(err, exams.ErrUnavailable):
-		return refuse(connect.CodeUnavailable, exams.ErrUnavailable, err)
-	case err != nil:
-		return err
-	case !exam.Over():
-		return refuse(connect.CodeFailedPrecondition, exams.ErrRunning, nil)
-	case exam.Scoring():
-		return refuse(connect.CodeFailedPrecondition, exams.ErrScoring, nil)
-	}
-
-	return nil
-}
-
-// With no students set, the only one is the local student.
-func (t *tutor) knows(student string) bool {
-	if len(t.students) == 0 {
-		return student == localStudent
-	}
-
-	for _, name := range t.students {
-		if name == student {
-			return true
-		}
-	}
-
-	return false
 }
 
 func refuseTaskOnLab(err error) error {

@@ -1,6 +1,10 @@
 package usecases
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/tasks"
+)
 
 // cluster is what the task use cases share about one owner's cluster: the tasks set up since their reset last
 // ran, the task set up last and not yet left, and a lock that lets setups run together but a reset or a tidy only
@@ -10,6 +14,8 @@ type cluster struct {
 	mu      sync.Mutex
 	touched map[string]bool
 	current string
+	setup   tasks.SetupState
+	running map[string]int
 }
 
 func (c *cluster) touch(id string) {
@@ -24,6 +30,24 @@ func (c *cluster) enter(id string) {
 	defer c.mu.Unlock()
 
 	c.current = id
+	c.setup = tasks.SetupPreparing
+	c.running[id]++
+}
+
+func (c *cluster) settle(id string, setup tasks.SetupState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.running[id]--
+	if c.running[id] > 0 {
+		return
+	}
+
+	delete(c.running, id)
+
+	if c.current == id {
+		c.setup = setup
+	}
 }
 
 func (c *cluster) leave(id string) {
@@ -36,10 +60,15 @@ func (c *cluster) leave(id string) {
 }
 
 func (c *cluster) currentTask() string {
+	id, _ := c.currentSetup()
+	return id
+}
+
+func (c *cluster) currentSetup() (string, tasks.SetupState) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	return c.current
+	return c.current, c.setup
 }
 
 func (c *cluster) forget(id string) {
@@ -71,7 +100,7 @@ func (c *clusters) of(owner string) *cluster {
 	defer c.mu.Unlock()
 
 	if c.all[owner] == nil {
-		c.all[owner] = &cluster{touched: map[string]bool{}}
+		c.all[owner] = &cluster{touched: map[string]bool{}, running: map[string]int{}}
 	}
 
 	return c.all[owner]

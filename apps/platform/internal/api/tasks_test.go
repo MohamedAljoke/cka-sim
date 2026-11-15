@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	chatusecases "github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/chats/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/platform/internal/domain/labs"
@@ -167,6 +168,51 @@ func TestAFailedGetIsUnavailableAndHidesTheCause(t *testing.T) {
 	status, body := call(t, h, http.MethodGet, "/api/tasks/wl-scale")
 
 	if status != http.StatusServiceUnavailable || strings.Contains(body, "secret") {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestTheCurrentTaskIsTheOneSetUpLast(t *testing.T) {
+	h := newAPIRunning(&fakeRunner{}, wlScale)
+	call(t, h, http.MethodPost, "/api/tasks/wl-scale/start")
+
+	status, body := call(t, h, http.MethodGet, "/api/tasks/current")
+
+	if status != http.StatusOK || strings.TrimSpace(body) != `{"id":"wl-scale","title":"Scale a Deployment","setup":"ready"}` {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestACurrentTaskWhoseSetupFailedSaysSo(t *testing.T) {
+	h := newAPIRunning(&fakeRunner{result: labs.ScriptResult{ExitCode: 1}}, wlScale)
+	call(t, h, http.MethodPost, "/api/tasks/wl-scale/start")
+
+	status, body := call(t, h, http.MethodGet, "/api/tasks/current")
+
+	if status != http.StatusOK || !strings.Contains(body, `"setup":"failed"`) {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestATidiedTaskIsNoLongerCurrent(t *testing.T) {
+	h := newAPIRunning(&fakeRunner{}, wlScale)
+	call(t, h, http.MethodPost, "/api/tasks/wl-scale/start")
+	call(t, h, http.MethodPost, "/api/tasks/wl-scale/tidy")
+
+	status, body := call(t, h, http.MethodGet, "/api/tasks/current")
+
+	if status != http.StatusNotFound || !strings.Contains(body, `"code":"no_current_task"`) {
+		t.Errorf("status %d: %s", status, body)
+	}
+}
+
+func TestTheCurrentTaskIsRefusedWhileAnExamRuns(t *testing.T) {
+	h := newExamAPI(&fakeRunner{}, nil)
+	send(t, h, http.MethodPost, "/api/exam", `{"count": 1, "minutes": 30}`)
+
+	status, body := call(t, h, http.MethodGet, "/api/tasks/current")
+
+	if status != http.StatusConflict || !strings.Contains(body, `"code":"exam_running"`) {
 		t.Errorf("status %d: %s", status, body)
 	}
 }
@@ -369,12 +415,12 @@ func newAPI(all ...tasks.Task) http.Handler {
 }
 
 func newAPIWith(repo usecases.TaskRepository) http.Handler {
-	taskCases := usecases.New(repo, &fakeRunner{})
+	taskCases := usecases.New(repo, &fakeRunner{}, &fakeAttempts{}, time.Now)
 	return New(taskCases, labusecases.UseCases{}, examsFor(taskCases, labusecases.UseCases{}, nil), chatusecases.UseCases{}, nil)
 }
 
 func newAPIRunning(r *fakeRunner, all ...tasks.Task) http.Handler {
-	taskCases := usecases.New(fakeRepository{tasks: all}, r)
+	taskCases := usecases.New(fakeRepository{tasks: all}, r, &fakeAttempts{}, time.Now)
 	return New(taskCases, labusecases.UseCases{}, examsFor(taskCases, labusecases.UseCases{}, nil), chatusecases.UseCases{}, nil)
 }
 
@@ -383,10 +429,12 @@ type fakeRunner struct {
 	err    error
 	host   string
 	script string
+	ran    []string
 }
 
 func (r *fakeRunner) RunScript(_ context.Context, _, host, script string) (labs.ScriptResult, error) {
 	r.host, r.script = host, script
+	r.ran = append(r.ran, script)
 	return r.result, r.err
 }
 

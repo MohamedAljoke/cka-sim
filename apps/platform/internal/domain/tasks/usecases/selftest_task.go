@@ -10,11 +10,11 @@ import (
 
 type SelftestTask struct {
 	start *StartTask
-	check *CheckTask
+	check *GradeTask
 	solve *SolveTask
 }
 
-func NewSelftestTask(start *StartTask, check *CheckTask, solve *SolveTask) *SelftestTask {
+func NewSelftestTask(start *StartTask, check *GradeTask, solve *SolveTask) *SelftestTask {
 	return &SelftestTask{start: start, check: check, solve: solve}
 }
 

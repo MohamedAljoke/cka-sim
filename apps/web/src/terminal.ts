@@ -26,9 +26,17 @@ const theme = {
   brightWhite: '#ebe7df',
 }
 
-export function openTerminal(pane: HTMLElement, path: string, onDisconnect: () => void): () => void {
+// Links a program prints as OSC 8 (like Claude Code's sign-in link) open in a new tab, and only on the web.
+const linkHandler = {
+  activate: (_event: MouseEvent, uri: string) => {
+    if (/^https?:\/\//i.test(uri)) window.open(uri, '_blank', 'noopener,noreferrer')
+  },
+}
+
+export function openTerminal(pane: HTMLElement, path: string, onDisconnect: (event: CloseEvent) => void): () => void {
   const term = new Terminal({
     cursorBlink: true,
+    linkHandler,
     fontFamily: "'Cascadia Mono', ui-monospace, Menlo, Consolas, monospace",
     fontSize: 14,
     theme,
@@ -51,9 +59,9 @@ export function openTerminal(pane: HTMLElement, path: string, onDisconnect: () =
     term.focus()
   }
   socket.onmessage = (event) => term.write(new Uint8Array(event.data))
-  socket.onclose = () => {
+  socket.onclose = (event) => {
     term.write('\r\n[disconnected]\r\n')
-    onDisconnect()
+    onDisconnect(event)
   }
 
   term.attachCustomKeyEventHandler((event) => {
@@ -69,7 +77,10 @@ export function openTerminal(pane: HTMLElement, path: string, onDisconnect: () =
     if (isOpen()) socket.send(encoder.encode(keys))
   })
   term.onResize(sendSize)
-  const resizes = new ResizeObserver(() => fit.fit())
+  // A pane taken off the page or folded away measures nothing, and fitting it would squash the program to 2 columns.
+  const resizes = new ResizeObserver(() => {
+    if (pane.offsetWidth > 0 && pane.offsetHeight > 0) fit.fit()
+  })
   resizes.observe(pane)
 
   return () => {

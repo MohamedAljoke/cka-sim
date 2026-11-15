@@ -38,6 +38,7 @@ func New(tasks usecases.UseCases, labs labusecases.UseCases, exams examusecases.
 	handlers.examRoutes(handle)
 	handlers.studentRoutes(handle)
 	handlers.chatRoutes(handle)
+	handlers.claudeRoutes(handle)
 
 	return http.NewCrossOriginProtection().Handler(handlers.identify(mux, problems))
 }

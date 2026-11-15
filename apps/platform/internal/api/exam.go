@@ -77,7 +77,7 @@ func (a *api) beginExam(w http.ResponseWriter, r *http.Request) error {
 		return httpx.Malformed(`the body must be JSON like {"count": 16, "minutes": 120}`)
 	}
 
-	exam, err := a.exams.Begin.Execute(r.Context(), studentOf(r), req.Count, req.Minutes)
+	exam, err := a.exams.Begin.Execute(r.Context(), studentOf(r), req.Count, req.Minutes, tasks.Filter{})
 	switch {
 	case errors.Is(err, exams.ErrInvalid):
 		return httpx.BadRequest(err)

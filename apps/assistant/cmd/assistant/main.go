@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -19,8 +20,12 @@ import (
 
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/api"
 	chatusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/chat/usecases"
+	claudeusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/claude/usecases"
 	docsusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/docs/usecases"
+	examusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/exam/usecases"
+	studyusecases "github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/study/usecases"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/domain/tutor/usecases"
+	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/claudecli"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/files"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/gemini"
 	"github.com/MohamedAljoke/cka-sim/apps/assistant/internal/infra/adapters/mcptools"
@@ -43,6 +48,9 @@ type settings struct {
 	DocsIndex  string `key:"CKA_SIM_DOCS_INDEX" default:""`
 	OllamaURL  string `key:"CKA_SIM_OLLAMA_URL" default:"http://127.0.0.1:11434"`
 	EmbedModel string `key:"CKA_SIM_EMBED_MODEL" default:"nomic-embed-text"`
+	Claude     string `key:"CKA_SIM_CLAUDE" default:"claude"`
+	// Where each student's Claude Code login is kept, under claude/<student>. Empty: the user's state folder.
+	StateDir string `key:"CKA_SIM_ASSISTANT_STATE_DIR" default:""`
 }
 
 func main() {
@@ -74,9 +82,27 @@ func run() error {
 	}
 
 	tutorCases := usecases.New(platform.New(cfg.PlatformURL, cfg.AssistantToken))
+	studyCases := studyusecases.New(platform.NewStudy(cfg.PlatformURL, cfg.AssistantToken))
+	examCases := examusecases.New(platform.NewExam(cfg.PlatformURL, cfg.AssistantToken))
 	toolbox := mcptools.New(func(student string) *mcp.Server { return api.NewMCPServer(tutorCases, search, student) })
-	handler := api.New(tutorCases, search, chatusecases.New(model, toolbox), cfg.Student, cfg.AssistantToken)
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	cliServerFor := func(student string) *mcp.Server {
+		return api.NewCLIServer(tutorCases, search, studyCases, examCases, student)
+	}
+	claudeMCP := api.NewClaudeMCP(loopbackURL(listener.Addr()), cliServerFor)
+
+	stateDir, err := stateDirOf(cfg)
+	if err != nil {
+		return err
+	}
+
+	claudeCases := claudeusecases.New(claudecli.New(cfg.Claude, filepath.Join(stateDir, "claude")), claudeMCP)
+	handler := api.New(tutorCases, search, studyCases, examCases, chatusecases.New(model, toolbox), cfg.Student,
+		cfg.AssistantToken, api.WithClaude(claudeCases.Open, claudeMCP))
+	// Claude Code's terminal is a bidi stream, which needs HTTP/2.
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
+	srv := &http.Server{Handler: handler, Protocols: protocols, ReadHeaderTimeout: 10 * time.Second}
 
 	go func() {
 		<-ctx.Done()
@@ -100,6 +126,34 @@ func run() error {
 	}
 
 	return nil
+}
+
+func stateDirOf(cfg settings) (string, error) {
+	if cfg.StateDir != "" {
+		return cfg.StateDir, nil
+	}
+
+	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" {
+		return filepath.Join(dir, "cka-sim", "assistant"), nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("find a folder for Claude Code's logins (set CKA_SIM_ASSISTANT_STATE_DIR): %w", err)
+	}
+
+	return filepath.Join(home, ".local", "state", "cka-sim", "assistant"), nil
+}
+
+// loopbackURL is how claude, run beside the assistant, reaches it, even when the assistant listens on every address.
+func loopbackURL(addr net.Addr) string {
+	tcp, ok := addr.(*net.TCPAddr)
+	if !ok || tcp.IP.IsUnspecified() {
+		_, port, _ := net.SplitHostPort(addr.String())
+		return "http://" + net.JoinHostPort("127.0.0.1", port)
+	}
+
+	return "http://" + tcp.String()
 }
 
 // modelOf is nil, which leaves the chat without AI, when there are no credentials or they don't work: the rest

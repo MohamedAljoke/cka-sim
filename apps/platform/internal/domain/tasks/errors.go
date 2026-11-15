@@ -9,4 +9,7 @@ var (
 	ErrMalformedTopic = domainerr.New("malformed_topic", "a topic is lowercase-kebab, like rolling-update")
 	ErrUnknownDomain  = domainerr.New("unknown_domain",
 		"the domain must be troubleshooting, architecture, networking, workloads or storage")
+	ErrEmptyNote   = domainerr.New("empty_note", "a note needs some text")
+	ErrNoteTooLong = domainerr.New("note_too_long", "a note is at most 500 characters")
+	ErrNoHistory   = domainerr.New("history_unavailable", "the history can't be read or saved right now; try again")
 )

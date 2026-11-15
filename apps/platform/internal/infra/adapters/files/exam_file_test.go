@@ -15,7 +15,7 @@ func TestAnExamSavedIsTheExamLoaded(t *testing.T) {
 	f := NewExamFile(filepath.Join(t.TempDir(), "state", "exam.json"))
 	start := time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC)
 	exam := exams.Exam{Minutes: 30, Started: start, Deadline: start.Add(30 * time.Minute), Tasks: []exams.Task{
-		{ID: "tr-etcd", Weight: 7, Last: true, Setup: exams.SetUp, Flagged: true,
+		{ID: "tr-etcd", Title: "Restore etcd", Weight: 7, Last: true, Setup: exams.SetUp, Flagged: true,
 			Grade: &tasks.Grade{Earned: 1, Total: 2, Checks: []tasks.Check{{Passed: true, Points: 1, Description: "logged"}}}},
 		{ID: "nw-svc", Weight: 3, Setup: exams.SetupFailed, SetupError: "exit code 1"},
 	}}

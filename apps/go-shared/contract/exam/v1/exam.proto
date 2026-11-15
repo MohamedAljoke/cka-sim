@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package exam.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/MohamedAljoke/cka-sim/apps/go-shared/contract/exam/v1;examv1";
+
+// ExamService is served by the platform and called by the assistant: a timed practice exam an AI starts for the
+// student, and its result to review once it's graded. Every call needs "Authorization: Bearer <token>"
+// (UNAUTHENTICATED otherwise) and names its student: NOT_FOUND for a student the platform doesn't know.
+service ExamService {
+  // StartExam draws count tasks from those matching every filter given (the whole catalog when none is), or every
+  // matching task when fewer match than count, and sets them up in the background; the clock starts once every
+  // setup is done. It never answers a question. INVALID_ARGUMENT for a count under 1, minutes outside 1..240, an
+  // unknown domain, a malformed topic, a task id that names no task, or a selection matching no task. FAILED_PRECONDITION while an exam runs or is graded, or unless the lab is ready.
+  rpc StartExam(StartExamRequest) returns (StartExamResponse);
+  // GetExamResult answers the student's last exam once it's graded. FAILED_PRECONDITION when there is none, and
+  // while it runs or is being graded.
+  rpc GetExamResult(GetExamResultRequest) returns (GetExamResultResponse);
+}
+
+message StartExamRequest {
+  string student = 1;
+  int32 count = 2;
+  int32 minutes = 3;
+  repeated string domains = 4;
+  // A task matches when it has any of them.
+  repeated string topics = 5;
+  repeated string task_ids = 6;
+}
+
+message ExamTask {
+  string id = 1;
+  string title = 2;
+}
+
+message StartExamResponse {
+  repeated ExamTask tasks = 1;
+  int32 minutes = 2;
+}
+
+message GetExamResultRequest {
+  string student = 1;
+}
+
+message TaskResult {
+  string id = 1;
+  string title = 2;
+  int32 weight = 3;
+  int32 earned = 4;
+  int32 total = 5;
+  // The descriptions of the checks that failed.
+  repeated string failed = 6;
+  bool flagged = 7;
+  // The task's setup failed, so it counts in neither earned nor total.
+  bool setup_failed = 8;
+  // Why the setup or the check broke, when one did.
+  string error = 9;
+}
+
+message GetExamResultResponse {
+  repeated TaskResult tasks = 1;
+  int32 minutes = 2;
+  google.protobuf.Timestamp started = 3;
+  google.protobuf.Timestamp ended = 4;
+  // The score weighs each task's share of its points by the task's weight.
+  int32 percent = 5;
+  bool passed = 6;
+  int32 pass_percent = 7;
+}

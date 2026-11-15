@@ -98,7 +98,7 @@ func newSelftest(r ScriptRunner) *SelftestTask {
 	repo, c := fakeRepository{tasks: []tasks.Task{fair}}, newClusters()
 	start := NewStartTask(repo, NewHealCluster(repo, r, c), NewSetUpTask(repo, r, c))
 
-	return NewSelftestTask(start, NewCheckTask(repo, r), NewSolveTask(repo, r, c))
+	return NewSelftestTask(start, NewGradeTask(repo, r), NewSolveTask(repo, r, c))
 }
 
 // lab answers the fair task's scripts, and its check passes once the solution ran.
